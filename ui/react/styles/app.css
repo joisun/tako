@@ -1115,14 +1115,14 @@
   gap: 12px;
   min-width: 0;
   margin: 0;
-  padding: 12px;
+  padding: 0;
   border: 0;
-  border-radius: 6px;
-  background: var(--surface-0);
 }
 
 .schedule-editor__work-hours legend {
-  padding: 0 0 8px;
+  min-height: 18px;
+  margin-bottom: 5px;
+  padding: 0;
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 500;
