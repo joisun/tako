@@ -31269,7 +31269,7 @@ function handler(operation) {
 }
 function createRilloServer({ service }) {
   const server = new McpServer(
-    { name: "rillo", version: "0.16.0" },
+    { name: "rillo", version: "0.16.1" },
     { instructions: SERVER_INSTRUCTIONS }
   );
   server.registerTool("session_sources", {

@@ -15,7 +15,7 @@ Rillo 是运行在本机的 coding-agent 会话与自动化控制台。Sessions 
 - runtime registry 已按 multi-CLI contract 设计，后续 runtime 只增加 adapter，不增加第二套调度链路；
 - 所有数据都保存在本机，不需要 cloud account 或 auth token。
 
-Rillo 0.16.0 使用 `rillo` 命令、插件标识和发布资产名称，GitHub 仓库为 `joisun/rillo`。旧版本的配置、定时任务和执行记录由安装脚本迁移，详见[更名与安装迁移](docs/migrations/rillo-rename.md)。
+Rillo 0.16.1 使用 `rillo` 命令、插件标识和发布资产名称，GitHub 仓库为 `joisun/rillo`。旧版本的配置、定时任务和执行记录由安装脚本迁移，详见[更名与安装迁移](docs/migrations/rillo-rename.md)。
 
 ## Quick start
 
@@ -37,7 +37,7 @@ rillo status
 普通安装不需要 clone repository、`npm install` 或 `npm ci`。更谨慎的固定版本安装方式：
 
 ```bash
-version=v0.16.0
+version=v0.16.1
 curl -fsSLO "https://raw.githubusercontent.com/joisun/rillo/${version}/install.sh"
 less install.sh
 bash install.sh --version "$version"

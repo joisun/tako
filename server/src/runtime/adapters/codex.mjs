@@ -86,7 +86,7 @@ export function createCodexRuntimeDefinition({
       const client = createAppServerClient({ executable: launch.executable, cwd: workspace || homedir(), runtimeEnvironment })
       try {
         await client.started
-        await client.request('initialize', { clientInfo: { name: 'rillo-settings', version: '0.16.0' } })
+        await client.request('initialize', { clientInfo: { name: 'rillo-settings', version: '0.16.1' } })
         const response = await client.request('config/read', { cwd: workspace || homedir(), includeLayers: false })
         const value = response?.config?.model_auto_compact_token_limit
         if (value != null && (!Number.isSafeInteger(value) || value <= 0)) throw runtimeError('RUNTIME_PROTOCOL_INVALID', 'Invalid local auto-compaction threshold')
