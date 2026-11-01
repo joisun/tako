@@ -1122,24 +1122,10 @@
 }
 
 .schedule-editor__work-hours legend {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-
-.schedule-editor__work-hours-fields {
-  display: grid;
-  min-width: 0;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.schedule-editor__work-hours-fields:disabled {
-  opacity: .5;
+  padding: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .schedule-editor__work-window {

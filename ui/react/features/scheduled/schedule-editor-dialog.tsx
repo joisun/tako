@@ -191,7 +191,10 @@ export function ScheduleEditorDialog({
   } | undefined
 
   function update<K extends keyof ScheduleDraft>(key: K, value: ScheduleDraft[K]) {
-    setDraft((current) => ({ ...current, [key]: value }))
+    setDraft((current) => ({
+      ...current, [key]: value,
+      ...(key === 'workWeekdays' || key === 'workWindows' ? { preserveUnrestrictedHours: false } : {}),
+    }))
     setError('')
     setDeleteArmed(false)
   }
@@ -343,22 +346,19 @@ export function ScheduleEditorDialog({
                     ) : null}
                   </div>
                   {draft.cadenceKind !== 'once' ? (
-                    <fieldset className="schedule-editor__work-hours">
-                      <legend>工作时段</legend>
-                      <Switch aria-label="限制工作时段" disabled={busy} checked={draft.workHoursEnabled} onCheckedChange={(selected) => update('workHoursEnabled', selected)}>仅在指定时段自动运行</Switch>
-                      <fieldset className="schedule-editor__work-hours-fields" aria-label="工作时段设置" disabled={busy || !draft.workHoursEnabled}>
-                        <div className="schedule-editor__weekdays" role="group" aria-label="工作时段适用星期">
-                          {WEEKDAYS.map(([day, label]) => <label key={day}><input checked={draft.workWeekdays.includes(day)} disabled={busy} type="checkbox" onChange={(event) => update('workWeekdays', event.currentTarget.checked ? [...draft.workWeekdays, day] : draft.workWeekdays.filter((value) => value !== day))} /><span>{label}</span></label>)}
+                    <fieldset className="schedule-editor__work-hours" disabled={busy}>
+                      <legend>生效时段</legend>
+                      <div className="schedule-editor__weekdays" role="group" aria-label="生效时段适用星期">
+                        {WEEKDAYS.map(([day, label]) => <label key={day}><input checked={draft.workWeekdays.includes(day)} disabled={busy} type="checkbox" onChange={(event) => update('workWeekdays', event.currentTarget.checked ? [...draft.workWeekdays, day] : draft.workWeekdays.filter((value) => value !== day))} /><span>{label}</span></label>)}
+                      </div>
+                      {draft.workWindows.map((window, index) => (
+                        <div className="schedule-editor__work-window" key={index}>
+                          <div className="schedule-editor__field"><FieldLabel htmlFor={`work-start-${index}`}>{`开始 ${index + 1}`}</FieldLabel><Input id={`work-start-${index}`} disabled={busy} inputMode="numeric" maxLength={5} placeholder="07:00" value={window.start} onChange={(event) => update('workWindows', draft.workWindows.map((item, itemIndex) => itemIndex === index ? { ...item, start: event.currentTarget.value } : item))} /></div>
+                          <div className="schedule-editor__field"><FieldLabel htmlFor={`work-end-${index}`}>{`结束 ${index + 1}`}</FieldLabel><Input id={`work-end-${index}`} disabled={busy} inputMode="numeric" maxLength={5} placeholder="18:00" value={window.end} onChange={(event) => update('workWindows', draft.workWindows.map((item, itemIndex) => itemIndex === index ? { ...item, end: event.currentTarget.value } : item))} /></div>
+                          <Button isIconOnly aria-label={`删除时段 ${index + 1}`} disabled={busy || draft.workWindows.length === 1} size="sm" type="button" variant="quiet" onClick={() => update('workWindows', draft.workWindows.filter((_, itemIndex) => itemIndex !== index))}><Trash2 /></Button>
                         </div>
-                        {draft.workWindows.map((window, index) => (
-                          <div className="schedule-editor__work-window" key={index}>
-                            <div className="schedule-editor__field"><FieldLabel htmlFor={`work-start-${index}`}>{`开始 ${index + 1}`}</FieldLabel><Input id={`work-start-${index}`} disabled={busy} inputMode="numeric" maxLength={5} placeholder="09:00" value={window.start} onChange={(event) => update('workWindows', draft.workWindows.map((item, itemIndex) => itemIndex === index ? { ...item, start: event.currentTarget.value } : item))} /></div>
-                            <div className="schedule-editor__field"><FieldLabel htmlFor={`work-end-${index}`}>{`结束 ${index + 1}`}</FieldLabel><Input id={`work-end-${index}`} disabled={busy} inputMode="numeric" maxLength={5} placeholder="18:00" value={window.end} onChange={(event) => update('workWindows', draft.workWindows.map((item, itemIndex) => itemIndex === index ? { ...item, end: event.currentTarget.value } : item))} /></div>
-                            <Button isIconOnly aria-label={`删除时段 ${index + 1}`} disabled={busy || draft.workWindows.length === 1} size="sm" type="button" variant="quiet" onClick={() => update('workWindows', draft.workWindows.filter((_, itemIndex) => itemIndex !== index))}><Trash2 /></Button>
-                          </div>
-                        ))}
-                        <Button disabled={busy || draft.workWindows.length >= 24} size="sm" type="button" variant="secondary" onClick={() => update('workWindows', [...draft.workWindows, { start: '', end: '' }])}>添加时段</Button>
-                      </fieldset>
+                      ))}
+                      <Button disabled={busy || draft.workWindows.length >= 24} size="sm" type="button" variant="secondary" onClick={() => update('workWindows', [...draft.workWindows, { start: '', end: '' }])}>添加时段</Button>
                     </fieldset>
                   ) : null}
                 </section>

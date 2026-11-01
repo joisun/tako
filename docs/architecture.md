@@ -318,7 +318,7 @@ Cadence 增加 `interval`（整数 `minutes: 1..1440`）。非 once cadence 可�
 
 窗口为同一天内的半开区间，end 允许24:00。无窗口的 interval 对固定经过时间网格取整；有窗口则从各段本地起点按经过分钟计算，起点和日期由服务本机 Date 语义决定。nextOccurrence 与 latestDueOccurrence 共用窗口规则；latestDueOccurrence 在关闭时段返回null，在开放时段将补跑下界截到当前窗口开始，避免重放上个窗口或周末积压。原有 occurrence key 和 Run 唯一约束继续防重，30秒调度节拍及正在执行任务的互斥行为不变。
 
-工作时段只限制自动调度；已启动 Run 的执行及其已有内部重试继续完成，手动 Run 不受限。前端创建/编辑、列表摘要与 MCP schema 同步支持；用户未设置 work_hours 则维持旧行为。Legacy 回滚界面可以显示新摘要，但拒绝编辑含 interval/work_hours 的计划，防止静默退化为 daily 丢失约束。
+生效时段只限制自动调度；已启动 Run 的执行及其已有内部重试继续完成，手动 Run 不受限。前端创建/编辑、列表摘要与 MCP schema 同步支持；网页新建周期计划默认周一至周五07:00–18:00，直接配置生效时段并写入work_hours，不再使用启用开关。旧计划未设置work_hours时回填全周全天，未编辑时段时仍不写入work_hours，以保留原始interval时间网格；编辑星期或起止时间后才按所选值保存。Legacy 回滚界面可以显示新摘要，但拒绝编辑含 interval/work_hours 的计划，防止静默退化为 daily 丢失约束。
 
 ## Frontend component architecture
 
