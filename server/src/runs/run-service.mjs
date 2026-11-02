@@ -1,3 +1,4 @@
+import { createAgentExecution } from '../agent-execution.mjs'
 import { runtimeEvent } from '../runtime/runtime-event.mjs'
 import { scheduleExecutionPrompt } from '../session-policy.mjs'
 import { createRunFilePreviews, openRunFile } from './run-file-opener.mjs'
@@ -16,6 +17,8 @@ export function createRunService({
   clock = () => new Date(),
   onChange = () => {},
   fileOpener = openRunFile,
+  executeAgent = createAgentExecution({ registry, supervisor, clock }),
+  resources = null,
 } = {}) {
   if (!runStore?.create || !runStore?.get || !registry?.resolve || !registry?.get
     || !supervisor?.start || !eventHub?.publish || !eventHub?.subscribe
@@ -50,12 +53,14 @@ export function createRunService({
 
   async function launch(runId, signal) {
     let logs = null
+    let lease = null
+    let pid = null
     try {
       const queued = runStore.get(runId)
       if (queued.status !== 'queued') return
-      const launchTarget = await abortable(registry.resolve(queued.runtime_id), signal)
+      if (resources) lease = await resources.wait({ owner: 'schedule', runId,
+        workspace: queued.snapshot.workspace, signal })
       if (signal.aborted) return cancelQueuedIfOpen(runStore, runId)
-      const definition = registry.get(queued.runtime_id)
       const workspaceBefore = await safeWorkspaceSnapshot(queued.snapshot.workspace)
 
       logs = await logStore.open({
@@ -71,64 +76,28 @@ export function createRunService({
         sequences.set(runId, Math.max(sequences.get(runId) ?? 0, event.sequence))
         eventHub.publish(event)
       }
-      const onSpawn = ({ pid }) => {
-        runStore.markRunning(runId, {
-          runtime_version: launchTarget.version,
-          pid,
-        })
-        publishStatus(runId, 'running')
-        changed(runId)
-      }
-      let result
-      if (typeof definition.createInteractiveSession === 'function') {
-        const session = definition.createInteractiveSession({
-          launch: launchTarget,
-          run: { ...queued.snapshot, prompt: scheduleExecutionPrompt(queued.snapshot) },
-          signal,
-          onSpawn,
-          logs,
-          emit(event) {
-            sequence = Math.max(sequence, sequences.get(runId) ?? 0)
-            const normalized = runtimeEvent({
-              runId,
-              sequence: ++sequence,
-              observedAt: nowIso(clock),
-              type: event.type,
-              payload: event.payload,
-            })
-            if (normalized.type === 'turn_started') {
-              const execution = active.get(runId)
-              if (execution) execution.turnRevision = normalized.payload.turn_revision
-            }
-            emitEvent(normalized)
-          },
-        })
-        const execution = active.get(runId)
-        if (execution) execution.session = session
-        result = await session.start()
-      } else {
-        const invocation = await definition.buildInvocation({
-          launch: launchTarget,
-          run: queued.snapshot,
-        })
-        if (signal.aborted) return cancelQueuedIfOpen(runStore, runId)
-        result = await supervisor.start({
-          invocation,
-          signal,
-          logs,
-          parseEvent(line) {
-            sequence = Math.max(sequence, sequences.get(runId) ?? 0)
-            return definition.parseEvent(line, {
-              runId,
-              sequence: ++sequence,
-              observedAt: nowIso(clock),
-              workspace: queued.snapshot.workspace,
-            })
-          },
-          emit: emitEvent,
-          onSpawn,
-        })
-      }
+      const resultFromAgent = await executeAgent({
+        runId, runtimeId: queued.runtime_id, invocationSpec: queued.snapshot,
+        spec: { ...queued.snapshot, prompt: scheduleExecutionPrompt(queued.snapshot) },
+        signal, logs,
+        nextSequence() {
+          sequence = Math.max(sequence, sequences.get(runId) ?? 0)
+          return ++sequence
+        },
+        onSpawn(value) {
+          pid = value.pid
+          lease?.spawned(pid)
+          runStore.markRunning(runId, value)
+          publishStatus(runId, 'running')
+          changed(runId)
+        },
+        onInteractive(session) { active.get(runId).session = session },
+        emit(event) {
+          if (event.type === 'turn_started') active.get(runId).turnRevision = event.payload.turn_revision
+          emitEvent(event)
+        },
+      })
+      let result = resultFromAgent
 
       const workspaceAfter = await safeWorkspaceSnapshot(queued.snapshot.workspace)
       result = {
@@ -178,6 +147,7 @@ export function createRunService({
       } catch {}
     } finally {
       await logs?.close().catch(() => {})
+      await lease?.releaseWhenExited(pid)
     }
   }
 
@@ -367,19 +337,6 @@ function nowIso(clock) {
 
 function serviceError(code, message) {
   return Object.assign(new Error(message), { code })
-}
-
-function abortable(promise, signal) {
-  if (signal.aborted) {
-    return Promise.reject(serviceError('RUN_CANCELED', 'Run was canceled'))
-  }
-  return new Promise((resolve, reject) => {
-    const onAbort = () => reject(serviceError('RUN_CANCELED', 'Run was canceled'))
-    signal.addEventListener('abort', onAbort, { once: true })
-    Promise.resolve(promise).then(resolve, reject).finally(() => {
-      signal.removeEventListener('abort', onAbort)
-    })
-  })
 }
 
 function logsPath(logs, stream) {

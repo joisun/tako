@@ -62,7 +62,7 @@ function nativeRelations(session) {
     }))
 }
 
-export function createSessionBrowser({ adapters, settings, terminalLauncher, links = null, pins = null }) {
+export function createSessionBrowser({ adapters, settings, terminalLauncher, links = null, pins = null, projectSessions = sessions => sessions }) {
   const sources = new Map(adapters.map((adapter) => [adapter.id, adapter]))
   if (sources.size !== adapters.length) throw new TypeError('Session adapter IDs must be unique')
 
@@ -88,7 +88,7 @@ export function createSessionBrowser({ adapters, settings, terminalLauncher, lin
     const ref = normalizeSessionReference(value)
     const adapter = source(ref.provider)
     reference(adapter, ref.session_id, ref)
-    return adapter.readSession(ref.session_id)
+    return projectSessions([await adapter.readSession(ref.session_id)])[0]
   }
   function requireLinks() {
     if (!links) throw sessionBrowserError('SESSION_BROWSER_UNAVAILABLE', '会话关系服务暂不可用', 503)
@@ -117,7 +117,7 @@ export function createSessionBrowser({ adapters, settings, terminalLauncher, lin
       }))
       const matched = sessions.filter(session => (!filters.workspace || session.workspace === filters.workspace) && (!filters.branch || session.branch === filters.branch))
       const next = offset + page.length
-      return { sessions: matched, relations: relationsFor(matched), next_cursor: next < entries.length ? 'pinned:' + next : null, search_scope: null, scanned_count: page.length }
+      return { sessions: projectSessions(matched), relations: relationsFor(matched), next_cursor: next < entries.length ? 'pinned:' + next : null, search_scope: null, scanned_count: page.length }
     },
     providers() {
       return { providers: [...sources.values()].map((adapter) => ({
@@ -130,12 +130,12 @@ export function createSessionBrowser({ adapters, settings, terminalLauncher, lin
     list(id, input, options) {
       const adapter = source(id)
       const filters = query(input)
-      return adapter.list(filters, options).then((result) => ({ ...result, relations: relationsFor(result.sessions) }))
+      return adapter.list(filters, options).then((result) => ({ ...result, sessions:projectSessions(result.sessions), relations: relationsFor(result.sessions) }))
     },
     async read(id, sessionId, input) {
       const adapter = source(id)
       reference(adapter, sessionId, input)
-      return { session: await adapter.readSession(sessionId) }
+      return { session: projectSessions([await adapter.readSession(sessionId)])[0] }
     },
     async relations(input) {
       const metadata = await readRef(input)
@@ -158,11 +158,11 @@ export function createSessionBrowser({ adapters, settings, terminalLauncher, lin
           catch { return { ...edge.child, title: '会话暂不可用', preview: '', workspace: null, branch: null, created_at: null, updated_at: null, last_active_at: null, state: 'unavailable', unavailable: true } }
         }))
         const next = offset + page.length
-        return { sessions: results, relations: [...page, ...relationsFor(results)], next_cursor: next < manual.length ? 'registered:' + next : adapter.children ? 'native:start' : null, search_scope: null, scanned_count: page.length }
+        return { sessions: projectSessions(results), relations: [...page, ...relationsFor(results)], next_cursor: next < manual.length ? 'registered:' + next : adapter.children ? 'native:start' : null, search_scope: null, scanned_count: page.length }
       }
       if (!adapter.children) return { sessions: [], relations: [], next_cursor: null, search_scope: null, scanned_count: 0 }
       const page = await adapter.children(sessionId, { ...filters, cursor: filters.cursor === 'native:start' ? null : filters.cursor })
-      return { ...page, relations: relationsFor(page.sessions) }
+      return { ...page, sessions:projectSessions(page.sessions), relations: relationsFor(page.sessions) }
     },
     async timeline(id, sessionId, input) {
       const adapter = source(id)
@@ -173,7 +173,7 @@ export function createSessionBrowser({ adapters, settings, terminalLauncher, lin
         throw sessionBrowserError('SESSION_BROWSER_INPUT_INVALID', '请选择有效且不超过一年的时间范围')
       }
       if (!adapter.timeline) throw sessionBrowserError('SESSION_BROWSER_UNSUPPORTED', '此来源不支持会话时间数据', 501)
-      return adapter.timeline(sessionId, filters)
+      return Promise.resolve(adapter.timeline(sessionId, filters)).then(page=>({...page,session:projectSessions([page.session])[0]}))
     },
     async link(input) {
       requireLinks()
@@ -222,7 +222,7 @@ export function createSessionBrowser({ adapters, settings, terminalLauncher, lin
     activity(id) {
       const adapter = source(id)
       if (!adapter.activity) throw sessionBrowserError('SESSION_BROWSER_UNSUPPORTED', '此来源不支持会话活跃状态', 501)
-      return adapter.activity()
+      return Promise.resolve(adapter.activity()).then(page=>({...page,sessions:projectSessions(page.sessions??[])}))
     },
     workspaces(id, input) {
       return source(id).workspaces({ ...query(input), limit: 100 })
@@ -239,7 +239,7 @@ export function createSessionBrowser({ adapters, settings, terminalLauncher, lin
       if (filters.order === 'asc' && (filters.at || filters.query)) throw sessionBrowserError('SESSION_BROWSER_INPUT_INVALID', 'Forward reading cannot be combined with search or time seek')
       if (filters.item_id && (!filters.at || filters.query)) throw sessionBrowserError('SESSION_BROWSER_INPUT_INVALID', '消息ID必须与定位时间一起使用')
       if (filters.at && filters.query) throw sessionBrowserError('SESSION_BROWSER_INPUT_INVALID', '时间定位和正文搜索不能同时提交')
-      return adapter.messages(sessionId, filters)
+      return Promise.resolve(adapter.messages(sessionId, filters)).then(page=>({...page,...(page.session?{session:projectSessions([page.session])[0]}:{})}))
     },
     async resume(id, sessionId, input) {
       const adapter = source(id)

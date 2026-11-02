@@ -1,3 +1,5 @@
+import type { RoomBoard, RoomWorkItem, RoomRuntime, RoomMemberDefinition, LoopAvatar, LoopAttachment } from './loop-types'
+import type { AgentDefinition, AgentCatalog, AgentCatalogSource, LoopRoom, LoopRoomDetail, LoopMember, LoopTaskInput, LoopTaskDetail } from './loop-types'
 import type {
   DashboardMeta,
   DashboardSettingsResponse,
@@ -62,6 +64,38 @@ interface ServerErrorPayload {
 }
 
 export interface DashboardApi {
+  reviseLoopTask(id: string, input: { goal: string; acceptance: string; expected_revision: number }): Promise<{ task: LoopTaskDetail }>
+  reconcileLoopRun(id: string): Promise<{ run: unknown }>
+  rooms(): Promise<{ rooms: LoopRoom[] }>
+  room(id: string): Promise<{ room: LoopRoomDetail }>
+  roomBoard(id:string):Promise<{board:RoomBoard}>
+  createRoomWorkItem(id:string,input:{name:string;column:string;owner_id?:string|null;type?:string;request_key:string;expected_revision:number}):Promise<{board:RoomBoard}>
+  saveRoomBoard(id:string,input:{items:{id:string;column:string}[];expected_revision:number}):Promise<{board:RoomBoard}>
+  updateRoomWorkItem(id:string,itemId:string,input:{name?:string;owner_id?:string|null;type?:RoomWorkItem['type'];details?:string;expected_revision:number}):Promise<{board:RoomBoard}>
+  roomRuntime(id:string):Promise<RoomRuntime>
+  roomMemberDefinition(roomId:string,memberId:string):Promise<RoomMemberDefinition>
+  importAgent(input:{definition_id:string;runtime_id:string}):Promise<{definition:AgentDefinition;path:string;imported:boolean}>
+  agentCatalogSources():Promise<{sources:AgentCatalogSource[]}>
+  agentCatalog(source: string,options?:{refresh?:boolean}): Promise<AgentCatalog>
+  agentDefinition(id: string, runtime: string): Promise<{ definition: AgentDefinition }>
+  configureRoom(id: string, input: { leader_id?: string; workspace?: string; workspaces?:string[]; memory_directory?:string|null; instructions?: string }): Promise<{ room: LoopRoomDetail }>
+  createRoom(title: string, workspace?: string, options?:{workspaces?:string[];memory_directory?:string;request_key?:string}): Promise<{ room: LoopRoomDetail }>
+  copyRoom(id:string,input:{title:string;request_key:string}):Promise<{room:LoopRoomDetail}>
+  syncRoomMemory(id:string):Promise<{room:LoopRoomDetail}>
+  restoreRoom(input:{source_directory:string;memory_directory?:string;workspaces?:string[]}):Promise<{room:LoopRoomDetail}>
+  updateRoomMember(id:string,memberId:string,input:{name:string;model?:string|null;effort?:string|null;avatar?:LoopAvatar}):Promise<{member:LoopMember}>
+  roomMemberDeletion(id:string,memberId:string):Promise<{member_id:string;files:{path:string;digest:string}[];other_rooms:number}>
+  deleteRoomMember(id:string,memberId:string,input:{confirm:true;files:{path:string;digest:string}[]}):Promise<{deleted:boolean}>
+  retryRoomDefinitionCleanup(id:string):Promise<{room:LoopRoomDetail}>
+  deleteRoom(id:string):Promise<{room:LoopRoomDetail}>
+  dissolveRoom(id:string):Promise<{room:LoopRoomDetail}>
+  roomAttachment(id:string,path:string):Promise<{attachment:LoopAttachment}>
+  addRoomMember(id: string, input: { name: string; runtime_id: string; instructions?: string; definition_id?: string; model?:string|null;effort?:string|null;avatar?:LoopAvatar }): Promise<{ member: LoopMember }>
+  postRoomMessage(id: string, input: { text: string; task_id: string | null; request_key: string; mentions?: string[];attachments?:LoopAttachment[] }): Promise<{ message: unknown }>
+  createLoopTask(id: string, input: LoopTaskInput): Promise<{ task: LoopTaskDetail }>
+  loopTask(id: string): Promise<{ task: LoopTaskDetail }>
+  controlLoopTask(id: string, action: string, revision: number): Promise<{ task: LoopTaskDetail }>
+
   sessionPins(): Promise<{ pins: SessionPin[] }>
   setSessionPin(session: SessionRef, pinned: boolean): Promise<{ pin: SessionPin | null; changed: boolean }>
   pinnedSessions(provider: string, filters: SessionFilters): Promise<SessionPage>
@@ -202,6 +236,37 @@ export function createDashboardApi({
   }
 
   return {
+    reviseLoopTask: (id, body) => request(`/api/v1/loop-tasks/${encodeURIComponent(id)}/control`, { method: 'POST', body: { ...body, action: 'revise' } }),
+    reconcileLoopRun: id => request(`/api/v1/loop-runs/${encodeURIComponent(id)}/reconcile`, { method: 'POST', body: { confirmed_exited: true } }),
+    rooms: () => request('/api/v1/teams'),
+    room: id => request(`/api/v1/teams/${encodeURIComponent(id)}`),
+    roomBoard: id => request(`/api/v1/teams/${encodeURIComponent(id)}/board`),
+    createRoomWorkItem: (id,body) => request(`/api/v1/teams/${encodeURIComponent(id)}/work-items`,{method:'POST',body}),
+    saveRoomBoard: (id,body) => request(`/api/v1/teams/${encodeURIComponent(id)}/board`,{method:'PUT',body}),
+    updateRoomWorkItem: (id,itemId,body) => request(`/api/v1/teams/${encodeURIComponent(id)}/work-items/${encodeURIComponent(itemId)}`,{method:'PATCH',body}),
+    roomRuntime: id => request(`/api/v1/teams-runtime/${encodeURIComponent(id)}`,{requestTimeoutMs:RUNTIME_TIMEOUT_MS}),
+    roomMemberDefinition: (id,memberId) => request(`/api/v1/teams/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}/definition`),
+    importAgent: body => request('/api/v1/agent-catalog/import',{method:'POST',body,requestTimeoutMs:RUNTIME_TIMEOUT_MS}),
+    agentCatalogSources:()=>request('/api/v1/agent-catalog/sources'),
+    agentCatalog: (source,options) => request(`/api/v1/agent-catalog?source=${encodeURIComponent(source)}${options?.refresh?'&refresh=1':''}`, { requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
+    agentDefinition: (id, runtime) => request(`/api/v1/agent-catalog/definition?id=${encodeURIComponent(id)}&runtime=${encodeURIComponent(runtime)}`, { requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
+    configureRoom: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
+    createRoom: (title, workspace, options) => request('/api/v1/teams', { method: 'POST', body: { title, workspace, ...options } }),
+    copyRoom: (id,body) => request(`/api/v1/teams/${encodeURIComponent(id)}/copy`,{method:'POST',body}),
+    syncRoomMemory:id=>request(`/api/v1/teams/${encodeURIComponent(id)}/memory-sync`,{method:'POST',body:{}}),
+    restoreRoom: body=>request('/api/v1/teams/restore',{method:'POST',body}),
+    updateRoomMember:(id,memberId,body)=>request(`/api/v1/teams/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`,{method:'PATCH',body}),
+    roomMemberDeletion:(id,memberId)=>request(`/api/v1/teams/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}/deletion`),
+    deleteRoomMember:(id,memberId,body)=>request(`/api/v1/teams/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`,{method:'DELETE',body}),
+    retryRoomDefinitionCleanup:id=>request(`/api/v1/teams/${encodeURIComponent(id)}/definition-cleanup`,{method:'POST',body:{}}),
+    deleteRoom:id=>request(`/api/v1/teams/${encodeURIComponent(id)}/delete`,{method:'POST',body:{confirm:true}}),
+    dissolveRoom:id=>request(`/api/v1/teams/${encodeURIComponent(id)}`,{method:'DELETE',body:{}}),
+    roomAttachment:(id,path)=>request(`/api/v1/teams/${encodeURIComponent(id)}/attachments`,{method:'POST',body:{path}}),
+    addRoomMember: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}/members`, { method: 'POST', body }),
+    postRoomMessage: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}/messages`, { method: 'POST', body }),
+    createLoopTask: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}/tasks`, { method: 'POST', body, requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
+    loopTask: id => request(`/api/v1/loop-tasks/${encodeURIComponent(id)}`),
+    controlLoopTask: (id, action, revision) => request(`/api/v1/loop-tasks/${encodeURIComponent(id)}/control`, { method: 'POST', body: { action, expected_revision: revision } }),
     sessionPins: () => request('/api/v1/session-browser/pins'),
     setSessionPin: (session, pinned) => request('/api/v1/session-browser/pins', { method: 'PUT', body: { session: { provider: session.provider, store_id: session.store_id, session_id: session.session_id }, pinned }, requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
     pinnedSessions: (provider, filters) => request(`/api/v1/session-browser/${encodeURIComponent(provider)}/pinned${queryString(filters)}`, { requestTimeoutMs: RUNTIME_TIMEOUT_MS }),

@@ -400,3 +400,17 @@
  .session-detail__tools > .session-detail__close { position: absolute; top: 8px; right: 10px; }
  .session-detail__subtitle { white-space: nowrap; }
 }
+
+.session-team-group { width:100%; border:0; cursor:pointer; background:var(--surface-1); color:var(--text-muted); text-align:left; }
+.session-team-group:hover { color:var(--foreground); background:var(--surface-2); }
+.session-team-group>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.session-team-agent { display:inline-flex; align-items:center; gap:5px; min-width:0; flex-shrink:0; font-size:11px; color:var(--text-muted); }
+.session-team-avatar { display:inline-block; width:21px; height:21px; overflow:hidden; border-radius:6px; background:var(--surface-2); }
+.session-team-agent>span:nth-child(2) { max-width:108px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.session-team-agent small { font-size:9px; border:1px solid var(--border); border-radius:3px; padding:0 3px; }
+.session-team-meta { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--session-subtitle,var(--text-muted)); }
+.session-detail__identity>.session-team-agent { margin-top:5px; }
+.session-message .ai-task-content { max-height:400px; overflow:auto; }
+.session-message .ai-task .room-markdown { height:auto; }
+.session-team-meta { font-size:10px; color:var(--text-subtle,var(--text-muted)); }
+.session-team-agent { text-transform:none; letter-spacing:normal; }

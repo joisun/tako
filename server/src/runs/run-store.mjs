@@ -33,6 +33,7 @@ const SAFE_RUNTIME_ID = /^[a-z][a-z0-9-]{0,63}$/
 
 export function createRunStore({
   databasePath,
+  database = null,
   clock = () => new Date(),
   createId = randomUUID,
 } = {}) {
@@ -43,12 +44,12 @@ export function createRunStore({
   const directory = dirname(databasePath)
   mkdirSync(directory, { recursive: true, mode: 0o700 })
   chmodSync(directory, 0o700)
-  const db = new DatabaseSync(databasePath)
+  const db = database ?? new DatabaseSync(databasePath)
   try {
     initialize(db)
     harden(databasePath)
   } catch (error) {
-    db.close()
+    if (!database) db.close()
     throw error
   }
 
@@ -331,7 +332,7 @@ export function createRunStore({
     list,
     markReviewed,
     hasOccurrence,
-    close: () => db.close(),
+    close: () => { if (!database) db.close() },
   })
 }
 

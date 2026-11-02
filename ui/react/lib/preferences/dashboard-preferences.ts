@@ -1,4 +1,4 @@
-export type DashboardView = 'scheduled' | 'sessions'
+export type DashboardView = 'scheduled' | 'sessions' | 'teams'
 export type SessionGroupMode = 'workspace' | 'branch'
 const SESSIONS_GROUP_KEY = 'rillo.sessions-group'
 
@@ -16,7 +16,7 @@ export function persistSessionsGroup(group: SessionGroupMode) {
 
 export function readDashboardView(location = window.location): DashboardView {
   const view = new URLSearchParams(location.search).get('view')
-  return view === 'scheduled' ? view : 'sessions'
+  return view === 'rooms' ? 'teams' : view === 'scheduled' || view === 'teams' ? view : 'sessions'
 }
 
 export function persistDashboardView(view: DashboardView, history = window.history) {

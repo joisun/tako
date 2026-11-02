@@ -1,8 +1,9 @@
 import { m } from 'motion/react'
 import { transition } from '@/lib/motion'
-import { ChevronDown, ChevronRight, Folder } from 'lucide-react'
+import { ChevronDown, ChevronRight, Folder, UsersRound } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+import { SessionAgent } from '@/components/agents/session-agent'
 import { Button } from '@/components/ui/button'
 import type { DashboardApi } from '@/lib/api/dashboard-api'
 import type { BrowserSession, SessionActivityPage, SessionPage, SessionRef, SessionRelation } from '@/lib/api/types'
@@ -28,6 +29,7 @@ export function SessionActivityView({ api, sessions, relations, relationIndex, k
   hasMore?: boolean; loadingMore?: boolean; onMore?: () => unknown
 }) {
   const [expanded, setExpanded] = useState(new Set<string>())
+  const [collapsedTeams,setCollapsedTeams]=useState(new Set<string>())
   const allSessions = sessions
   const allRelations = relations
   const roots = useMemo(() => {
@@ -49,7 +51,7 @@ export function SessionActivityView({ api, sessions, relations, relationIndex, k
   }, [allSessions, allRelations, activity?.available, activity?.store_id, statuses, statusSort, pinnedOnly, pinnedKeys])
   const groups = new Map<string, SessionTreeNode[]>()
   for (const root of roots) {
-    const path = root.session?.workspace ?? ''
+    const path = root.session?.team ? 'team:'+root.session.team.id : root.session?.workspace ?? ''
     groups.set(path, [...(groups.get(path) ?? []), root])
   }
   const selectedKey = selection ? sessionKey(selection) : null
@@ -81,6 +83,7 @@ export function SessionActivityView({ api, sessions, relations, relationIndex, k
         <div className="session-tree__title-row">
           <span className="session-tree__toggle-slot">{children.length ? <button className="session-tree__toggle" type="button" aria-label={(isExpanded ? '折叠 ' : '展开 ') + session.title} aria-expanded={isExpanded} onClick={() => toggle(node.key)}>{isExpanded ? <ChevronDown /> : <ChevronRight />}</button> : null}</span>
           <SessionActivity session={session} />
+          {session.team?<SessionAgent team={session.team}/>:null}
           <button type="button" className="session-tree__title" title={session.title} aria-pressed={node.key === selectedKey} onClick={() => onSelect(session)}>{session.title}</button>
           <SessionFamilyBadges session={session} index={relationIndex} knownSessions={knownSessions} onReadSession={onReadSession} />
           {node.conflict ? <span className="session-source-error" role="img" aria-label="关系冲突" title="关系冲突，未推断父级">!</span> : null}
@@ -90,7 +93,7 @@ export function SessionActivityView({ api, sessions, relations, relationIndex, k
         </div>
         <div className="session-tree__workspace-row">
           {session.branch ? <span className="session-tree__branch-meta"><SessionOrigin workspace={null} branch={session.branch} /></span> : null}
-          {session.workspace ? <SessionOrigin workspace={session.workspace} branch={null} /> : null}
+          {session.team?<span className="session-team-meta">Teams · {session.team.name}{session.team.deleted?' · 已删除':session.team.dissolved?' · 已解散':''} · {session.provider}</span>:session.workspace ? <SessionOrigin workspace={session.workspace} branch={null} /> : null}
         </div>
 
       </div>
@@ -100,10 +103,13 @@ export function SessionActivityView({ api, sessions, relations, relationIndex, k
   return <section className="session-activity-view" aria-label="会话列表">
     <header className="session-activity-view__toolbar"><Button size="xs" variant="quiet" disabled={!selection && !sessions.length} onClick={() => { const session = selection ?? sessions[0]; if (session) onLatest(session) }}>最近消息</Button></header>
     <div className="session-activity-view__scroll">
-      {[...groups.entries()].map(([path, nodes]) => <div key={path} className="session-tree__workspace">
-        <div className="session-tree__group"><Folder /><span className="session-path" title={path}><bdi dir="ltr">{path || '目录未知 / 父会话未载入'}</bdi></span><small>{nodes.length}</small></div>
-        {nodes.map(node => renderNode(node, 0))}
-      </div>)}
+      {[...groups.entries()].map(([path,nodes])=>{
+        const team=nodes[0]?.session?.team,closed=team&&collapsedTeams.has(path)
+        return <div key={path} className="session-tree__workspace" data-team={team?.id}>
+          {team?<button className="session-tree__group session-team-group" type="button" aria-expanded={!closed} onClick={()=>setCollapsedTeams(current=>{const next=new Set(current);if(next.has(path))next.delete(path);else next.add(path);return next})}>{closed?<ChevronRight/>:<ChevronDown/>}<UsersRound/><span>{team.name}</span><small>{nodes.length}</small></button>:<div className="session-tree__group"><Folder/><span className="session-path" title={path}><bdi dir="ltr">{path||'目录未知 / 父会话未载入'}</bdi></span><small>{nodes.length}</small></div>}
+          {!closed?nodes.map((node,index)=>renderNode(node,team?1:0,index===nodes.length-1)):null}
+        </div>
+      })}
       {roots.length === 0 ? (hasMore || loadingMore || ancestorState === 'pending'
         ? <div className="session-state" aria-busy="true"><span className="session-spinner" aria-label="读取主会话" /></div>
         : <p className="session-state">{ancestorState === 'unavailable' ? '父会话暂不可读取' : pinnedOnly ? '当前范围没有已标记会话' : '当前范围没有可展示的主会话'}</p>) : null}

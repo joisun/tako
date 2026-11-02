@@ -1,3 +1,4 @@
+import { handleCollaborationRequest } from './collaboration-http.mjs'
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 
@@ -9,6 +10,10 @@ const SCHEDULE_LOG_TAIL_MAX = 64 * 1024
 const RUN_INTERVENTION_TEXT_LIMIT = 16 * 1024
 const RUN_INTERVENTION_BODY_LIMIT = RUN_INTERVENTION_TEXT_LIMIT + 256
 const PUBLIC_SERVICE_ERRORS = new Set([
+  'AGENT_CATALOG_ERROR',
+  'AGENT_SAVE_FAILED',
+  'LOOP_RUNTIME_UNAVAILABLE',
+  'LOOP_MEMORY_SYNC_FAILED',
   'CODEX_MODEL_CATALOG_UNAVAILABLE',
   'CODEX_MODEL_UNAVAILABLE',
   'CODEX_REASONING_UNSUPPORTED',
@@ -371,6 +376,7 @@ export function createApiServer({
   sessionBrowser = null,
   messaging = null,
   schedulerService = null,
+  collaboration = null,
   scheduledRunLogs = null,
   runtimeRegistry = null,
   runService = null,
@@ -389,6 +395,7 @@ export function createApiServer({
       const requestOrigin = new URL(`http://${request.headers.host ?? expectedHost}`).origin
       const url = new URL(request.url, requestOrigin)
       const { pathname } = url
+      if (await handleCollaborationRequest({ request, response, url, collaboration })) return
       const previewResource = pathname.match(/^\/run-files\/([a-f0-9]{48})\/(.*)$/)
       const readingPreview = previewResource && ['GET', 'HEAD'].includes(request.method)
       if (readingPreview && runService?.readPreview) {

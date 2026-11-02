@@ -77,6 +77,11 @@ function createSession({
       }
       return
     }
+    if (method === 'item/reasoning/summaryTextDelta' || method === 'item/commandExecution/outputDelta') {
+      if(params?.threadId!==threadId || params?.turnId!==turnId || typeof params?.itemId!=='string' || typeof params?.delta!=='string')return
+      safeEmit(emit,{type:method==='item/reasoning/summaryTextDelta'?'thinking':'tool_result',payload:{item_id:params.itemId,text:params.delta,delta:true}})
+      return
+    }
     if (method === 'item/agentMessage/delta') {
       if (params?.threadId !== threadId || params?.turnId !== turnId
         || typeof params?.itemId !== 'string' || typeof params?.delta !== 'string') return
@@ -115,6 +120,7 @@ function createSession({
           }
         }
       }
+      if(item.type==='reasoning' && method==='item/completed' && Array.isArray(item.summary) && item.summary.length) safeEmit(emit,{type:'thinking',payload:{item_id:item.id,text:item.summary.map(value=>typeof value==='string'?value:value.text??'').join('\n'),delta:false}})
       const label = activityLabel(item)
       if (label) {
         safeEmit(emit, {
@@ -123,6 +129,8 @@ function createSession({
             turn_revision: turnRevision,
             item_id: item.id,
             label,
+            input:item.type==='commandExecution'?item.command:item.type==='mcpToolCall'?item.arguments:undefined,
+            output:method==='item/completed' ? (item.aggregatedOutput??item.result??item.error) : undefined,
             ...(method === 'item/completed' ? { state: activityState(item) } : {}),
           },
         })
@@ -172,6 +180,7 @@ function createSession({
         signal,
         disabledFeatures: capabilityLaunch.disabledFeatures,
         configOverrides: capabilityLaunch.configOverrides,
+        ...(run.execution_env ? { env: run.execution_env } : {}),
       })
       unsubscribe = client.onNotification(handleNotification)
       unsubscribeClosed = client.onClose?.((error) => finish({
@@ -193,6 +202,7 @@ function createSession({
         : null
       const config = {
         ...threadConfig,
+        ...(run.execution_config ?? {}),
         ...(run.network_access == null ? {} : { 'sandbox_workspace_write.network_access': run.network_access }),
         ...(run.auto_compact_token_limit == null ? {} : { model_auto_compact_token_limit: run.auto_compact_token_limit }),
       }
@@ -225,8 +235,8 @@ function createSession({
       finalMessage = ''
       safeEmit(emit, { type: 'user_message', payload: { kind, text } })
       const result = await client.request('turn/start', compact({
-        threadId, input: [{ type: 'text', text }], cwd: run.workspace,
-        model: run.model, effort: run.reasoning_effort,
+        threadId, input: [{ type: 'text', text }, ...(kind==='prompt'?(run.images??[]).map(path=>({type:'localImage',path})):[])], cwd: run.workspace,
+        model: run.model, effort: run.reasoning_effort, summary:run.reasoning_summary,
         serviceTier: run.fast_mode == null ? undefined : run.fast_mode ? 'fast' : 'default',
       }))
       if (settled || request !== requestRevision || retryTimer !== null) return

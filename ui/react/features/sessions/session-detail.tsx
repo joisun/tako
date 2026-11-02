@@ -2,6 +2,8 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Copy, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
+import { SessionAgent } from '@/components/agents/session-agent'
+import { Task,TaskTrigger,TaskContent } from '@/components/ai-elements/task'
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
 import { Button } from '@/components/ui/button'
 import { DashboardApiError, type DashboardApi } from '@/lib/api/dashboard-api'
@@ -87,7 +89,7 @@ export function SessionDetail({ api, session, knownSessions, knownRelations, que
     placeholderData: (previous) => previous,
   })
   const pages = history.data?.pages ?? []
-  const current = pages[0]?.session ?? session
+  const current = {...(pages[0]?.session??session),...(session.team?{team:session.team,title:session.title}:{})}
   const match = pages[0]?.match
   const seek = pages[0]?.seek
   useEffect(() => {
@@ -223,7 +225,7 @@ export function SessionDetail({ api, session, knownSessions, knownRelations, que
     <section className="session-detail" aria-label="会话预览">
       <header className="session-detail__header">
         <div className="session-detail__heading">
-          <div className="session-detail__identity"><div className="session-detail__title"><SessionActivity session={session} /><h2 title={current.title}>{current.title}</h2></div><SessionTimeRange pages={timelinePages} /></div>
+          <div className="session-detail__identity"><div className="session-detail__title"><SessionActivity session={session} /><h2 title={current.title}>{current.title}</h2></div><SessionTimeRange pages={timelinePages}/>{current.team?<SessionAgent team={current.team}/>:null}</div>
           <div className="session-detail__tools">
             <SessionPinButton api={api} session={current} />
             {canResume ? <SessionResumeButton api={api} session={{ ...current, state: session.state }} /> : null}
@@ -249,10 +251,10 @@ export function SessionDetail({ api, session, knownSessions, knownRelations, que
         {!history.isPending && !history.isError && !history.hasNextPage && messages.length === 0 ? <div className="session-state">{seek?.state === 'before_start' ? '此时间之前还没有消息。' : '暂无可展示的文字消息。'}</div> : null}
         {messages.map((message) => (
           <div className="session-message" data-at={message.at ?? undefined} data-item-id={message.id} data-match={(message.id === located?.item_id && message.turn_id === located?.turn_id) || undefined} key={`${message.turn_id}:${message.id}`} ref={message.id === located?.item_id && message.turn_id === located?.turn_id ? matchedMessage : undefined}>
-            <span className="session-message__role">{message.role === 'user' ? '你' : session.provider}<time dateTime={message.at ?? undefined}>{message.at ? new Date(message.at).toLocaleString('zh-CN') : '时间未知'}{message.time_precision === 'turn' ? ' · 轮次级' : ''}</time></span>
+            <span className="session-message__role">{message.role==='assistant'&&current.team?<SessionAgent team={current.team}/>:message.role === 'user' ? current.team&&message.text.startsWith('You are an active teammate in a Rillo ')?'团队执行上下文':'你' : current.team?.alias??session.provider}<time dateTime={message.at ?? undefined}>{message.at ? new Date(message.at).toLocaleString('zh-CN') : '时间未知'}{message.time_precision === 'turn' ? ' · 轮次级' : ''}</time></span>
             <Message from={message.role}>
               <MessageContent>
-                {message.id === match?.item_id ? <div className="session-message__match"><Highlight text={message.text} query={search} /></div>
+                {current.team&&message.role==='user'&&message.text.startsWith('You are an active teammate in a Rillo ')?<Task defaultOpen={false}><TaskTrigger title="团队执行上下文"/><TaskContent><MessageResponse mode="static">{message.text}</MessageResponse></TaskContent></Task>:message.id === match?.item_id ? <div className="session-message__match"><Highlight text={message.text} query={search} /></div>
                   : <MessageResponse mode="static">{message.text}</MessageResponse>}
               </MessageContent>
             </Message>

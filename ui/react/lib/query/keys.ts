@@ -10,6 +10,7 @@ export function isSessionMetadataQuery(key: readonly unknown[]) {
 
 export const queryKeys = {
   all: ['dashboard'] as const,
+  rooms: ['dashboard', 'rooms'] as const,
   meta: ['dashboard', 'meta'] as const,
   settings: ['dashboard', 'settings'] as const,
   sessionBrowser: ['dashboard', 'session-browser'] as const,

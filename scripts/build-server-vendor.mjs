@@ -11,6 +11,8 @@ export async function buildServerVendor({
   projectRoot = fileURLToPath(new URL('..', import.meta.url)),
 } = {}) {
   for (const [name, contents] of [
+    ['unpdf', "export { getDocumentProxy } from 'unpdf'\n"],
+    ['toml', "export { parse, stringify } from 'smol-toml'\n"],
     ['yaml', "export { parseDocument, stringify } from 'yaml'\n"],
     ['ws', "export { default } from 'ws'\n"],
     ['claude-sdk', "export { query } from '@anthropic-ai/claude-agent-sdk'\n"],
@@ -32,7 +34,7 @@ export async function buildServerVendor({
       legalComments: 'inline',
       minify: true,
       sourcemap: false,
-      external: ['bufferutil', 'utf-8-validate'],
+      external: ['bufferutil', 'utf-8-validate', 'pdfjs-dist', 'pdfjs-dist/*', '@napi-rs/canvas'],
       write: false,
     })
     const [output] = result.outputFiles
@@ -45,6 +47,12 @@ export async function buildServerVendor({
       await rm(temporaryPath, { force: true }).catch(() => undefined)
     }
   }
+  await build({
+    entryPoints: [join(projectRoot, 'mcp', 'src', 'loop-server.mjs')],
+    outfile: join(projectRoot, 'server', 'vendor', 'loop-server.mjs'),
+    bundle: true, format: 'esm', platform: 'node', target: 'node24',
+    legalComments: 'inline', minify: true,
+  })
   const licensePath = join(projectRoot, 'server', 'vendor', 'CLAUDE_SDK_LICENSE.md')
   const temporaryLicense = `${licensePath}.${randomUUID()}.tmp`
   try {

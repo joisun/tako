@@ -85,6 +85,7 @@ export class DashboardEventSource {
     if (!this.#source) return
     this.#refreshTimer = null
     this.#lastRefreshAt = Date.now()
+    void this.#queryClient.invalidateQueries({ queryKey: queryKeys.rooms })
     void this.#queryClient.invalidateQueries({ queryKey: queryKeys.sessionBrowser, predicate: (query) => isSessionMetadataQuery(query.queryKey) })
     void this.#queryClient.invalidateQueries({ queryKey: queryKeys.schedules })
     void this.#queryClient.invalidateQueries({

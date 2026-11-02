@@ -1,3 +1,4 @@
+import type { LoopAvatar } from './loop-types'
 export interface SessionProvider {
   id: string
   name: string
@@ -22,7 +23,10 @@ export interface SessionPin extends SessionRef {
   pinned_at: string
 }
 
+export interface TeamSessionIdentity {id:string;name:string;task_id:string;task_title:string;member_id:string;alias:string;avatar:LoopAvatar|null;leader:boolean;deleted:boolean;dissolved:boolean}
+
 export interface BrowserSession extends SessionRef {
+  team?:TeamSessionIdentity | null
   title: string
   preview: string
   snippet?: string | null

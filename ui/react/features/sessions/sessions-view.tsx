@@ -125,7 +125,7 @@ export function SessionsView({ api }: { api: DashboardApi }) {
   const sessions = useMemo(() => family.sessions.map(session => sessionWithStatus(session, nativeActivity, nativeStatuses))
     .sort((left, right) => compareSessions(left, right, statusSort)), [family.sessions, nativeActivity?.available, nativeActivity?.store_id, nativeStatuses, statusSort])
   const relationIndex = useMemo(() => indexSessionRelations(relations), [relations])
-  const knownSessions = useMemo(() => new Map([...sessions, ...(selection ? [selection.session] : [])].map(session => [sessionKey(session), session])), [sessions, selection?.session])
+  const knownSessions = useMemo(() => new Map([...(selection ? [selection.session] : []), ...sessions].map(session => [sessionKey(session), session])), [sessions, selection?.session])
   const activeSessions = (nativeActivity?.sessions ?? []).filter(session => session.state === 'active')
   const activeWorkspaces = new Set(activeSessions.map(session => session.workspace))
   const displayedSessions = useMemo(() => {
@@ -323,7 +323,7 @@ export function SessionsView({ api }: { api: DashboardApi }) {
       </div>
       <div className="session-reader-sheet-host" ref={setReaderHost}>
           {selection && readerHost ? <Sheet open={readerOpen} onOpenChange={changeReaderOpen} modal={false}><SheetContent ref={readerPopup} container={readerHost} keepMounted initialFocus={readerPopup} finalFocus={false} floating className="session-reader-sheet" aria-label="会话面板">
-            <div className="session-reader-sheet__content"><SessionDetail canResume={Boolean(provider?.capabilities.resume)} key={sessionKey(selection.session)} api={api} session={withStatus(selection.session)} knownSessions={knownSessions} knownRelations={relations} query={selection.query} at={selection.at} itemId={selection.itemId} followRequest={selection.followRequest} onReadSession={(ref) => void onReadSession(ref)} onLoadTimeline={() => void client.invalidateQueries({ queryKey: queryKeys.sessionTimeline(selection.session, 'session', selection.session.updated_at ?? '') })} active={readerOpen} onSeek={(at, itemId) => setSelection(current => current ? { ...current, query: '', at, itemId, followRequest: ++followRequestSequence.current } : current)} onBack={() => changeReaderOpen(false)} /></div>
+            <div className="session-reader-sheet__content"><SessionDetail canResume={Boolean(provider?.capabilities.resume)} key={sessionKey(selection.session)} api={api} session={withStatus(knownSessions.get(sessionKey(selection.session))??selection.session)} knownSessions={knownSessions} knownRelations={relations} query={selection.query} at={selection.at} itemId={selection.itemId} followRequest={selection.followRequest} onReadSession={(ref) => void onReadSession(ref)} onLoadTimeline={() => void client.invalidateQueries({ queryKey: queryKeys.sessionTimeline(selection.session, 'session', selection.session.updated_at ?? '') })} active={readerOpen} onSeek={(at, itemId) => setSelection(current => current ? { ...current, query: '', at, itemId, followRequest: ++followRequestSequence.current } : current)} onBack={() => changeReaderOpen(false)} /></div>
           </SheetContent></Sheet> : null}
       </div>
     </div>

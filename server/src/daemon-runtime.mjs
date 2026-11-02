@@ -1,3 +1,10 @@
+import { createAgentCatalog } from './agent-catalog.mjs'
+import { createExecutionDatabase } from './execution-database.mjs'
+import { createExecutionResourceCoordinator } from './execution-resource-coordinator.mjs'
+import { createAgentExecution } from './agent-execution.mjs'
+import { createCollaborationStore } from './collaboration/store.mjs'
+import { createCollaborationRuntime } from './collaboration-runtime.mjs'
+import { createClaudeRuntimeDefinition } from './runtime/adapters/claude.mjs'
 import { createSessionMessageStore } from './session-message-store.mjs'
 import { createSessionMessaging } from './runtime/session-messaging.mjs'
 import { createCodexMessageProvider } from './runtime/session-messaging/providers/codex.mjs'
@@ -145,12 +152,15 @@ export async function startDaemon({
     backlog: 0,
     count: 0,
   }
+  let executionDatabase = null
+  let collaboration = null
   let schedulerStore = null
   let schedulerDefinitions = null
   let schedulerMonitor = null
   let schedulerService = null
   let schedulerClock = null
   let messaging = null
+  let runtimeResolver = null
   let runtimeRegistry = null
   let runtimeEnvironment = null
   let sessionBrowser = null
@@ -226,6 +236,7 @@ export async function startDaemon({
     schedulerClosed = true
     try {
       await schedulerClock?.close()
+      await collaboration?.close()
       await runService?.shutdown()
       await schedulerMonitor?.close()
     } finally {
@@ -237,7 +248,12 @@ export async function startDaemon({
       runService = null
       runEventHub?.close()
       runEventHub = null
-      try { schedulerStore?.close() } finally { schedulerStore = null }
+      try { schedulerStore?.close() } finally {
+        schedulerStore = null
+        executionDatabase?.close()
+        executionDatabase = null
+        collaboration = null
+      }
     }
   }
 
@@ -259,7 +275,11 @@ export async function startDaemon({
       })
       migrateRunLedger({ databasePath: schedulePaths.databasePath, clock })
       schedulerDefinitions = createSwitchableScheduleDefinitionRepository(initialDefinitions)
+      executionDatabase = createExecutionDatabase(schedulePaths.databasePath)
+      const resources = createExecutionResourceCoordinator({ database: executionDatabase })
+      resources.recover()
       schedulerStore = createRunLedger({
+        database: executionDatabase,
         databasePath: schedulePaths.databasePath,
         clock,
       })
@@ -274,16 +294,31 @@ export async function startDaemon({
         store: schedulerStore,
         root: schedulePaths.logsDirectory,
       })
+      const supervisor = createSupervisor({ runtimeEnvironment })
+      const executeAgent = createAgentExecution({ registry: runtimeRegistry, supervisor, clock })
       runService = createRuns({
+        resources, executeAgent,
         runStore: schedulerStore,
         registry: runtimeRegistry,
-        supervisor: createSupervisor({ runtimeEnvironment }),
+        supervisor,
         eventHub: runEventHub,
         logStore: runLogStore,
         clock,
         onChange: (change) => hub.publish(change),
       })
       runService.recover()
+      const collaborationRegistry = createRuntimeRegistry({
+        definitions: [createCodexRuntime({ execFileImpl: runtimeExecFile, runtimeEnvironment }), createClaudeRuntimeDefinition()],
+        resolver: runtimeResolver,
+      })
+      collaboration = createCollaborationRuntime({
+        catalog: createAgentCatalog(), memoryRoot:join(dataDirectory,'rooms','memory'), workspaceRoot:join(dataDirectory,'rooms','workspaces'),
+        store: createCollaborationStore({ database: executionDatabase, clock }), resources,
+        registry: collaborationRegistry,
+        executeAgent: createAgentExecution({ registry: collaborationRegistry, supervisor, clock }),
+        logs: createRunLogs({ root: join(dataDirectory, 'rooms', 'logs') }),
+        onChange: change => hub.publish(change),
+      })
       schedulerService = createScheduleService({
         definitions: schedulerDefinitions,
         runtimeRegistry,
@@ -371,7 +406,7 @@ export async function startDaemon({
       resolverEnvironment.CODEX_BIN = config.codexPath
     }
     runtimeEnvironment = createRuntimeEnvironment({ env: resolverEnvironment })
-    const runtimeResolver = createRuntimeResolver({
+    runtimeResolver = createRuntimeResolver({
       env: resolverEnvironment,
       runtimeEnvironment,
       canonicalize: canonicalRuntimeExecutable,
@@ -401,6 +436,7 @@ export async function startDaemon({
       terminalLauncher,
       links,
       pins,
+      projectSessions: sessions => collaboration?.projectSessions(sessions)??sessions,
     })
     const messageTerminal = createTerminalMessageTransport({ enabled: async () => process.platform === 'darwin' && (await dashboardSettings.get()).settings.resume_terminal === 'otty' })
     messaging = createSessionMessaging({
@@ -426,6 +462,7 @@ export async function startDaemon({
       sessionBrowser,
       messaging,
       schedulerService,
+      collaboration,
       scheduledRunLogs,
       runtimeRegistry,
       runService,
@@ -433,6 +470,7 @@ export async function startDaemon({
       packageVersion: config.packageVersion ?? 'source',
     })
     const address = await api.listen()
+    await collaboration?.start(`http://127.0.0.1:${address.port}`)
     return {
       address,
       startup: { api_version: 5 },

@@ -9,6 +9,7 @@ CLI-owned sessions ◀──adapter── daemon ──HTTP──▶ Dashboard
                                   │
 Agent session_link ──HTTP────────▶│──▶ session-links.sqlite
 Schedule Markdown ──watch───────▶│──▶ scheduler.sqlite
+Teams ──HTTP───────────────────▶│──▶ loop_* / execution_resources（同一库）
                                   │
                                   └──▶ Runtime Registry ──▶ local agent CLI
 ```
@@ -108,7 +109,7 @@ queued
 
 ## Active Live Session
 
-Codex 的 active Run 使用 one-process-per-Run `codex app-server --listen stdio://`。这不是第二个 daemon：process lifecycle、timeout、cancel、terminal persistence 与 Run status 仍由 `RunService` 独占管理。
+Codex 的 active Run 使用 one-process-per-Run `codex app-server --listen stdio://`。这不是第二个 daemon：Scheduled的process lifecycle、timeout、cancel、terminal persistence与Run status仍由`RunService`管理。共同执行驱动位于`agent-execution.mjs`；Teams使用独立Run记录，不借用Schedule唯一约束。
 
 ```text
 Dashboard ──GET Run SSE──────────────▶ daemon Run Event Hub
@@ -322,10 +323,31 @@ Cadence 增加 `interval`（整数 `minutes: 1..1440`）。非 once cadence 可�
 
 ## Frontend component architecture
 
-`ui/react/app` 管理 shell、导航、连接与设置；`features/sessions` 和 `features/scheduled` 保留原业务归属；不为目录外观拆散业务文件。共用控件集中在 `components/ui`，Kibo 源码组合组件集中在 `components/kibo-ui`，注册表与来源记录见 `components/registry/README.md`。`lib/cn.ts` 为唯一 class 合并入口，`lib/motion.ts` 定义 150/220/300ms 动效约定。
+`ui/react/app` 管理 shell、导航、连接与设置；`features/sessions`、`features/scheduled` 和 `features/teams` 分别保存会话、定时任务与团队业务；`components/agents` 提供 Teams 和 Sessions 共用的成员身份展示；不为目录外观拆散业务文件。共用控件集中在 `components/ui`，Kibo 源码组合组件集中在 `components/kibo-ui`，注册表与来源记录见 `components/registry/README.md`。`lib/cn.ts` 为唯一 class 合并入口，`lib/motion.ts` 定义 150/220/300ms 动效约定。
 
 Kibo 是 shadcn 生态的源码注册表，扩展组件以它为默认来源；按钮、表单、Dialog、Sheet、Select、Popover、Tooltip 和分段切换采用 shadcn 组件组织和属性约定，交互底层只使用 Base UI。React Aria/dotUI 组件、跨框架 Drawer 桥接以及专用 Tailwind 插件已退出当前 React 前端。Kibo Status/Pill/Spinner 只纳入用到的导出，使用同一语义颜色，不为导出未使用的 Avatar/Gantt/装饰效果安装依赖。AI Elements/Streamdown、Canvas minimap 和已有 SSE/Query 业务代码继续使用；旧版回滚构建仍依赖 SVAR，不能删除。
 
 `styles/tokens.css` 是唯一颜色、字体、间距、圆角、阴影和 CSS 时长定义；`styles/components.css` 负责共用控件，功能布局保留原有位置。MotionConfig 遵从系统减少动态效果，LazyMotion 使用 domMax 支持布局投影。Motion 负责导航选中、弹窗、Sheet、列表重排和展开反馈；hover/focus/disabled 等即时控件状态使用相同 CSS 时长。实时状态不添加装饰性循环闪动。现有产品没有 toast 或独立 Overview，不为本次改造新增这些工作流。
 
 Geist Sans/Mono 的拉丁字集 WOFF2 随 esbuild 以 data URL 内嵌，中文沿用系统字体。React 编译器保留这些本地 @font-face，继续拒绝远程 CSS URL，产物仍为离线单 HTML。React 与 Tailwind 版本不迁移。检查使用 npm run check、npm run test:ui、生产构建及相关 node:test；仓库未配置独立 linter，不能把跳过 lint 说成 ESLint 通过。
+
+## Agent Loop 团队协作
+
+源码合同见[Agent Loop 架构与接口](agent-loop.md)。同一 daemon 在 scheduler.sqlite 中添加独立版本的 loop_* 表及 execution_resources，Scheduled 表和公开接口不变。daemon 持有共享 SQLite 连接并最终关闭，RunStore 不关闭外部注入的连接。RunService 与协作运行时共用 agent-execution 和底层 supervisor，不互相包装。
+
+团队以用户消息建立内部任务，Leader 按依赖委派成员并根据回报继续工作。消息、持久 inbox、outbox 及后续派发使用事务。Agent 定义来自本地全局目录、ECC 或 Agency Agents 在线目录；市场来源由服务端返回，目录按来源独立缓存并可手动刷新，定义和导入记录固定到具体 commit。市场导入原子写入真实共享 Agent 目录后才允许加入团队，成员执行配置与定义快照分别保存。Teams 看板使用独立的 loop_boards、loop_work_items 和 revision 保存人工工作项，不把卡片当作 Agent Task 或 Run。协作 loop_schema 为 5，Scheduled user_version 保持 4。六个 Run 专用 MCP 工具为 read_context、remember、send_message、submit_result、request_action、report_progress。成员续接自己的原生会话，按成功投递游标读取新增输入；完整历史通过有界分页工具读取，关键决定及摘要保留来源。SQLite 保存共享事实、执行索引和未导出版本；服务管理的资料目录异步备份完整团队与文件快照，失败不阻断协作。团队只需名称；服务为新任务分配稳定内部目录，独立新应用可直接在内部目录实现，已有项目和分支由 Leader 根据用户消息通过 prepare_projects 为当前任务准备；恢复不重放旧执行。旧固定阶段记录继续按原流程执行，新聊天使用 conversation 工作流。
+
+新任务的 CLI 始终使用服务管理的内部目录。项目执行可选择隔离新分支、继续已有本地分支或明确复用原目录，记录实际目录、分支、起点及 dirty 状态；原子取得内部目录及全部项目目录的占用，写入 sandbox 限制到这组目录。写入后须通过只读验证才能交付。暂停或改目标撤销 Run 凭据，重启不重放已领取的执行。PID 未知或旧进程仍存活时，不释放目录占用。当前 Codex 消息驱动交付已实测，Claude 讨论与审阅适配仍缺少模型侧成功证据，不开放 Claude 实施。
+
+这是未发布分支的源码合同，既有 Release 与安装版不会随之更新。验证范围见[实施验证记录](job/agent-loop/03-phases.md)。
+
+
+Teams 成员的 name/avatar 是团队身份，execution_config 保存模型与实际支持的 effort。用户显式 @ 直接派发，无收件人时由 Leader 承接；成员结果返回实际委派者并通知 Leader。只读执行共享目录读锁，写入与 Scheduled 使用排他锁；depends_on 依赖完成后才派发。公开摘要、工具输入输出及状态保存在 Run.parts，图片/PDF 为服务端路径引用，详见 [Teams](agent-loop.md#成员身份运行内容与生命周期)。loop_schema=5 保留历史成员快照，允许真删除成员及关联全局定义；删除文件先确认 digest 并用持久化日志处理恢复。解散先停止本团队执行，保留历史，不改变其他团队。
+
+Teams 对话采用 AI Elements Conversation、Message、PromptInput、ChainOfThought、Tool、Task 与 InlineCitation；Tiptap Mention 继续使用稳定成员 ID。Agent 组件展示定义快照与配置，不接管运行时。导航顺序为 Sessions、Schedule、Teams；当前页面与接口使用 teams，旧 rooms 链接和接口保留已有数据兼容入口。团队解散/删除入口位于左侧列表；删除隐藏列表记录并保留原生会话及历史。
+
+Sessions 通过 daemon 注入的 projectSessions 补充团队身份，不跨服务调用协作运行时。新执行按 provider/store/session 精确关联；旧记录额外核对 workspace。列表按团队分组，标题采用用户任务名，成员头像与别名来自当前成员或 Run 快照；原生父子与 fork 关系不变。具体数据约定见 [Sessions 中的团队关联](agent-loop.md#sessions-中的团队关联)。
+
+团队快照将原有 agent_message 事件中的动作补充为 messages[].intent，界面分别标记指派、验证、回复与广播，并保留稳定成员 ID。此投影不改变派发、权限或消息正文；旧记录缺少事件时不推断动作。独立新产物不以缺少现有仓库路径为阻塞，已有项目仍须明确授权；写入后的只读验证门槛不变。
+
+左侧团队菜单的“复制房间”通过 POST /api/v1/teams/:id/copy 复用当前成员快照及配置，事务内生成新房间和成员 ID 并重映射 Leader。服务为其分配独立默认存储；消息、任务、会话、看板、项目绑定与原团队执行状态不复制。复制不探测 CLI、不重新导入全局定义或启动 Agent；request_key 防止重试产生多个房间。

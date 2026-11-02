@@ -1,0 +1,10 @@
+import { Check,ChevronsUpDown } from 'lucide-react'
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { ModelSelector,ModelSelectorContent,ModelSelectorInput,ModelSelectorList,ModelSelectorItem,ModelSelectorEmpty,ModelSelectorGroup } from '@/components/ai-elements/model-selector'
+import type { RoomRuntime } from '@/lib/api/loop-types'
+export function MemberRuntimeFields({runtime,model,effort,onModel,onEffort}:{runtime?:RoomRuntime;model:string|null;effort:string|null;onModel:(value:string|null)=>void;onEffort:(value:string|null)=>void}){
+  const [open,setOpen]=useState(false),selected=runtime?.models.find(item=>item.id===model)
+  const levels=(selected?.reasoningLevels??[]).map(value=>typeof value==='string'?value:value.reasoningEffort??value.reasoning_effort??'').filter(Boolean)
+  return <><div className="room-field"><span>模型</span><Button className="room-model-trigger" disabled={!runtime||runtime.state!=='ready'} onClick={()=>setOpen(true)}><span>{model??'跟随客户端默认模型'}</span><ChevronsUpDown/></Button></div><label className="room-field"><span>推理强度</span><select className="room-select" aria-label="推理强度" value={effort??''} disabled={!levels.length} onChange={event=>onEffort(event.target.value||null)}><option value="">跟随客户端默认</option>{levels.map(value=><option key={value} value={value}>{value}</option>)}</select></label><ModelSelector open={open} onOpenChange={setOpen}><ModelSelectorContent><ModelSelectorInput aria-label="搜索模型"/><ModelSelectorList><ModelSelectorEmpty/><ModelSelectorGroup><ModelSelectorItem value="跟随客户端默认模型" onSelect={()=>{onModel(null);setOpen(false)}}>跟随客户端默认模型{!model?<Check/>:null}</ModelSelectorItem>{runtime?.models.map(item=><ModelSelectorItem key={item.id} value={`${item.id} ${item.displayName??''}`} onSelect={()=>{onModel(item.id);setOpen(false)}}><span>{item.displayName??item.id}<small>{item.id}</small></span>{item.id===model?<Check/>:null}</ModelSelectorItem>)}</ModelSelectorGroup></ModelSelectorList></ModelSelectorContent></ModelSelector></>
+}
