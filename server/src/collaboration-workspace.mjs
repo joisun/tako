@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createHash } from 'node:crypto'
-import { mkdir, realpath, stat } from 'node:fs/promises'
-import { join, relative, resolve, isAbsolute } from 'node:path'
+import { mkdir, readFile, realpath, stat } from 'node:fs/promises'
+import { dirname, join, relative, resolve, isAbsolute } from 'node:path'
 
 const exec = promisify(execFile)
 export async function prepareCollaborationWorkspace({workspace,requestKey,executionMode='isolated',branch:requestedBranch=null}) {
@@ -23,6 +23,7 @@ export async function prepareCollaborationWorkspace({workspace,requestKey,execut
     if(checkedOut!==branch)throw invalid('LOOP_BRANCH_MISMATCH','目录当前分支已改变，请重新核对')
     if(!(await stat(target).catch(()=>null))?.isDirectory())throw invalid('LOOP_WORKSPACE_UNAVAILABLE','项目子目录不在所选工作区，请选择该分支中存在的项目目录')
     return{workspace:target,source_workspace:workspace,branch,execution_mode:executionMode,requested_branch:requestedBranch,
+      git_directory:await realpath(await git(['rev-parse','--absolute-git-dir'],actual)),project_relative_path:relative(root,workspace),
       base_commit:await git(['rev-parse','HEAD'],actual),dirty:!!await git(['status','--porcelain=v1','--untracked-files=all'],actual)}
   }
   if(executionMode==='in_place') {
@@ -54,6 +55,27 @@ export async function prepareCollaborationWorkspace({workspace,requestKey,execut
   const commit=await git(['rev-parse','--verify','--end-of-options',`${start}^{commit}`]).catch(()=>{throw invalid('LOOP_BRANCH_NOT_FOUND','所选起点引用不存在；不会改用 HEAD')})
   if(!assigned){await ensureParent();await git(['worktree','add','-b',branch,worktree,commit])}
   return result(worktree,branch)
+}
+
+export async function refreshCollaborationWorkspace(resource) {
+  const git=async(args,cwd)=>(await exec('git',args,{cwd,timeout:15000,maxBuffer:1024*1024,encoding:'utf8',shell:false})).stdout.trim()
+  let directory=resource.workspace
+  if(resource.git_directory){
+    const pointer=await readFile(join(resource.git_directory,'gitdir'),'utf8').catch(error=>{if(error.code==='ENOENT')return null;throw error})
+    if(pointer)directory=dirname(pointer.trim())
+  }
+  let root
+  try{root=await realpath(await git(['rev-parse','--show-toplevel'],directory))}catch(error){
+    if(resource.git_directory)throw error
+    return resource
+  }
+  const gitDirectory=await realpath(await git(['rev-parse','--absolute-git-dir'],root))
+  if(resource.git_directory&&gitDirectory!==resource.git_directory)throw Object.assign(new Error('工作区已不再属于原 Git worktree'),{code:'LOOP_WORKTREE_CONFLICT',statusCode:409})
+  const projectPath=resource.project_relative_path??relative(root,directory)
+  const workspace=await realpath(join(root,projectPath))
+  const branch=await git(['symbolic-ref','--quiet','--short','HEAD'],root).catch(()=>null)
+  return{...resource,workspace,branch,git_directory:gitDirectory,project_relative_path:projectPath,
+    ...(resource.execution_mode==='existing_branch'?{requested_branch:branch}:{})}
 }
 
 export async function prepareConversationWorkspace({workspaceRoot,roomId,requestKey}) {

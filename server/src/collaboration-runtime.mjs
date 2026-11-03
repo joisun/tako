@@ -4,22 +4,26 @@ import { realpath, stat } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { isAbsolute, join, resolve } from 'node:path'
 import { processExists } from './execution-resource-coordinator.mjs'
-import { prepareCollaborationWorkspace, prepareConversationWorkspace } from './collaboration-workspace.mjs'
+import { prepareCollaborationWorkspace, prepareConversationWorkspace, refreshCollaborationWorkspace } from './collaboration-workspace.mjs'
 import { resolveCollaborationArtifact } from './collaboration-artifacts.mjs'
 import { executionPrompt } from './collaboration/context.mjs'
 import { memberConfiguration, memberAvatar } from './collaboration/member-configuration.mjs'
 import { prepareRoomAttachments,readRoomAttachment } from './collaboration/attachments.mjs'
 import { createRunParts } from './collaboration/run-parts.mjs'
+import { createTeamLiveStream } from './collaboration/live-stream.mjs'
 import { loopError } from './collaboration/errors.mjs'
 
 export function createCollaborationRuntime({ store, executeAgent, resources, registry, logs, onChange = () => {}, concurrency = 2, catalog = null, memoryRoot = null, workspaceRoot = null,
+  hydrateRunParts=async run=>run,
   toolServerPath = fileURLToPath(new URL('../vendor/loop-server.mjs', import.meta.url)) }) {
   const active = new Map()
   const messageQueues = new Map()
   let creationQueue = Promise.resolve()
   let copyQueue = Promise.resolve()
+  let catalogDeletionQueue = Promise.resolve()
   let stopping = false, timer = null, baseUrl = null, pumping = false
-  const changed = () => { try { onChange({ kind: 'rooms' }) } catch {} }
+  const live=createTeamLiveStream(store)
+  const changed = () => { live.refresh();try { onChange({ kind: 'rooms' }) } catch {} }
 
   function copyRoom(sourceId,input) {
     const operation=copyQueue.then(async()=>{
@@ -43,12 +47,22 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
 
   function backup(roomId){void store.memory.flush(roomId).catch(error=>{console.error('Rillo room backup pending:',error.code);changed()})}
 
+  async function refreshProjects(taskId,replacing=[]) {
+    const task=store.detail(taskId)
+    if(task.config.workflow!=='conversation')return
+    const previous=task.config.resources??[]
+    const refreshed=await Promise.all(previous.map(resource=>replacing.includes(resource.source_workspace)?resource:refreshCollaborationWorkspace(resource)))
+    store.refreshProjects(taskId,previous,refreshed)
+  }
+
   async function execute(candidate, controller) {
-    const parts=createRunParts(value=>store.recordParts(candidate.id,value),changed)
+    const parts=createRunParts(value=>store.recordParts(candidate.id,value),updates=>{live.parts(candidate.task_id,candidate.id,updates);try{onChange({kind:'rooms'})}catch{}})
     let lease = null, pid = null, handle = null, result = null, claimed = false
     try {
+      await refreshProjects(candidate.task_id)
       const current = store.context(candidate.id)
-      lease = await resources.wait({ owner: 'collaboration', runId: candidate.id, workspace: current.task.workspace, workspaces:[current.task.workspace,...(current.task.config.resources?.map(resource=>resource.workspace)??[])], signal: controller.signal, access:current.run.phase==='implementing'?'write':'read' })
+      const leaderWrite = current.task.config.workflow==='conversation' && current.member.runtime_id==='codex' && current.run.routing?.intent==='lead'
+      lease = await resources.wait({ owner: 'collaboration', runId: candidate.id, workspace: current.task.workspace, workspaces:[current.task.workspace,...(current.task.config.resources?.map(resource=>resource.workspace)??[])], signal: controller.signal, access:current.run.phase==='implementing'||leaderWrite?'write':'read' })
       if (controller.signal.aborted) return
       const token = randomBytes(32).toString('hex')
       const context = store.claim(candidate.id, token)
@@ -57,11 +71,12 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       backup(context.task.room_id)
       changed()
       const writing = context.run.phase === 'implementing'
+      const unrestricted = context.task.config.workflow === 'conversation' && context.member.runtime_id === 'codex'
       if (writing && registry.get(context.member.runtime_id).capabilities?.collaborationWrite === false) throw loopError('LOOP_WRITE_UNSUPPORTED', '所选 Agent 尚不支持受限实施')
       const executionEnv = { RILLO_LOOP_URL: baseUrl, RILLO_LOOP_RUN: candidate.id, RILLO_LOOP_TOKEN: token }
       const loopMcp = { command: process.execPath, args: [toolServerPath] }
       const executionConfig = {
-        ...(writing && context.task.config.resources?.length ? {'sandbox_workspace_write.writable_roots':context.task.config.resources.map(resource=>resource.workspace)} : {}),
+        ...(!unrestricted && writing && context.task.config.resources?.length ? {'sandbox_workspace_write.writable_roots':context.task.config.resources.map(resource=>resource.workspace)} : {}),
         'mcp_servers.rillo_loop': { ...loopMcp, env_vars: Object.keys(executionEnv), enabled: true, default_tools_approval_mode: 'approve', enabled_tools: ['read_context','submit_result','request_action','report_progress','send_message','remember'] },
       }
       handle = await logs.open({ scheduleId: context.task.id, runId: candidate.id })
@@ -74,15 +89,16 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       let sequence = 0
       result = await executeAgent({
         runId: candidate.id, runtimeId: context.member.runtime_id, signal: controller.signal, logs: handle,
-        spec: { workspace: context.task.workspace, resume_session_id: context.continuity.session_id, additional_workspaces:context.task.config.resources?.map(resource=>resource.workspace).filter(path=>path!==context.task.workspace)??[], images:attached.filter(item=>item.media_type.startsWith('image/')).map(item=>item.path), prompt: executionPrompt(context), sandbox_mode: writing ? 'workspace-write' : 'read-only',
-          reasoning_effort:context.member.execution_config?.effort??null, reasoning_summary:'concise',
-          timeout_seconds: context.task.config.timeout_seconds, model: context.member.execution_config ? context.member.execution_config.model : context.member.profile?.model ?? null,
-          network_access: false, capabilities: { skills: 'disabled', integrations: 'disabled' },
+        spec: { workspace: context.task.workspace, resume_session_id: context.continuity.session_id, additional_workspaces:context.task.config.resources?.map(resource=>resource.workspace).filter(path=>path!==context.task.workspace)??[], images:attached.filter(item=>item.media_type.startsWith('image/')).map(item=>item.path), prompt: executionPrompt(context), sandbox_mode: unrestricted ? 'danger-full-access' : writing ? 'workspace-write' : 'read-only',
+          reasoning_effort:context.member.execution_config?.effort??null, reasoning_summary:'detailed',
+          timeout_seconds: context.task.config.workflow === 'conversation' ? undefined : context.task.config.timeout_seconds, model: context.member.execution_config ? context.member.execution_config.model : context.member.profile?.model ?? null,
+          capabilities: { skills: 'inherit', integrations: 'inherit' },
           execution_config: executionConfig, execution_env: executionEnv, loop_mcp: loopMcp },
         nextSequence: () => ++sequence,
         onSpawn(value) { pid = value.pid; lease.spawned(pid); store.spawned(candidate.id, value); changed() },
         emit(event) { parts.emit(event); if (event.type === 'turn_started') store.inputDelivered(candidate.id); if (event.type === 'session') { store.recordSession(candidate.id, event.payload.session_id,context.member.runtime_id==='codex'?{provider:context.member.runtime_id,store_id:createHash('sha256').update(resolve(process.env.CODEX_HOME??join(homedir(),'.codex'))).digest('hex').slice(0,20),session_id:event.payload.session_id}:null); changed() } },
       })
+      await refreshProjects(candidate.task_id)
     } catch (error) {
       result = { status: controller.signal.aborted ? 'canceled' : 'failed', error_code: error.code ?? 'LOOP_EXECUTION_FAILED', final_message: error.message }
       if(!claimed&&!controller.signal.aborted)store.failQueued(candidate.id,result)
@@ -96,6 +112,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       }
       backup(store.detail(candidate.task_id).room_id)
       active.delete(candidate.id)
+      live.finished(candidate.task_id)
       changed()
       wake()
     }
@@ -129,9 +146,26 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       }
     }
   }
+  function catalogOperation(operation){
+    const next=catalogDeletionQueue.then(operation)
+    catalogDeletionQueue=next.catch(()=>{})
+    return next
+  }
+  async function recoverCatalogDeletions(strict=false){
+    for(const job of store.database.prepare('SELECT * FROM loop_catalog_deletions').all()){
+      try{
+        await catalog.finishDeletion(JSON.parse(job.files_json),job.state==='committed')
+        store.database.prepare('DELETE FROM loop_catalog_deletions WHERE id=?').run(job.id)
+      }catch(error){
+        if(strict)throw loopError('LOOP_DEFINITION_DELETE_PENDING','本地定义清理未完成，请检查文件权限后重试',409)
+        console.error('Rillo Agent definition cleanup failed:',error.code??error.message)
+      }
+    }
+  }
   async function start(url) {
     store.recover()
     await recoverDefinitionDeletions()
+    await recoverCatalogDeletions()
     for(const room of store.rooms()) {
       try{if(memoryRoot&&!room.config.memory_directory){const path=await store.memory.bind(join(memoryRoot,room.id),room.id);store.configureMemory(room.id,path)};backup(room.id)}
       catch(error){console.error('Rillo room memory startup sync failed:',room.id,error.code)}
@@ -175,6 +209,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     stopping = true; clearInterval(timer)
     for (const entry of active.values()) entry.controller.abort()
     await Promise.allSettled([...active.values()].map(entry => entry.promise))
+    live.close()
     try{await store.memory.close()}catch(error){console.error('Rillo room memory shutdown sync failed:',error.code)}
   }
   function reconcileRun(id, input) {
@@ -202,7 +237,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       if(room.config?.dissolved_at)throw loopError('LOOP_ROOM_DISSOLVED','团队已解散，只能查看历史',409)
       input={...input,attachments:await prepareRoomAttachments(input.attachments)}
       const selected = input.task_id ? room.tasks.find(task => task.id === input.task_id) : room.tasks.find(task => task.config.workflow === 'conversation' && !['completed','canceled'].includes(task.status))
-      const sameConfiguration = selected?.config.leader === room.config?.leader_id && selected?.config.source_workspace === room.config?.workspace && (selected?.config.room_instructions ?? '') === (room.config?.instructions ?? '') && selected?.config.max_runs === room.config?.max_runs
+      const sameConfiguration = selected?.config.leader === room.config?.leader_id && selected?.config.source_workspace === room.config?.workspace && (selected?.config.room_instructions ?? '') === (room.config?.instructions ?? '')
       if (!selected?.config.imported && selected?.config.workflow === 'conversation' && sameConfiguration && !['completed','canceled'].includes(selected.status)) {
         const value = store.continueConversation(roomId, selected.id, input)
         changed(); wake(); return value
@@ -225,23 +260,26 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
   }
   async function requestAction(id,input) {
     if(input.action!=='prepare_projects'){const value=store.requestAction(id,input);changed();return value}
-    const context=store.projectContext(id,input),current=context.task.config.resources??[{workspace:context.task.workspace,source_workspace:context.task.config.source_workspace,branch:context.task.config.branch}]
+    const context=store.projectContext(id,input),bound=context.task.config.resources??[]
     const paths=await canonicalWorkspaces(input.workspaces.map(path=>{
       if(path.startsWith('~/'))return join(homedir(),path.slice(2))
       if(isAbsolute(path))return path
-      const base=context.task.config.source_workspace??current[0]?.source_workspace
+      const base=context.task.config.source_workspace??bound[0]?.source_workspace
       if(!base)throw loopError('LOOP_PROJECT_PATH_REQUIRED','尚未指定项目，请在对话中给出绝对路径或 ~/ 路径')
       return resolve(base,path)
     }))
+    const explicit=input.execution_mode!==undefined||input.branch!==undefined
+    await refreshProjects(context.task.id,explicit?paths:[])
+    const current=store.context(id).task.config.resources??[]
     const executionMode=input.execution_mode??(input.branch?'existing_branch':'isolated')
-    for(const path of paths){
-      const existing=current.find(resource=>resource.source_workspace===path)
-      if(existing&&(((input.execution_mode!==undefined||input.branch!==undefined)&&(existing.execution_mode??'isolated')!==executionMode)||(input.branch!==undefined&&(existing.requested_branch??existing.branch)!==input.branch)))throw loopError('LOOP_PROJECT_BINDING_CONFLICT','当前任务已绑定该项目的其他分支或执行方式，请结束当前任务后再重新选择',409)
-    }
     const additions=paths.filter(path=>!current.some(resource=>resource.source_workspace===path))
     if(current.length+additions.length>8)throw loopError('LOOP_INPUT_INVALID','同一任务最多使用8个项目')
     const prepared=[]
-    for(const workspace of additions)prepared.push(await prepareCollaborationWorkspace({workspace,requestKey:context.task.id,executionMode,branch:input.branch??null}))
+    for(const workspace of paths){
+      const existing=current.find(resource=>resource.source_workspace===workspace)
+      if(existing&&input.execution_mode===undefined&&input.branch===undefined)continue
+      prepared.push(await prepareCollaborationWorkspace({workspace,requestKey:context.task.id,executionMode,branch:input.branch??null}))
+    }
     const result=store.extendProjects(id,input,prepared);changed();return result
   }
   async function memberRuntime(runtimeId) {
@@ -262,12 +300,15 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       const value=store.dissolveRoom(id);changed();return value
     }
   return Object.freeze({ ...store,
+    subscribeTask:live.subscribe,
+    async taskTimeline(id){const task=store.detail(id);return {...task,runs:await Promise.all(task.runs.map(run=>hydrateRunParts(run,task))) }},
     reconcileRun,
     memberRuntime,
-    importAgent: async input => {
+    importAgent: input => catalogOperation(async()=>{
+      await recoverCatalogDeletions(true)
       try { const result = await catalog.importLocal(input.definition_id,input.runtime_id??'codex'); changed(); return result }
       catch (error) { if(error.code==='AGENT_CATALOG_ERROR')throw error;throw loopError('AGENT_SAVE_FAILED','无法保存到本地 Agent 目录，请检查目录权限和磁盘空间',503) }
-    },
+    }),
     createWorkItem(id,input) { const value=store.createWorkItem(id,input);changed();return value },
     reorderWorkItems(id,input) { const value=store.reorderWorkItems(id,input);changed();return value },
     updateWorkItem(id,itemId,input) { const value=store.updateWorkItem(id,itemId,input);changed();return value },
@@ -285,7 +326,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     async flushMemory(roomId){try{return await store.memory.flush(roomId)}finally{changed()}},
     readContext(id,input={}) {if(input.section==='attachment'){const room=store.context(id).task.room_id;const message=store.database.prepare('SELECT attachments_json FROM loop_messages WHERE id=? AND room_id=?').get(input.source_message_id??'',room);const attachment=JSON.parse(message?.attachments_json??'[]')[input.attachment_index??0];if(!attachment)throw loopError('LOOP_NOT_FOUND','文件引用不属于此团队',404);const offset=input.offset??0;if(!Number.isSafeInteger(offset)||offset<0)throw loopError('LOOP_INPUT_INVALID','文件读取位置无效');return {...attachment,text:attachment.text?.slice(offset,offset+12000),next_offset:attachment.text?.length>offset+12000?offset+12000:null}};return input.section==='artifact'?store.memory.readArtifact(store.context(id).task.room_id,input):store.readContext(id,input)},
     catalogSources:()=>{if(!catalog)throw loopError('AGENT_CATALOG_UNAVAILABLE','Agent目录尚未初始化',503);return {sources:catalog.sources()}},
-    catalog: async (source,options={}) => { if (!catalog) throw loopError('AGENT_CATALOG_UNAVAILABLE', 'Agent目录尚未初始化', 503); return source === 'local' ? catalog.local() : catalog.marketplace(source,options) },
+    catalog: async (source,options={}) => { if (!catalog) throw loopError('AGENT_CATALOG_UNAVAILABLE', 'Agent目录尚未初始化', 503); return source === 'local' ? catalogOperation(async()=>{await recoverCatalogDeletions(true);return catalog.local()}) : catalog.marketplace(source,options) },
     agentDefinition: (id, runtimeId) => catalog.get(id, runtimeId),
     async configureRoom(id, input) {
       const workspaces = input.workspaces!==undefined ? await canonicalWorkspaces(input.workspaces) : input.workspace!==undefined ? [await canonicalWorkspace(input.workspace)] : undefined
@@ -356,25 +397,39 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       return readRoomAttachment(attachment,{extract:false})
     },
     async retryDefinitionDeletion(roomId){await recoverDefinitionDeletions(roomId);changed();return store.room(roomId)},
-    async memberDeletion(roomId,id){
-      const room=store.room(roomId),member=room.members.find(value=>value.id===id)
-      if(!member)throw loopError('LOOP_NOT_FOUND','成员不存在',404)
-      const files=await catalog.deletionFiles(member.profile?.id)
-      return {member_id:id,files,other_rooms:store.rooms().filter(value=>value.id!==roomId).filter(value=>store.room(value.id).members.some(other=>other.profile?.id===member.profile?.id)).length}
+    removeMember(roomId,id,input){
+      if(input.confirm!==true)throw loopError('LOOP_DELETE_CONFIRM_REQUIRED','请确认移出当前团队')
+      if(!store.room(roomId).members.some(member=>member.id===id))return {deleted:true,member_id:id}
+      const result=store.removeMember(roomId,id);changed();return result
     },
-    async deleteMember(roomId,id,input){
-      if(input.confirm!==true)throw loopError('LOOP_DELETE_CONFIRM_REQUIRED','请确认删除成员及本地定义')
-      const member=store.room(roomId).members.find(value=>value.id===id)
-      if(!member)return {deleted:true,member_id:id}
-      if(store.room(roomId).definition_deletions.length)throw loopError('LOOP_DEFINITION_DELETE_PENDING','请先重试当前团队未完成的定义清理',409)
-      const files=await catalog.deletionFiles(member.profile?.id)
+    agentDeletion(id){return catalogOperation(async()=>{
+      if(!id.startsWith('local:'))throw loopError('AGENT_LOCAL_REQUIRED','只能删除本地 Agent 定义')
+      await recoverCatalogDeletions(true)
+      const files=await catalog.deletionFiles(id)
+      if(!files.length)throw loopError('LOOP_NOT_FOUND','本地 Agent 定义不存在',404)
+      return {definition_id:id,files,teams:store.rooms().filter(room=>store.room(room.id).members.some(member=>member.profile?.id===id)).length}
+    })},
+    deleteAgentDefinition(id,input){return catalogOperation(async()=>{
+      if(input.confirm!==true)throw loopError('LOOP_DELETE_CONFIRM_REQUIRED','请确认删除本地 Agent 定义')
+      if(!id.startsWith('local:'))throw loopError('AGENT_LOCAL_REQUIRED','只能删除本地 Agent 定义')
+      await recoverCatalogDeletions(true)
+      const files=await catalog.deletionFiles(id)
+      if(!files.length)throw loopError('LOOP_NOT_FOUND','本地 Agent 定义不存在',404)
       if(JSON.stringify(files)!==JSON.stringify(input.files))throw loopError('LOOP_DEFINITION_CHANGED','定义文件已改变，请重新确认删除',409)
       const job=randomUUID(),staged=files.map(file=>({...file,staged:file.path+'.rillo-delete-'+job}))
-      store.database.prepare("INSERT INTO loop_definition_deletions VALUES(?,?,?,?,'staging')").run(job,roomId,id,JSON.stringify(staged))
+      store.database.prepare("INSERT INTO loop_catalog_deletions VALUES(?,?,?,'staging')").run(job,id,JSON.stringify(staged))
       let committed=false
-      try{await catalog.stageDeletion(staged);const value=store.removeMember(roomId,id);committed=true;changed();return value}
-      finally{try{await catalog.finishDeletion(staged,committed);store.database.prepare('DELETE FROM loop_definition_deletions WHERE id=?').run(job)}catch{store.database.prepare("UPDATE loop_definition_deletions SET state='blocked' WHERE id=?").run(job);throw loopError('LOOP_DEFINITION_DELETE_PENDING','定义文件清理未完成，请检查文件权限后在团队重试清理',409)}finally{changed()}}
-    },
+      try{
+        await catalog.stageDeletion(staged)
+        store.database.prepare("UPDATE loop_catalog_deletions SET state='committed' WHERE id=?").run(job)
+        committed=true
+      }finally{
+        try{await catalog.finishDeletion(staged,committed);store.database.prepare('DELETE FROM loop_catalog_deletions WHERE id=?').run(job)}
+        catch{throw loopError('LOOP_DEFINITION_DELETE_PENDING','本地定义清理未完成，请检查文件权限后重试',409)}
+        finally{changed()}
+      }
+      return {deleted:true,definition_id:id}
+    })},
     async addMember(id, input) {
       if(store.room(id).config?.dissolved_at)throw loopError('LOOP_ROOM_DISSOLVED','团队已解散',409)
       const status = await memberRuntime(input.runtime_id)
@@ -382,7 +437,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       const execution_config=memberConfiguration(input,status),avatar=memberAvatar(input.avatar)
       let value = {...input,execution_config,avatar}
       if (input.definition_id) {
-        if (!input.definition_id.startsWith('local:')) throw loopError('AGENT_LOCAL_REQUIRED','请先将市场角色添加到本地')
+        if (!input.definition_id.startsWith('local:')&&!input.definition_id.startsWith('managed:')) throw loopError('AGENT_LOCAL_REQUIRED','请先将市场角色添加到本地')
         const profile = await catalog.get(input.definition_id, input.runtime_id)
         value = { name: input.name || profile.name, runtime_id: input.runtime_id, instructions: profile.instructions, profile, execution_config,avatar }
       }

@@ -1,13 +1,12 @@
-// AI Elements PromptInput structure, with a Tiptap editor slot and server-path references.
+// shadcn/ui Prompt Input composition. Tiptap is the custom Input Group control.
 // Browser uploads/drop handling are omitted: the product references files on its server.
 import { forwardRef,type ComponentProps } from 'react'
-import { LoaderCircle,Send } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/cn'
-export const PromptInput=forwardRef<HTMLFormElement,ComponentProps<'form'>>(function PromptInput({className,...props},ref){return <form ref={ref} className={cn('ai-prompt-input',className)} {...props}/>})
+import { ArrowUp,LoaderCircle } from 'lucide-react'
+import {InputGroup,InputGroupAddon,InputGroupButton} from '@/components/ui/input-group'
+export const PromptInput=forwardRef<HTMLFormElement,ComponentProps<'form'>>(function PromptInput({className,children,...props},ref){return <form ref={ref} className={className} {...props}><InputGroup className="ai-prompt-input">{children}</InputGroup></form>})
 export function PromptInputBody(props:ComponentProps<'div'>){return <div className="ai-prompt-body" {...props}/>}
-export function PromptInputHeader(props:ComponentProps<'div'>){return <div className="ai-prompt-header" {...props}/>}
-export function PromptInputFooter(props:ComponentProps<'div'>){return <div className="ai-prompt-footer" {...props}/>}
+export function PromptInputHeader(props:ComponentProps<'div'>){return <InputGroupAddon align="block-start" className="ai-prompt-header" {...props}/>}
+export function PromptInputFooter(props:ComponentProps<'div'>){return <InputGroupAddon align="block-end" className="ai-prompt-footer" {...props}/>}
 export function PromptInputTools(props:ComponentProps<'div'>){return <div className="ai-prompt-tools" {...props}/>}
-export function PromptInputButton(props:ComponentProps<typeof Button>){return <Button size="sm" variant="quiet" {...props}/>}
-export function PromptInputSubmit({status='ready',disabled,...props}:ComponentProps<typeof Button>&{status?:'ready'|'submitted'|'error'}){const waiting=status==='submitted';return <Button type="submit" size="sm" variant="primary" disabled={disabled||waiting} aria-busy={waiting||undefined} {...props}>{waiting?<LoaderCircle className="room-spinner"/>:<Send/>}<span>{waiting?'发送中':'发送'}</span></Button>}
+export function PromptInputButton(props:ComponentProps<typeof InputGroupButton>){return <InputGroupButton size="sm" variant="quiet" {...props}/>}
+export function PromptInputSubmit({status='ready',disabled,...props}:ComponentProps<typeof InputGroupButton>&{status?:'ready'|'submitted'|'error'}){const waiting=status==='submitted';return <InputGroupButton type="submit" size="sm" variant="primary" disabled={disabled||waiting} aria-busy={waiting||undefined} {...props}>{waiting?<LoaderCircle className="room-spinner"/>:<ArrowUp/>}<span>{waiting?'发送中':'发送'}</span></InputGroupButton>}

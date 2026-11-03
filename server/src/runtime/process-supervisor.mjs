@@ -226,7 +226,7 @@ function supervise({
       if (error?.code !== 'EPIPE') terminate('failed', 'RUNTIME_STDIN_FAILED')
     })
 
-    timeoutTimer = setTimer(
+    timeoutTimer = invocation.timeout_ms === null ? null : setTimer(
       () => terminate('timed_out', 'RUNTIME_TIMEOUT'),
       invocation.timeout_ms,
     )
@@ -347,7 +347,7 @@ function validateStart({ invocation, parseEvent, emit, onSpawn, signal, logs }) 
     || !Array.isArray(invocation.args)
     || invocation.args.some((value) => typeof value !== 'string')
     || typeof invocation.cwd !== 'string' || invocation.cwd.length === 0
-    || !Number.isSafeInteger(invocation.timeout_ms) || invocation.timeout_ms < 1
+    || (invocation.timeout_ms !== null && (!Number.isSafeInteger(invocation.timeout_ms) || invocation.timeout_ms < 1))
     || typeof parseEvent !== 'function' || typeof emit !== 'function'
     || typeof onSpawn !== 'function' || !signal?.addEventListener
     || (logs !== null && (typeof logs?.writeStdout !== 'function'

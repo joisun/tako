@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { AtSign, Paperclip } from 'lucide-react'
+import { Paperclip } from 'lucide-react'
 import { Extension, type Editor } from '@tiptap/core'
 import Mention, { type MentionNodeAttrs } from '@tiptap/extension-mention'
 import { ReactRenderer } from '@tiptap/react'
@@ -87,11 +87,11 @@ export function RoomComposer({ api,roomId,members, disabled, pending, onSend, in
   }
   return <PromptInput ref={form} className="room-composer" onSubmit={submit}>
     <PromptInputBody><EditorProvider limit={20000} placeholder="说明你的任务，或 @ 一位成员…" extensions={extensions} editable={!disabled && !pending}
-      editorProps={{ attributes:{ role:'textbox', 'aria-label':'发送团队消息', 'aria-multiline':'true', 'aria-autocomplete':'list', 'aria-haspopup':'listbox', 'aria-expanded':'false' } }}
+      editorProps={{ attributes:{ role:'textbox', 'data-slot':'input-group-control', 'aria-label':'发送团队消息', 'aria-multiline':'true', 'aria-autocomplete':'list', 'aria-haspopup':'listbox', 'aria-expanded':'false' } }}
       onCreate={({ editor:current }) => { editor.current = current; setReady(true) }}
       onUpdate={({ editor:current, transaction }) => { setHasContent(!!current.getText().trim()); if (transaction.docChanged) requestKey.current = crypto.randomUUID() }} /></PromptInputBody>
     {attachments.length?<PromptInputHeader><Attachments>{attachments.map(item=><Attachment key={item.path}><AttachmentInfo name={item.name} path={item.path} mediaType={item.media_type}/><AttachmentRemove name={item.name} onClick={()=>{setAttachments(value=>value.filter(file=>file.path!==item.path));requestKey.current=crypto.randomUUID()}}/></Attachment>)}</Attachments></PromptInputHeader>:null}
-    <PromptInputFooter className="room-composer__footer"><PromptInputTools><PromptInputButton isIconOnly aria-label="引用图片或 PDF 路径" disabled={disabled||pending||attachments.length>=8} onClick={()=>setFileDialog(true)}><Paperclip/></PromptInputButton><span><AtSign/>成员协作 <kbd>⌘ / Ctrl ↵</kbd> 发送</span></PromptInputTools><PromptInputSubmit disabled={disabled||!hasContent} status={pending?'submitted':'ready'}/></PromptInputFooter>
+    <PromptInputFooter className="room-composer__footer"><PromptInputTools><PromptInputButton isIconOnly aria-label="引用图片或 PDF 路径" disabled={disabled||pending||attachments.length>=8} onClick={()=>setFileDialog(true)}><Paperclip/></PromptInputButton><span className="room-composer-shortcut"><kbd>⌘ / Ctrl ↵</kbd> 发送</span></PromptInputTools><PromptInputSubmit disabled={disabled||!hasContent} status={pending?'submitted':'ready'}/></PromptInputFooter>
     <Dialog open={fileDialog} onOpenChange={value=>{if(!filePending)setFileDialog(value)}}><DialogContent className="room-dialog room-theme" showCloseButton={!filePending}><DialogHeader><DialogTitle>引用文件</DialogTitle><DialogDescription>填写运行 Rillo 的机器上的图片或 PDF 路径。</DialogDescription></DialogHeader><DialogBody><Input autoFocus aria-label="文件绝对路径" placeholder="/path/to/file.png" value={path} disabled={filePending} onChange={event=>setPath(event.target.value)}/>{fileError?<p className="room-error" role="alert">{fileError}</p>:null}</DialogBody><DialogFooter><Button disabled={filePending} onClick={()=>setFileDialog(false)}>取消</Button><Button variant="primary" isPending={filePending} disabled={!path.trim()} onClick={()=>{void referenceFile()}}>添加引用</Button></DialogFooter></DialogContent></Dialog>
   </PromptInput>
 }

@@ -1,3 +1,4 @@
+import { handleMarketplaceRequest } from './agent-marketplace/http.mjs'
 import { handleCollaborationRequest } from './collaboration-http.mjs'
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
@@ -377,6 +378,7 @@ export function createApiServer({
   messaging = null,
   schedulerService = null,
   collaboration = null,
+  marketplace = null,
   scheduledRunLogs = null,
   runtimeRegistry = null,
   runService = null,
@@ -395,6 +397,7 @@ export function createApiServer({
       const requestOrigin = new URL(`http://${request.headers.host ?? expectedHost}`).origin
       const url = new URL(request.url, requestOrigin)
       const { pathname } = url
+      if (await handleMarketplaceRequest({request,response,url,marketplace})) return
       if (await handleCollaborationRequest({ request, response, url, collaboration })) return
       const previewResource = pathname.match(/^\/run-files\/([a-f0-9]{48})\/(.*)$/)
       const readingPreview = previewResource && ['GET', 'HEAD'].includes(request.method)

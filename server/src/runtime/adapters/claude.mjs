@@ -19,7 +19,7 @@ export function createClaudeRuntimeDefinition() {
       if (spec.model) args.push('--model', spec.model)
       if (spec.resume_session_id) args.push('--resume', spec.resume_session_id)
       return { command: launch.executable, args, cwd: spec.workspace, stdin: spec.prompt,
-        timeout_ms: spec.timeout_seconds * 1000, env: spec.execution_env ?? {} }
+        timeout_ms: spec.timeout_seconds == null ? null : spec.timeout_seconds * 1000, env: spec.execution_env ?? {} }
     },
     normalizeResult(result) {
       if (result.status !== 'succeeded' || result.usage?.is_error !== true) return result
@@ -32,8 +32,8 @@ export function createClaudeRuntimeDefinition() {
       if (value.type === 'system' && value.subtype === 'init' && value.session_id) return [event('session', { session_id: value.session_id })]
       if(value.type==='assistant' && Array.isArray(value.message?.content))return value.message.content.flatMap((part,index)=>{
         const item_id=`${value.message.id??value.uuid}:${index}`
-        if(part.type==='thinking' && typeof part.thinking==='string')return [event('thinking',{item_id,text:part.thinking,delta:false})]
-        if(part.type==='text')return [event('assistant_delta',{item_id,delta:part.text})]
+        if(part.type==='thinking' && typeof part.thinking==='string')return [event('thinking',{item_id,text:part.thinking,delta:false,state:'completed'})]
+        if(part.type==='text')return [event('assistant_delta',{item_id,text:part.text,delta:false,state:'completed'})]
         if(part.type==='tool_use')return [event('activity_started',{item_id:part.id,label:part.name,input:part.input})]
         return []
       })

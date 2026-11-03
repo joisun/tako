@@ -25,6 +25,8 @@ export async function handleCollaborationRequest({ request, response, url, colla
   if (pathname === '/api/v1/agent-catalog' && request.method === 'GET') return send(await collaboration.catalog(url.searchParams.get('source') ?? 'local',{refresh:url.searchParams.get('refresh')==='1'}))
   if (pathname === '/api/v1/agent-catalog/definition' && request.method === 'GET') return send({ definition: await collaboration.agentDefinition(url.searchParams.get('id') ?? '', url.searchParams.get('runtime') ?? 'codex') })
   if (pathname === '/api/v1/agent-catalog/import' && request.method === 'POST') return send(await collaboration.importAgent(await body()))
+  if(pathname==='/api/v1/agent-catalog/deletion'&&request.method==='GET')return send(await collaboration.agentDeletion(url.searchParams.get('id')??''))
+  if(pathname==='/api/v1/agent-catalog/definition'&&request.method==='DELETE')return send(await collaboration.deleteAgentDefinition(url.searchParams.get('id')??'',await body()))
   const memberRuntime = pathname.match(/^\/api\/v1\/rooms-runtime\/(codex|claude)$/)
   if (memberRuntime && request.method === 'GET') return send(await collaboration.memberRuntime(memberRuntime[1]))
   const remove=pathname.match(/^\/api\/v1\/rooms\/([a-zA-Z0-9-]+)\/delete$/)
@@ -41,11 +43,10 @@ export async function handleCollaborationRequest({ request, response, url, colla
       response.writeHead(200,{'Content-Type':meta.media_type,'Content-Length':bytes.length,'X-Content-Type-Options':'nosniff','Cache-Control':'no-store','Content-Security-Policy':"sandbox; default-src 'none'",'Content-Disposition':`inline; filename*=UTF-8''${encodeURIComponent(meta.name)}`});response.end(bytes);return true
     }
   }
-  const membership=pathname.match(/^\/api\/v1\/rooms\/([a-zA-Z0-9-]+)\/members\/([a-zA-Z0-9-]+)(?:\/(deletion))?$/)
+  const membership=pathname.match(/^\/api\/v1\/rooms\/([a-zA-Z0-9-]+)\/members\/([a-zA-Z0-9-]+)$/)
   if(membership){
-    if(membership[3]==='deletion'&&request.method==='GET')return send(await collaboration.memberDeletion(membership[1],membership[2]))
-    if(!membership[3]&&request.method==='PATCH')return send({member:await collaboration.updateMember(membership[1],membership[2],await body())})
-    if(!membership[3]&&request.method==='DELETE')return send(await collaboration.deleteMember(membership[1],membership[2],await body()))
+    if(request.method==='PATCH')return send({member:await collaboration.updateMember(membership[1],membership[2],await body())})
+    if(request.method==='DELETE')return send(await collaboration.removeMember(membership[1],membership[2],await body()))
   }
   const definition = pathname.match(/^\/api\/v1\/rooms\/([a-zA-Z0-9-]+)\/members\/([a-zA-Z0-9-]+)\/definition$/)
   if (definition && request.method === 'GET') return send(await collaboration.memberDefinition(definition[1],definition[2]))
@@ -74,10 +75,26 @@ export async function handleCollaborationRequest({ request, response, url, colla
     if (request.method === 'POST' && room[2] === 'messages') return send({ message: await collaboration.postMessage(room[1], await body()) })
     if (request.method === 'POST' && room[2] === 'tasks') return send({ task: await collaboration.createTask(room[1], await body()) })
   }
-  const task = pathname.match(/^\/api\/v1\/loop-tasks\/([a-zA-Z0-9-]+)(?:\/(control))?$/)
+  const stream=pathname.match(/^\/api\/v1\/loop-tasks\/([a-zA-Z0-9-]+)\/events$/)
+  if(stream&&request.method==='GET'){
+    collaboration.detail(stream[1])
+    response.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform',Connection:'keep-alive','X-Accel-Buffering':'no','X-Content-Type-Options':'nosniff'})
+    response.flushHeaders?.()
+    const unsubscribe=collaboration.subscribeTask(stream[1],event=>{
+      if(event.type==='closed'){response.end();return}
+      if(response.destroyed||response.writableEnded)return
+      if(response.writableLength>512*1024){response.end();return}
+      response.write(`id: ${event.sequence}\nevent: team\ndata: ${JSON.stringify(event)}\n\n`)
+    })
+    const heartbeat=setInterval(()=>{if(!response.destroyed)response.write(': keepalive\n\n')},15000);heartbeat.unref?.()
+    response.once('close',()=>{clearInterval(heartbeat);unsubscribe()})
+    return true
+  }
+  const task = pathname.match(/^\/api\/v1\/loop-tasks\/([a-zA-Z0-9-]+)(?:\/(control|timeline))?$/)
   if (task) {
+    if(request.method==='GET'&&task[2]==='timeline')return send({task:await collaboration.taskTimeline(task[1])})
     if (request.method === 'GET' && !task[2]) return send({ task: collaboration.detail(task[1]) })
-    if (request.method === 'POST' && task[2]) return send({ task: collaboration.control(task[1], await body()) })
+    if (request.method === 'POST' && task[2]==='control') return send({ task: collaboration.control(task[1], await body()) })
   }
   const reconcile = pathname.match(/^\/api\/v1\/loop-runs\/([a-zA-Z0-9-]+)\/reconcile$/)
   if (reconcile && request.method === 'POST') return send({ run: collaboration.reconcileRun(reconcile[1], await body()) })

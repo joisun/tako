@@ -4,7 +4,9 @@ The standalone Dashboard bundles MIT-licensed React/React DOM (Meta), Base UI Re
 
 Kibo UI Status, Pill and Spinner source is locally adapted under MIT. Copyright (c) 2023 — Present shadcnblocks. The exact upstream notice follows below. Historical dotUI-derived application styles retain copyright (c) 2024 dotLabs; React Aria, React Stately and the dotUI source components are no longer bundled. Component provenance is recorded in `ui/react/components/registry/README.md`.
 
-The React Dashboard includes locally adapted Conversation, Message, PromptInput, ChainOfThought, Task, Tool, InlineCitation, Agent, ModelSelector and Attachments component source from Vercel AI Elements, copyright 2023 Vercel, Inc., under Apache-2.0. It also bundles Streamdown 2.4.0 and `@streamdown/cjk` 1.0.2 under Apache-2.0, plus `use-stick-to-bottom` 1.1.3 under MIT. Only presentation code is included; no AI SDK runtime, gateway, or hosted service is used.
+The React Dashboard includes locally adapted Conversation, Message, PromptInput, Reasoning, ChainOfThought, Task, Tool, InlineCitation, Agent, ModelSelector and Attachments component source from Vercel AI Elements, copyright 2023 Vercel, Inc., under Apache-2.0. It also bundles Streamdown 2.4.0 and `@streamdown/cjk` 1.0.2 under Apache-2.0, plus `use-stick-to-bottom` 1.1.3 under MIT. Only presentation code is included; no AI SDK runtime, gateway, or hosted service is used.
+
+The Dashboard also includes the locally adapted shadcn/ui Message, Message Scroller, Input Group, Bubble, Code Block and Trace components and shimmer CSS utility, copyright (c) 2023 shadcn, under the MIT license below. It uses the existing Base UI primitives, local cn utility and Lucide icons. The official `@shadcn/react` 0.3.1 message-scroller engine is bundled under the same MIT license.
 
 The MIT License text applicable to these packages follows:
 

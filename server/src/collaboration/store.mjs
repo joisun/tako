@@ -58,7 +58,7 @@ export function createCollaborationStore({ database: db, clock = () => new Date(
   function insertRoom(input) {
     const title = text(input.title, '团队名称', 120)
     const id = input.id ?? createId()
-    db.prepare('INSERT INTO loop_rooms(id,title,created_at,config_json) VALUES(?,?,?,?)').run(id, title, now(), JSON.stringify({ creation_request_key:input.request_key??null, leader_id: null, workspace: input.workspace ?? input.workspaces?.[0] ?? null, workspaces: input.workspaces ?? (input.workspace ? [input.workspace] : []), memory_directory: input.memory_directory ?? null, instructions: input.instructions ?? '', max_runs: 24, timeout_seconds: 600 }))
+    db.prepare('INSERT INTO loop_rooms(id,title,created_at,config_json) VALUES(?,?,?,?)').run(id, title, now(), JSON.stringify({ creation_request_key:input.request_key??null, leader_id: null, workspace: input.workspace ?? input.workspaces?.[0] ?? null, workspaces: input.workspaces ?? (input.workspace ? [input.workspace] : []), memory_directory: input.memory_directory ?? null, instructions: input.instructions ?? '' }))
     if(input.initial_member)addMember(id,input.initial_member)
     return room(id)
   }
@@ -209,7 +209,7 @@ export function createCollaborationStore({ database: db, clock = () => new Date(
       const candidate = run(runId), current = task(candidate.task_id)
       if (candidate.status !== 'queued' || current.status !== 'active' || candidate.revision !== current.revision || candidate.generation !== current.generation) return null
       conversation.consumeInbox(candidate)
-      const input = { message_cursor: db.prepare('SELECT coalesce(max(sequence),0) AS n FROM loop_messages WHERE room_id=?').get(current.room_id).n, delivered: false }
+      const input = { message_cursor: db.prepare('SELECT coalesce(max(sequence),0) AS n FROM loop_messages WHERE room_id=?').get(current.room_id).n, result_cursor: db.prepare("SELECT coalesce(max(sequence),0) AS n FROM loop_events WHERE task_id=? AND kind='run_completed'").get(current.id).n, delivered: false }
       db.prepare('UPDATE loop_runs SET input_json=?,member_snapshot_json=? WHERE id=?').run(JSON.stringify(input),JSON.stringify(get('loop_members',candidate.member_id)),runId)
       db.prepare("UPDATE loop_runs SET status='starting',token_hash=? WHERE id=?").run(hash(token), runId)
       db.prepare("UPDATE loop_outbox SET state='claimed' WHERE run_id=?").run(runId)
@@ -222,8 +222,8 @@ export function createCollaborationStore({ database: db, clock = () => new Date(
     const link=continuity(execution,current), facts=conversation.context(runId)
     if(link.session_id&&facts.room_messages)facts.room_messages=facts.room_messages.filter(message=>message.sequence>link.message_cursor)
     return { ...facts, memories: memories(current.room_id), continuity: link, run: execution, task: current, member: decode(db.prepare('SELECT * FROM loop_members WHERE id=?').get(execution.member_id)) ?? execution.member_snapshot,
-      results: db.prepare(`SELECT id,member_id,phase,result_json FROM loop_runs
-        WHERE task_id=? AND revision=? AND result_json IS NOT NULL ORDER BY rowid DESC LIMIT 12`).all(current.id, current.revision).reverse().map(decode).map(row => ({ ...row, result: { submission: row.result?.submission ? { ...row.result.submission, summary: row.result.submission.summary.slice(-4000) } : null, final_message: row.result?.final_message?.slice(-1000) } })),
+      results: db.prepare(`SELECT id,member_id,phase,status,error_code,result_json FROM loop_runs
+        WHERE task_id=? AND revision=? AND result_json IS NOT NULL AND id IN (SELECT run_id FROM loop_events WHERE task_id=? AND kind='run_completed' AND sequence>?) ORDER BY rowid DESC LIMIT 12`).all(current.id, current.revision, current.id, link.result_cursor ?? 0).reverse().map(decode).map(row => ({ ...row, result: { submission: row.result?.submission ? { ...row.result.submission, summary: row.result.submission.summary.slice(0,1200) } : null, ...(row.status==='succeeded'?{}:{error:row.result?.final_message?.slice(0,600)}), public_messages: { source_run_id: row.id, read: 'read_context(section=results,source_run_id)' } } })),
       messages: db.prepare('SELECT author,text FROM loop_messages WHERE task_id=? AND run_id IS NULL ORDER BY sequence DESC LIMIT 12').all(current.id).reverse().map(row => ({ ...row, text: row.text.slice(-2000) })) }
   }
   function memories(roomId) {
@@ -235,7 +235,7 @@ export function createCollaborationStore({ database: db, clock = () => new Date(
     const previous = candidates.find(row => (row.routing?.intent ?? row.phase) === key)
     if (!previous) return {session_id:null,message_cursor:0}
     if (LIVE_RUNS.has(previous.status)) throw loopError('LOOP_SESSION_BUSY','成员原会话的执行尚未确认结束',409)
-    return {session_id:previous.session_id,message_cursor:previous.input?.delivered ? previous.input.message_cursor : 0,source_run_id:previous.id}
+    return {session_id:previous.session_id,message_cursor:previous.input?.delivered ? previous.input.message_cursor : 0,result_cursor:previous.input?.delivered ? previous.input.result_cursor ?? 0 : 0,source_run_id:previous.id,definition_unchanged:previous.input?.delivered===true&&previous.member_snapshot?.instructions===get('loop_members',execution.member_id).instructions}
   }
   function inputDelivered(id) {
     const value=run(id)
@@ -244,6 +244,11 @@ export function createCollaborationStore({ database: db, clock = () => new Date(
   function readContext(id,input={}) {
     const current=context(id)
     if (!input.section || input.section==='snapshot') return current
+    if (input.section==='results' && input.source_run_id) {
+      const source=run(text(input.source_run_id,'执行标识',128))
+      if (source.task_id!==current.task.id) throw loopError('LOOP_NOT_FOUND','执行结果不属于当前任务',404)
+      return {section:'results',items:[{id:source.id,member_id:source.member_id,status:source.status,result:source.result,submission:source.submission,public_messages:(source.parts??[]).filter(part=>part.type==='text'&&part.text).map(({id,text,phase,origin,truncated})=>({id,text,phase,origin,truncated}))}],next_before:null}
+    }
     const limit=input.limit??20,before=input.before??Number.MAX_SAFE_INTEGER
     if (!Number.isSafeInteger(limit)||limit<1||limit>50||!Number.isSafeInteger(before)||before<1||input.query!==undefined&&(typeof input.query!=='string'||input.query.length>200)) throw loopError('LOOP_INPUT_INVALID','历史页数、游标或搜索词无效')
     if (!['messages','memories','results'].includes(input.section)) throw loopError('LOOP_INPUT_INVALID','上下文区域无效')
@@ -271,24 +276,37 @@ export function createCollaborationStore({ database: db, clock = () => new Date(
   function projectContext(id,input) {
     const candidate=run(id),current=task(candidate.task_id);assertLive(candidate)
     if(current.config.workflow!=='conversation'||candidate.member_id!==current.config.leader||candidate.routing?.intent!=='lead')throw loopError('LOOP_ACTION_FORBIDDEN','只有当前 Leader 可准备任务项目',403)
-    if(db.prepare("SELECT id FROM loop_runs WHERE task_id=? AND id!=? AND status IN ('queued','starting','running','stopping','unknown')").get(current.id,id))throw loopError('LOOP_RESOURCE_BUSY','成员执行结束后才能添加项目',409)
     if(!Array.isArray(input.workspaces)||!input.workspaces.length||input.workspaces.length>8||input.workspaces.some(path=>typeof path!=='string'||!path.trim()||path.length>4096||path.includes('\0')))throw loopError('LOOP_INPUT_INVALID','请提供1–8个项目路径')
     if(input.execution_mode!==undefined&&!['isolated','existing_branch','in_place'].includes(input.execution_mode))throw loopError('LOOP_EXECUTION_MODE_INVALID','执行方式无效')
     if(input.branch!==undefined&&(typeof input.branch!=='string'||!input.branch.trim()||input.branch.length>255))throw loopError('LOOP_BRANCH_INVALID','分支引用无效')
-    const source=db.prepare("SELECT * FROM loop_messages WHERE id=? AND room_id=? AND author='user' AND sequence<=?").get(input.source_message_id??null,current.room_id,candidate.input?.message_cursor??0)
-    const configured=get('loop_rooms',current.room_id).config?.workspaces??[]
-    if(!source||input.workspaces.some(path=>!source.text.includes(path)&&!configured.includes(path))||input.branch&&!source.text.includes(input.branch))throw loopError('LOOP_PROJECT_SOURCE_INVALID','额外项目路径须在用户消息中明确给出，并引用该消息 ID')
     return{task:current,run:candidate}
   }
   function extendProjects(id,input,prepared) {
     return transaction(()=>{
       const{task:current}=projectContext(id,input),resources=current.config.resources??[{workspace:current.workspace,source_workspace:current.config.source_workspace,branch:current.config.branch}]
-      for(const resource of prepared)if(!resources.some(value=>value.source_workspace===resource.source_workspace))resources.push(resource)
+      for(const resource of prepared){
+        const index=resources.findIndex(value=>value.source_workspace===resource.source_workspace)
+        if(index<0)resources.push(resource)
+        else resources[index]=resource
+      }
       if(resources.length>8)throw loopError('LOOP_INPUT_INVALID','同一任务最多使用8个项目')
       const config={...current.config,resources,source_workspaces:resources.map(resource=>resource.source_workspace)}
       db.prepare('UPDATE loop_tasks SET config_json=?,updated_at=? WHERE id=?').run(JSON.stringify(config),now(),current.id)
-      event(current.id,id,'projects_prepared',{source_message_id:input.source_message_id,resources})
+      event(current.id,id,'projects_prepared',{resources})
       return{accepted:true,resources}
+    })
+  }
+  function refreshProjects(taskId,previous,refreshed) {
+    return transaction(()=>{
+      const current=task(taskId),resources=[...(current.config.resources??[])];let changed=false
+      for(let index=0;index<previous.length;index++){
+        const target=resources.findIndex(value=>value.source_workspace===previous[index].source_workspace)
+        if(target<0||JSON.stringify(resources[target])!==JSON.stringify(previous[index])||JSON.stringify(previous[index])===JSON.stringify(refreshed[index]))continue
+        resources[target]=refreshed[index];changed=true
+      }
+      if(!changed)return
+      db.prepare('UPDATE loop_tasks SET config_json=?,updated_at=? WHERE id=?').run(JSON.stringify({...current.config,resources}),now(),taskId)
+      event(taskId,null,'projects_refreshed',{resources})
     })
   }
   function authenticate(runId, token) {
@@ -339,13 +357,14 @@ export function createCollaborationStore({ database: db, clock = () => new Date(
       let status = exited ? result.status : 'unknown'
       if (result.status === 'succeeded' && exited) inputDelivered(runId)
       if (!candidate.session_id && result.session_id) db.prepare('UPDATE loop_runs SET session_id=? WHERE id=?').run(result.session_id,runId)
-      const errorCode = !exited ? 'LOOP_PROCESS_UNKNOWN' : result.error_code ?? (result.status === 'succeeded' && !candidate.submission ? 'LOOP_RESULT_MISSING' : null)
+      const errorCode = !exited ? 'LOOP_PROCESS_UNKNOWN' : result.error_code ?? (result.status === 'succeeded' && current.config.workflow !== 'conversation' && !candidate.submission ? 'LOOP_RESULT_MISSING' : null)
       if (errorCode && status === 'succeeded') status = 'failed'
       db.prepare('UPDATE loop_runs SET status=?,result_json=?,error_code=?,token_hash=NULL,finished_at=? WHERE id=?')
         .run(status, JSON.stringify({ ...result, submission: candidate.submission }), errorCode, exited ? now() : null, runId)
       db.prepare("UPDATE loop_outbox SET state='done' WHERE run_id=?").run(runId)
       event(current.id, runId, 'run_completed', { status, error_code: errorCode })
-      if (current.config.workflow !== 'conversation' || !db.prepare('SELECT id FROM loop_messages WHERE run_id=?').get(runId)) message(current.room_id, current.id, runId, candidate.member_id, candidate.submission?.summary ?? result.final_message ?? errorCode ?? status)
+      const fallback=candidate.submission?.summary??result.final_message??(current.config.workflow==='conversation'?null:errorCode??status)
+      if (fallback && (current.config.workflow !== 'conversation' || (!(candidate.parts??[]).some(part=>part.type==='text'&&part.text&&part.origin!=='hook') && !db.prepare('SELECT id FROM loop_messages WHERE run_id=?').get(runId)))) message(current.room_id, current.id, runId, candidate.member_id, fallback)
       if (current.status !== 'active' || candidate.revision !== current.revision || candidate.generation !== current.generation) return run(runId)
       if (current.config.workflow === 'conversation') { conversation.afterRun(candidate.id); return run(runId) }
       if (status !== 'succeeded') { setTask(current.id, status === 'unknown' ? 'waiting' : 'failed', candidate.phase); return run(runId) }
@@ -388,8 +407,10 @@ export function createCollaborationStore({ database: db, clock = () => new Date(
         if (db.prepare("SELECT id FROM loop_runs WHERE task_id=? AND status IN ('starting','running','stopping','unknown')").get(id)) throw loopError('LOOP_RUN_UNRESOLVED', '先确认所有旧执行已退出', 409)
         const stages = db.prepare('SELECT stage FROM loop_runs WHERE task_id=? AND revision=? ORDER BY rowid DESC LIMIT 1').get(id, current.revision)
         db.prepare('UPDATE loop_tasks SET generation=generation+1 WHERE id=?').run(id)
-        if (current.config.workflow === 'conversation') conversation.resume(task(id))
-        else enqueueStage(task(id), stages?.stage ?? 0, true)
+        if (current.config.workflow === 'conversation') {
+          db.prepare("UPDATE loop_runs SET generation=? WHERE task_id=? AND revision=? AND status='queued'").run(current.generation + 1, id, current.revision)
+          conversation.resume(task(id))
+        } else enqueueStage(task(id), stages?.stage ?? 0, true)
       } else throw loopError('LOOP_STATE_CONFLICT', '此状态不支持该操作', 409)
       event(id, null, `task_${action}`)
       return detail(id)
@@ -465,7 +486,7 @@ export function createCollaborationStore({ database: db, clock = () => new Date(
     unresolvedRoom:id=>db.prepare("SELECT r.id FROM loop_runs r JOIN loop_tasks t ON t.id=r.task_id WHERE t.room_id=? AND r.status='unknown'").all(id),
     validateTaskInput, resolveUnknown, createRoom, copyRoom,
     taskForRequest: key => decode(db.prepare('SELECT * FROM loop_tasks WHERE request_key=?').get(key)),
-    addMember, room, postMessage, createTask, detail, run, context, readContext, remember, inputDelivered, projectContext, extendProjects,
+    addMember, room, postMessage, createTask, detail, run, context, readContext, remember, inputDelivered, projectContext, extendProjects, refreshProjects,
     claim, authenticate, submit, requestAction, spawned, complete, control, recover, failQueued,
     hideRoom(id){const current=room(id);if(!current.config?.dissolved_at)throw loopError('LOOP_ROOM_BUSY','请先解散团队',409);db.prepare('UPDATE loop_rooms SET config_json=? WHERE id=?').run(JSON.stringify({...current.config,deleted_at:now()}),id);return room(id)},
     rooms: () => db.prepare("SELECT * FROM loop_rooms WHERE json_extract(config_json,'$.deleted_at') IS NULL ORDER BY rowid DESC").all().map(decode),

@@ -48,6 +48,8 @@ function createSession({
   let turnId = null
   let turnRevision = 0
   let finalMessage = ''
+  let automaticContinuation = false
+  let usage = null
   let retryTimer = null
   let retries = 0
   let requestRevision = 0
@@ -77,9 +79,19 @@ function createSession({
       }
       return
     }
+    if(method==='thread/tokenUsage/updated'){
+      if(params?.threadId!==threadId||params?.turnId!==turnId)return
+      usage=publicUsage(params.tokenUsage)
+      if(usage)safeEmit(emit,{type:'usage_updated',payload:{usage}})
+      return
+    }
+    if(method==='item/reasoning/summaryPartAdded'){
+      if(params?.threadId===threadId&&params?.turnId===turnId&&typeof params?.itemId==='string'&&Number.isSafeInteger(params.summaryIndex)&&params.summaryIndex>=0)safeEmit(emit,{type:'thinking',payload:{item_id:params.itemId,summary_index:params.summaryIndex,text:'',delta:true,state:'running'}})
+      return
+    }
     if (method === 'item/reasoning/summaryTextDelta' || method === 'item/commandExecution/outputDelta') {
       if(params?.threadId!==threadId || params?.turnId!==turnId || typeof params?.itemId!=='string' || typeof params?.delta!=='string')return
-      safeEmit(emit,{type:method==='item/reasoning/summaryTextDelta'?'thinking':'tool_result',payload:{item_id:params.itemId,text:params.delta,delta:true}})
+      safeEmit(emit,{type:method==='item/reasoning/summaryTextDelta'?'thinking':'tool_result',payload:{item_id:params.itemId,text:params.delta,delta:true,...(method==='item/reasoning/summaryTextDelta'?{summary_index:Number.isSafeInteger(params.summaryIndex)&&params.summaryIndex>=0?params.summaryIndex:0}:{})}})
       return
     }
     if (method === 'item/agentMessage/delta') {
@@ -100,6 +112,8 @@ function createSession({
       if (params?.threadId !== threadId || params?.turnId !== turnId
         || typeof params?.item?.id !== 'string') return
       const item = params.item
+      if (item.type==='hookPrompt') { automaticContinuation = true; return }
+      if (method==='item/started' && item.type==='agentMessage') safeEmit(emit,{type:'assistant_delta',payload:{item_id:item.id,text:'',delta:false,phase:item.phase,origin:automaticContinuation?'hook':'agent'}})
       if (!READ_ONLY_ITEMS.has(item.type)) {
         if (method === 'item/started') pendingOperations.add(item.id)
         else {
@@ -110,6 +124,7 @@ function createSession({
       if (method === 'item/completed' && item.type === 'agentMessage'
         && typeof item.text === 'string') {
         finalMessage = appendBounded('', item.text, FINAL_MESSAGE_BYTES)
+        safeEmit(emit,{type:'assistant_delta',payload:{item_id:item.id,text:item.text,delta:false,state:'completed',phase:item.phase,origin:automaticContinuation?'hook':'agent'}})
       }
       if (method === 'item/completed' && item.type === 'fileChange'
         && item.status === 'completed' && Array.isArray(item.changes)) {
@@ -120,7 +135,10 @@ function createSession({
           }
         }
       }
-      if(item.type==='reasoning' && method==='item/completed' && Array.isArray(item.summary) && item.summary.length) safeEmit(emit,{type:'thinking',payload:{item_id:item.id,text:item.summary.map(value=>typeof value==='string'?value:value.text??'').join('\n'),delta:false}})
+      if(item.type==='reasoning'){
+        const summary=Array.isArray(item.summary)?item.summary.map(value=>typeof value==='string'?value:value.text??'').join('\n'):''
+        safeEmit(emit,{type:'thinking',payload:{item_id:item.id,state:method==='item/started'?'running':'completed',...(summary?{text:summary,delta:false,summary:item.summary.map(value=>typeof value==='string'?value:value.text??'')}:{})}})
+      }
       const label = activityLabel(item)
       if (label) {
         safeEmit(emit, {
@@ -130,7 +148,8 @@ function createSession({
             item_id: item.id,
             label,
             input:item.type==='commandExecution'?item.command:item.type==='mcpToolCall'?item.arguments:undefined,
-            output:method==='item/completed' ? (item.aggregatedOutput??item.result??item.error) : undefined,
+            output:method==='item/completed'&&item.type!=='fileChange' ? (item.aggregatedOutput??item.result??item.error) : undefined,
+            ...(item.type==='fileChange'?{files:(Array.isArray(item.changes)?item.changes:[]).slice(0,24).map(change=>containedFileChange(change,run.workspace)).filter(Boolean)}:{}),
             ...(method === 'item/completed' ? { state: activityState(item) } : {}),
           },
         })
@@ -156,11 +175,12 @@ function createSession({
         finalMessage,
         failure,
         fileChanges: [...fileChanges.values()],
+        usage,
       }))
     }
   }
   const onAbort = () => finish(failedResult(sessionError('RUN_CANCELED')))
-  const timeout = setTimer(() => finish(timeoutResult()), run.timeout_seconds * 1_000)
+  const timeout = run.timeout_seconds == null ? null : setTimer(() => finish(timeoutResult()), run.timeout_seconds * 1_000)
   timeout?.unref?.()
   signal.addEventListener('abort', onAbort, { once: true })
   if (signal.aborted) onAbort()
@@ -233,10 +253,12 @@ function createSession({
     try {
       providerError = null
       finalMessage = ''
+      automaticContinuation = false
       safeEmit(emit, { type: 'user_message', payload: { kind, text } })
       const result = await client.request('turn/start', compact({
         threadId, input: [{ type: 'text', text }, ...(kind==='prompt'?(run.images??[]).map(path=>({type:'localImage',path})):[])], cwd: run.workspace,
         model: run.model, effort: run.reasoning_effort, summary:run.reasoning_summary,
+        ...(run.sandbox_mode==='danger-full-access'?{approvalPolicy:'never',sandboxPolicy:{type:'dangerFullAccess'}}:{}),
         serviceTier: run.fast_mode == null ? undefined : run.fast_mode ? 'fast' : 'default',
       }))
       if (settled || request !== requestRevision || retryTimer !== null) return
@@ -344,7 +366,7 @@ function normalizedCapabilities(value) {
   return { skills: mode('skills'), integrations: mode('integrations') }
 }
 
-function turnResult(turn, { threadId, finalMessage, fileChanges, failure }) {
+function turnResult(turn, { threadId, finalMessage, fileChanges, failure, usage }) {
   const succeeded = turn?.status === 'completed'
   return {
     status: succeeded ? 'succeeded' : (turn?.status === 'interrupted' ? 'canceled' : 'failed'),
@@ -352,7 +374,7 @@ function turnResult(turn, { threadId, finalMessage, fileChanges, failure }) {
     error_code: succeeded ? null : (turn?.status === 'interrupted' ? 'RUN_CANCELED' : failure.code),
     session_id: threadId,
     final_message: succeeded ? (finalMessage || null) : (failure.message || finalMessage || null),
-    usage: null,
+    usage,
     file_changes: fileChanges,
   }
 }
@@ -414,14 +436,15 @@ function appendBounded(current, delta, maximumBytes) {
 }
 
 function containedFileChange(change, workspace) {
-  if (!change || typeof change !== 'object' || !FILE_CHANGE_KINDS.has(change.kind)
+  const kind=typeof change?.kind==='string'?change.kind:change?.kind?.type
+  if (!change || typeof change !== 'object' || !FILE_CHANGE_KINDS.has(kind)
     || typeof change.path !== 'string' || change.path.length === 0
     || Buffer.byteLength(change.path) > 2048) return null
   const root = resolve(workspace)
   const absolute = isAbsolute(change.path) ? resolve(change.path) : resolve(root, change.path)
   const child = relative(root, absolute)
   if (child === '' || isAbsolute(child) || child === '..' || child.startsWith(`..${sep}`)) return null
-  return { path: child.split(sep).join('/'), kind: change.kind }
+  return { path: child.split(sep).join('/'), kind }
 }
 
 function activityLabel(item) {
@@ -446,9 +469,29 @@ function activityState(item) {
 }
 
 function safeEmit(emit, event) {
-  try { emit(event) } catch {}
+  try { emit(event) } catch(error) {
+    // Preserve lifecycle completion when a large final item exceeds the public event limit.
+    if(error?.message!=='runtime event payload is too large')return
+    const payload={...event.payload,truncated:true}
+    for(const key of ['text','delta','input','output'])if(payload[key]!=null){
+      const text=typeof payload[key]==='string'?payload[key]:JSON.stringify(payload[key],(field,value)=>/token|authorization|password|secret|api.?key/i.test(field)?'[redacted]':value)
+      payload[key]=text.slice(-4096)
+    }
+    if(Array.isArray(payload.summary))payload.summary=payload.summary.slice(-32).map(text=>String(text).slice(-256))
+    if(Array.isArray(payload.files))payload.files=payload.files.slice(0,16)
+    try{emit({...event,payload})}catch{}
+  }
 }
 
 function sessionError(code) {
   return Object.assign(new Error(code), { code })
+}
+
+function publicUsage(value){
+  if(!value||typeof value!=='object')return null
+  const fields=['inputTokens','cachedInputTokens','cacheWriteInputTokens','outputTokens','reasoningOutputTokens','totalTokens']
+  const breakdown=input=>input&&typeof input==='object'?Object.fromEntries(fields.filter(key=>Number.isSafeInteger(input[key])&&input[key]>=0).map(key=>[key,input[key]])):null
+  const total=breakdown(value.total),last=breakdown(value.last)
+  if(!total||!last||!Object.keys(total).length||!Object.keys(last).length)return null
+  return {total,last,modelContextWindow:Number.isSafeInteger(value.modelContextWindow)&&value.modelContextWindow>0?value.modelContextWindow:null}
 }

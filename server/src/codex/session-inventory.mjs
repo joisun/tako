@@ -96,5 +96,6 @@ export function createCodexSessionInventory({
     return matches
   }
 
-  return { ids, has }
+  async function path(sessionId){try{if(!await has(sessionId))return null;return (await currentIndex()).get(sessionId)?.[0]??null}catch{return null}}
+  return { ids, has, path }
 }

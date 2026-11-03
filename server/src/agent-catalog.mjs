@@ -46,7 +46,7 @@ export function parseAgentDefinition(contents, { format, source, fallbackName })
   }
 }
 
-export function createAgentCatalog({ home = homedir(), codexHome = process.env.CODEX_HOME || join(home, '.codex'), fetchImpl = fetch, clock = Date.now } = {}) {
+export function createAgentCatalog({ home = homedir(), codexHome = process.env.CODEX_HOME || join(home, '.codex'), fetchImpl = fetch, clock = Date.now, additionalLocalDefinitions=async()=>({definitions:[],errors:[]}) } = {}) {
   const marketCache = new Map(), marketPending = new Map()
   const definitionCache = new Map()
   async function local() {
@@ -72,7 +72,8 @@ export function createAgentCatalog({ home = homedir(), codexHome = process.env.C
         } catch (error) { errors.push({ source: path, message: error.code === 'AGENT_CATALOG_ERROR' ? error.message : '定义解析失败' }) }
       }
     }
-    return { definitions: [...profiles.values()].map(profile => ({ ...profile, runtimes: Object.keys(profile.variants) })), errors }
+    const additional=await additionalLocalDefinitions()
+    return { definitions: [...profiles.values()].map(profile => ({ ...profile, runtimes: Object.keys(profile.variants) })).concat(additional.definitions), errors:errors.concat(additional.errors) }
   }
   async function remoteJson(url) {
     let response
@@ -105,7 +106,7 @@ export function createAgentCatalog({ home = homedir(), codexHome = process.env.C
   }
   async function get(id, runtimeId) {
     if(typeof id!=='string'||!id)throw catalogError('请选择 Agent 定义')
-    if (id.startsWith('local:')) {
+    if (id.startsWith('local:')||id.startsWith('managed:')) {
       const profile = (await local()).definitions.find(value => value.id === id)
       if (!profile) throw catalogError('本地Agent定义已不存在，请刷新目录', 404)
       const definition = profile.variants[runtimeId] ?? Object.values(profile.variants)[0]

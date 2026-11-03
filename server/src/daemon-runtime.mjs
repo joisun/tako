@@ -1,3 +1,5 @@
+import { createAgentMarketplace } from './agent-marketplace/service.mjs'
+import { createTeamPartTiming } from './team-part-timing.mjs'
 import { createAgentCatalog } from './agent-catalog.mjs'
 import { createExecutionDatabase } from './execution-database.mjs'
 import { createExecutionResourceCoordinator } from './execution-resource-coordinator.mjs'
@@ -153,6 +155,7 @@ export async function startDaemon({
     count: 0,
   }
   let executionDatabase = null
+  let marketplace = null
   let collaboration = null
   let schedulerStore = null
   let schedulerDefinitions = null
@@ -237,6 +240,7 @@ export async function startDaemon({
     try {
       await schedulerClock?.close()
       await collaboration?.close()
+      await marketplace?.close()
       await runService?.shutdown()
       await schedulerMonitor?.close()
     } finally {
@@ -253,6 +257,7 @@ export async function startDaemon({
         executionDatabase?.close()
         executionDatabase = null
         collaboration = null
+        marketplace = null
       }
     }
   }
@@ -311,8 +316,11 @@ export async function startDaemon({
         definitions: [createCodexRuntime({ execFileImpl: runtimeExecFile, runtimeEnvironment }), createClaudeRuntimeDefinition()],
         resolver: runtimeResolver,
       })
+      marketplace = createAgentMarketplace({database:executionDatabase,dataDirectory,clock,onChange:change=>hub.publish(change)})
+      await marketplace.recover()
       collaboration = createCollaborationRuntime({
-        catalog: createAgentCatalog(), memoryRoot:join(dataDirectory,'rooms','memory'), workspaceRoot:join(dataDirectory,'rooms','workspaces'),
+        hydrateRunParts:createTeamPartTiming(),
+        catalog: createAgentCatalog({additionalLocalDefinitions:()=>marketplace.teamDefinitions()}), memoryRoot:join(dataDirectory,'rooms','memory'), workspaceRoot:join(dataDirectory,'rooms','workspaces'),
         store: createCollaborationStore({ database: executionDatabase, clock }), resources,
         registry: collaborationRegistry,
         executeAgent: createAgentExecution({ registry: collaborationRegistry, supervisor, clock }),
@@ -463,6 +471,7 @@ export async function startDaemon({
       messaging,
       schedulerService,
       collaboration,
+      marketplace,
       scheduledRunLogs,
       runtimeRegistry,
       runService,

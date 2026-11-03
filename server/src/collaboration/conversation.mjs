@@ -30,8 +30,8 @@ export function createConversationOperations({ db, clock, createId }) {
     db.prepare('INSERT INTO loop_messages(id,room_id,task_id,run_id,author,text,request_key,created_at,mentions_json) VALUES(?,?,?,?,?,?,?,?,?)').run(id, current.room_id, current.id, runId, author, text, requestKey, now(), JSON.stringify(mentions))
     return { id, created: true }
   }
-  function inbox(current, memberId, { messageId = null, sourceRunId = null, reason, key, intent = 'lead', write = false, assignment = '', depends_on = [], reply_expected = false }) {
-    db.prepare('INSERT OR IGNORE INTO loop_inbox VALUES(?,?,?,?,?,?,?,NULL,?,?,?)').run(createId(), current.id, memberId, messageId, sourceRunId, reason, key, current.revision, JSON.stringify({ intent, write_access: write, assignment, depends_on, reply_expected }), now())
+  function inbox(current, memberId, { messageId = null, sourceRunId = null, reason, key, intent = 'lead', write = false, assignment = '', depends_on = [], reply_expected = false, wait_for_source = false }) {
+    db.prepare('INSERT OR IGNORE INTO loop_inbox VALUES(?,?,?,?,?,?,?,NULL,?,?,?)').run(createId(), current.id, memberId, messageId, sourceRunId, reason, key, current.revision, JSON.stringify({ intent, write_access: write, assignment, depends_on, reply_expected, wait_for_source }), now())
   }
   function openWorkers(current) {
     return db.prepare(`SELECT * FROM loop_runs WHERE task_id=? AND revision=? AND status IN ${OPEN}`).all(current.id, current.revision)
@@ -40,15 +40,12 @@ export function createConversationOperations({ db, clock, createId }) {
   function ensureRun(current, memberId, { immediate = false } = {}) {
     current = task(current.id)
     if (current.status !== 'active' || db.prepare(`SELECT id FROM loop_runs WHERE task_id=? AND member_id=? AND status IN ${OPEN}`).get(current.id, memberId)) return
-    const pending = db.prepare('SELECT * FROM loop_inbox WHERE task_id=? AND member_id=? AND revision=? AND consumed_by IS NULL ORDER BY rowid').all(current.id, memberId, current.revision).find(value=>(parse(value.payload_json).depends_on??[]).every(id=>run(id).status==='succeeded'))
+    const pending = db.prepare('SELECT * FROM loop_inbox WHERE task_id=? AND member_id=? AND revision=? AND consumed_by IS NULL ORDER BY rowid').all(current.id, memberId, current.revision).find(value=>{const payload=parse(value.payload_json);return (!payload.wait_for_source||!OPEN.includes(run(value.source_run_id).status))&&(payload.depends_on??[]).every(id=>run(id).status==='succeeded')})
     if (!pending) return
     const payload = parse(pending.payload_json)
     const dependencies=(payload.depends_on??[]).map(run)
     if(dependencies.some(value=>value.status!=='succeeded')) return
     if (payload.intent === 'lead' && !immediate && openWorkers(current).length) return
-    if (db.prepare('SELECT count(*) AS n FROM loop_runs WHERE task_id=?').get(current.id).n >= current.config.max_runs) {
-      updateTask(current, 'waiting', 'leading'); event(current.id, null, 'budget_exhausted'); return
-    }
     const id = createId(), stage = db.prepare('SELECT coalesce(max(stage),-1)+1 AS n FROM loop_runs WHERE task_id=?').get(current.id).n
     const phase = payload.intent === 'lead' ? 'leading' : payload.intent === 'verify' ? 'verifying' : payload.write_access ? 'implementing' : 'discussing'
     db.prepare(`INSERT INTO loop_runs(id,task_id,member_id,phase,stage,attempt,revision,generation,status,created_at,routing_json) VALUES(?,?,?,?,?,1,?,?,'queued',?,?)`)
@@ -91,7 +88,7 @@ export function createConversationOperations({ db, clock, createId }) {
     }
     const goal = required(input.text, '消息'), id = createId(), timestamp = now()
     const config = { workflow: 'conversation', leader: target.config.leader_id, coordinator: target.config.leader_id,
-      participants: roster.map(member => member.id), max_runs: target.config.max_runs ?? 24, timeout_seconds: target.config.timeout_seconds ?? 600,
+      participants: roster.map(member => member.id),
       source_workspace: target.config.workspace, source_workspaces:target.config.workspaces??(target.config.workspace?[target.config.workspace]:[]), resources:workspace.resources??[{source_workspace:target.config.workspace,workspace:workspace.workspace,branch:workspace.branch}], branch: workspace.branch, room_instructions: target.config.instructions ?? '', allow_write: true }
     db.prepare(`INSERT INTO loop_tasks(id,room_id,title,goal,acceptance,workspace,status,phase,revision,generation,config_json,request_key,created_at,updated_at) VALUES(?,?,?,?,?,?,'active','leading',1,1,?,?,?,?)`)
       .run(id, roomId, goal.split('\n')[0].slice(0,100), goal, 'Deliver the requested outcome with concrete verification evidence.', workspace.workspace, JSON.stringify(config), `conversation:${input.request_key}`, timestamp, timestamp)
@@ -119,15 +116,13 @@ export function createConversationOperations({ db, clock, createId }) {
     const dependencies=input.depends_on??[]
     if(!Array.isArray(dependencies)||dependencies.length>12||dependencies.some(id=>{const dependency=run(id);return dependency.task_id!==current.id||dependency.id===runId||dependency.member_id===candidate.member_id&&OPEN.includes(dependency.status)})) throw loopError('LOOP_DEPENDENCY_INVALID','依赖须为当前任务其他成员的执行')
     const write = input.write_access === true
-    const isLeader = candidate.member_id === current.config.leader && routing.intent === 'lead'
-    if (write && (!current.config.allow_write || (!isLeader && !routing.write_access))) throw loopError('LOOP_ACTION_FORBIDDEN', '当前执行不能授予写入权限', 403)
     if (write && members(current.room_id).some(member => mentions.includes(member.id) && member.runtime_id !== 'codex')) throw loopError('LOOP_WRITE_UNSUPPORTED', '当前只有Codex成员可承担受限实施')
     if (intent !== 'delegate' && write) throw loopError('LOOP_ACTION_FORBIDDEN', '只有实施指派能授予写入权限', 403)
     const message = insertMessage(current, candidate.member_id, value, key, mentions, runId)
     if (!message.created) return { accepted: true, message_id: message.id }
     for (const memberId of intent === 'announce' ? [] : mentions) {
       const purpose = memberId === current.config.leader && intent === 'reply' ? 'lead' : intent === 'verify' ? 'verify' : write ? 'implement' : 'discuss'
-      inbox(current, memberId, { messageId: message.id, sourceRunId: runId, reason: intent === 'delegate' ? 'delegation' : 'agent_mention', key: `mention:${message.id}:${memberId}`, intent: purpose, write, assignment: value, depends_on:dependencies, reply_expected:['delegate','verify'].includes(intent) })
+      inbox(current, memberId, { messageId: message.id, sourceRunId: runId, reason: intent === 'delegate' ? 'delegation' : 'agent_mention', key: `mention:${message.id}:${memberId}`, intent: purpose, write, assignment: value, depends_on:dependencies, reply_expected:['delegate','verify'].includes(intent), wait_for_source:intent==='reply' })
       if (intent !== 'announce') ensureRun(current, memberId)
     }
     event(current.id, runId, 'agent_message', { message_id: message.id, mentions, intent, write_access: write })
@@ -147,9 +142,6 @@ export function createConversationOperations({ db, clock, createId }) {
     const reason = required(input.reason, '动作说明', 4000)
     if (input.action === 'deliver') {
       if (openWorkers(current).length) throw loopError('LOOP_DELIVERY_PENDING', '仍有成员执行未完成', 409)
-      const writer = db.prepare("SELECT * FROM loop_runs WHERE task_id=? AND revision=? AND json_extract(routing_json,'$.write_access')=1 ORDER BY stage DESC LIMIT 1").get(current.id,current.revision)
-      const verification = writer ? db.prepare("SELECT * FROM loop_runs WHERE task_id=? AND revision=? AND stage>? AND json_extract(routing_json,'$.intent')='verify' ORDER BY stage DESC LIMIT 1").get(current.id,current.revision,writer.stage) : null
-      if (writer && (verification?.status !== 'succeeded' || parse(verification.submission_json).verdict !== 'pass')) throw loopError('LOOP_VERIFICATION_REQUIRED', '实施后需要指派一次只读验证并获得pass结果', 409)
     }
     const action = { action: input.action, reason }
     if (candidate.action && JSON.stringify(candidate.action) !== JSON.stringify(action)) throw loopError('LOOP_ACTION_CONFLICT', '本次执行已提交不同的阶段决定', 409)
@@ -165,7 +157,7 @@ export function createConversationOperations({ db, clock, createId }) {
       if (candidate.status !== 'succeeded') { updateTask(current, 'waiting', 'leading'); event(current.id, runId, 'leader_failed'); return }
       const unread = db.prepare('SELECT id FROM loop_inbox WHERE task_id=? AND revision=? AND consumed_by IS NULL').get(current.id,current.revision)
       if (action.action === 'deliver' && !unread && !openWorkers(current).length) { updateTask(current, 'review', 'delivery'); event(current.id, runId, 'delivery_ready', { summary: action.reason }); return }
-      if (action.action === 'wait' && !unread) { updateTask(current, 'waiting', 'leading'); event(current.id, runId, 'waiting_for_user', { reason: action.reason }); return }
+      if (action.action === 'wait' && !unread && !openWorkers(current).length) { updateTask(current, 'waiting', 'leading'); event(current.id, runId, 'waiting_for_user', { reason: action.reason }); return }
       const pending = db.prepare('SELECT id FROM loop_inbox WHERE task_id=? AND revision=? AND consumed_by IS NULL').get(current.id,current.revision)
       if (!pending && !openWorkers(current).length) {
         const attempts = db.prepare("SELECT count(*) AS n FROM loop_events WHERE task_id=? AND kind='leader_no_action'").get(current.id).n
@@ -175,20 +167,23 @@ export function createConversationOperations({ db, clock, createId }) {
       }
     } else {
       const parent=routing.parent_run_id ? run(routing.parent_run_id) : null
-      if(routing.reply_expected && parent && parent.member_id!==current.config.leader && members(current.room_id).some(member=>member.id===parent.member_id)) inbox(current,parent.member_id,{sourceRunId:runId,reason:'member_result',key:`result:${runId}:requester`,intent:'discuss',assignment:'Your delegated work has returned. Reconcile the result and continue your own assignment.'})
-      inbox(current, current.config.leader, { sourceRunId: runId, reason: 'member_result', key: `result:${runId}:leader` })
+      const notified=new Set(db.prepare("SELECT member_id FROM loop_inbox WHERE source_run_id=? AND consumed_by IS NULL AND reason='agent_mention'").all(runId).map(row=>row.member_id))
+      if(routing.reply_expected && parent && !notified.has(parent.member_id) && parent.member_id!==current.config.leader && members(current.room_id).some(member=>member.id===parent.member_id)) inbox(current,parent.member_id,{sourceRunId:runId,reason:'member_result',key:`result:${runId}:requester`,intent:'discuss',assignment:'Your delegated work has returned. Reconcile the result and continue your own assignment.'})
+      if(!notified.has(current.config.leader))inbox(current, current.config.leader, { sourceRunId: runId, reason: 'member_result', key: `result:${runId}:leader` })
     }
-    for (const member of members(current.room_id)) ensureRun(current, member.id)
+    for (const member of members(current.room_id).filter(member=>member.id!==current.config.leader)) ensureRun(current, member.id)
+    ensureRun(current,current.config.leader)
   }
   function resume(current) {
     const pending = db.prepare('SELECT id FROM loop_inbox WHERE task_id=? AND revision=? AND consumed_by IS NULL').get(current.id,current.revision)
     if (!pending) inbox(current, current.config.leader, { reason: 'user_resume', key: `resume:${current.id}:${current.generation}`, assignment: current.goal })
     updateTask(current, 'active', 'leading')
-    for (const member of members(current.room_id)) ensureRun(current, member.id)
+    for (const member of members(current.room_id).filter(member=>member.id!==current.config.leader)) ensureRun(current, member.id)
+    ensureRun(current,current.config.leader)
   }
   function configureRoom(roomId, input) {
     const target = room(roomId)
-    const changed=(input.leader_id!==undefined&&input.leader_id!==target.config.leader_id)||(input.workspace!==undefined&&input.workspace!==target.config.workspace)||(input.workspaces!==undefined&&JSON.stringify(input.workspaces)!==JSON.stringify(target.config.workspaces??[target.config.workspace]))||(input.instructions!==undefined&&input.instructions!==target.config.instructions)||(input.max_runs!==undefined&&input.max_runs!==target.config.max_runs)
+    const changed=(input.leader_id!==undefined&&input.leader_id!==target.config.leader_id)||(input.workspace!==undefined&&input.workspace!==target.config.workspace)||(input.workspaces!==undefined&&JSON.stringify(input.workspaces)!==JSON.stringify(target.config.workspaces??[target.config.workspace]))||(input.instructions!==undefined&&input.instructions!==target.config.instructions)
     if(changed&&db.prepare("SELECT id FROM loop_tasks WHERE room_id=? AND status IN ('active','paused','waiting')").get(roomId))throw loopError('LOOP_ROOM_BUSY','有未结束工作时不能更换 Leader、项目或协作规则',409)
     const config = { ...target.config }
     if (input.leader_id !== undefined) {
@@ -199,7 +194,6 @@ export function createConversationOperations({ db, clock, createId }) {
     if (input.workspaces !== undefined) config.workspaces = input.workspaces
     if (input.memory_directory !== undefined) config.memory_directory = input.memory_directory
     if (input.instructions !== undefined) config.instructions = String(input.instructions).slice(0,8000)
-    if (input.max_runs !== undefined) { if (!Number.isSafeInteger(input.max_runs) || input.max_runs < 4 || input.max_runs > 100) throw loopError('LOOP_INPUT_INVALID', '执行预算范围为4–100'); config.max_runs = input.max_runs }
     db.prepare('UPDATE loop_rooms SET config_json=? WHERE id=?').run(JSON.stringify(config),roomId)
     return { ...target, config }
   }

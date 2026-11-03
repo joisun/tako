@@ -1,3 +1,4 @@
+import type {MarketSource,MarketCatalog,MarketDefinition,InstalledAgent,AgentUpdate,AgentReview,MarketplaceMutation,AgentSessionContext,AgentRuntimeAdapter} from './marketplace-types'
 import type { RoomBoard, RoomWorkItem, RoomRuntime, RoomMemberDefinition, LoopAvatar, LoopAttachment } from './loop-types'
 import type { AgentDefinition, AgentCatalog, AgentCatalogSource, LoopRoom, LoopRoomDetail, LoopMember, LoopTaskInput, LoopTaskDetail } from './loop-types'
 import type {
@@ -75,6 +76,18 @@ export interface DashboardApi {
   roomRuntime(id:string):Promise<RoomRuntime>
   roomMemberDefinition(roomId:string,memberId:string):Promise<RoomMemberDefinition>
   importAgent(input:{definition_id:string;runtime_id:string}):Promise<{definition:AgentDefinition;path:string;imported:boolean}>
+  marketSources():Promise<{sources:MarketSource[]}>
+  marketSaveSource(input:{id?:string;name:string;repository:string;ref:string;directories?:string[];enabled:boolean;confirm:true}):Promise<{source:MarketSource}>
+  marketDeleteSource(input:{id:string;confirm:true}):Promise<{deleted:boolean}>
+  marketCatalog(source:string,refresh?:boolean):Promise<MarketCatalog>
+  marketDefinition(source:string,path:string,version:string):Promise<{definition:MarketDefinition}>
+  marketInstalled():Promise<{installed:InstalledAgent[]}>
+  marketLocal(id:string):Promise<{installed:InstalledAgent;content:string|null;local_path:string}>
+  marketUpdates(refresh?:boolean):Promise<{updates:AgentUpdate[]}>
+  marketReview(id:string):Promise<AgentReview>
+  marketMutate(action:'install'|'update'|'uninstall',input:MarketplaceMutation):Promise<{id:string;action:string;completed:boolean}>
+  marketSessionContext(id:string):Promise<AgentSessionContext>
+  marketCompatibility():Promise<{adapters:AgentRuntimeAdapter[]}>
   agentCatalogSources():Promise<{sources:AgentCatalogSource[]}>
   agentCatalog(source: string,options?:{refresh?:boolean}): Promise<AgentCatalog>
   agentDefinition(id: string, runtime: string): Promise<{ definition: AgentDefinition }>
@@ -84,8 +97,9 @@ export interface DashboardApi {
   syncRoomMemory(id:string):Promise<{room:LoopRoomDetail}>
   restoreRoom(input:{source_directory:string;memory_directory?:string;workspaces?:string[]}):Promise<{room:LoopRoomDetail}>
   updateRoomMember(id:string,memberId:string,input:{name:string;model?:string|null;effort?:string|null;avatar?:LoopAvatar}):Promise<{member:LoopMember}>
-  roomMemberDeletion(id:string,memberId:string):Promise<{member_id:string;files:{path:string;digest:string}[];other_rooms:number}>
-  deleteRoomMember(id:string,memberId:string,input:{confirm:true;files:{path:string;digest:string}[]}):Promise<{deleted:boolean}>
+  agentDeletion(id:string):Promise<{definition_id:string;files:{path:string;digest:string}[];teams:number}>
+  deleteAgentDefinition(id:string,input:{confirm:true;files:{path:string;digest:string}[]}):Promise<{deleted:boolean}>
+  removeRoomMember(id:string,memberId:string,input:{confirm:true}):Promise<{deleted:boolean}>
   retryRoomDefinitionCleanup(id:string):Promise<{room:LoopRoomDetail}>
   deleteRoom(id:string):Promise<{room:LoopRoomDetail}>
   dissolveRoom(id:string):Promise<{room:LoopRoomDetail}>
@@ -247,6 +261,18 @@ export function createDashboardApi({
     roomRuntime: id => request(`/api/v1/teams-runtime/${encodeURIComponent(id)}`,{requestTimeoutMs:RUNTIME_TIMEOUT_MS}),
     roomMemberDefinition: (id,memberId) => request(`/api/v1/teams/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}/definition`),
     importAgent: body => request('/api/v1/agent-catalog/import',{method:'POST',body,requestTimeoutMs:RUNTIME_TIMEOUT_MS}),
+    marketSources:()=>request('/api/v1/marketplace/sources'),
+    marketSaveSource:body=>request('/api/v1/marketplace/sources',{method:'POST',body}),
+    marketDeleteSource:body=>request('/api/v1/marketplace/sources',{method:'DELETE',body}),
+    marketCatalog:(source,refresh)=>request(`/api/v1/marketplace/catalog?source=${encodeURIComponent(source)}${refresh?'&refresh=1':''}`,{requestTimeoutMs:90000}),
+    marketDefinition:(source,path,version)=>request(`/api/v1/marketplace/definition?source=${encodeURIComponent(source)}&path=${encodeURIComponent(path)}&version=${encodeURIComponent(version)}`,{requestTimeoutMs:90000}),
+    marketInstalled:()=>request('/api/v1/marketplace/installed'),
+    marketLocal:id=>request(`/api/v1/marketplace/local?id=${encodeURIComponent(id)}`),
+    marketUpdates:refresh=>request(`/api/v1/marketplace/updates${refresh?'?refresh=1':''}`,{requestTimeoutMs:90000}),
+    marketReview:id=>request(`/api/v1/marketplace/review?id=${encodeURIComponent(id)}`,{requestTimeoutMs:90000}),
+    marketMutate:(action,body)=>request(`/api/v1/marketplace/${action}`,{method:'POST',body,requestTimeoutMs:90000}),
+    marketSessionContext:id=>request(`/api/v1/marketplace/session-context?id=${encodeURIComponent(id)}`),
+    marketCompatibility:()=>request('/api/v1/marketplace/compatibility'),
     agentCatalogSources:()=>request('/api/v1/agent-catalog/sources'),
     agentCatalog: (source,options) => request(`/api/v1/agent-catalog?source=${encodeURIComponent(source)}${options?.refresh?'&refresh=1':''}`, { requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
     agentDefinition: (id, runtime) => request(`/api/v1/agent-catalog/definition?id=${encodeURIComponent(id)}&runtime=${encodeURIComponent(runtime)}`, { requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
@@ -256,8 +282,9 @@ export function createDashboardApi({
     syncRoomMemory:id=>request(`/api/v1/teams/${encodeURIComponent(id)}/memory-sync`,{method:'POST',body:{}}),
     restoreRoom: body=>request('/api/v1/teams/restore',{method:'POST',body}),
     updateRoomMember:(id,memberId,body)=>request(`/api/v1/teams/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`,{method:'PATCH',body}),
-    roomMemberDeletion:(id,memberId)=>request(`/api/v1/teams/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}/deletion`),
-    deleteRoomMember:(id,memberId,body)=>request(`/api/v1/teams/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`,{method:'DELETE',body}),
+    agentDeletion:id=>request(`/api/v1/agent-catalog/deletion?id=${encodeURIComponent(id)}`),
+    deleteAgentDefinition:(id,body)=>request(`/api/v1/agent-catalog/definition?id=${encodeURIComponent(id)}`,{method:'DELETE',body}),
+    removeRoomMember:(id,memberId,body)=>request(`/api/v1/teams/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`,{method:'DELETE',body}),
     retryRoomDefinitionCleanup:id=>request(`/api/v1/teams/${encodeURIComponent(id)}/definition-cleanup`,{method:'POST',body:{}}),
     deleteRoom:id=>request(`/api/v1/teams/${encodeURIComponent(id)}/delete`,{method:'POST',body:{confirm:true}}),
     dissolveRoom:id=>request(`/api/v1/teams/${encodeURIComponent(id)}`,{method:'DELETE',body:{}}),
@@ -265,7 +292,7 @@ export function createDashboardApi({
     addRoomMember: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}/members`, { method: 'POST', body }),
     postRoomMessage: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}/messages`, { method: 'POST', body }),
     createLoopTask: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}/tasks`, { method: 'POST', body, requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
-    loopTask: id => request(`/api/v1/loop-tasks/${encodeURIComponent(id)}`),
+    loopTask: id => request(`/api/v1/loop-tasks/${encodeURIComponent(id)}/timeline`),
     controlLoopTask: (id, action, revision) => request(`/api/v1/loop-tasks/${encodeURIComponent(id)}/control`, { method: 'POST', body: { action, expected_revision: revision } }),
     sessionPins: () => request('/api/v1/session-browser/pins'),
     setSessionPin: (session, pinned) => request('/api/v1/session-browser/pins', { method: 'PUT', body: { session: { provider: session.provider, store_id: session.store_id, session_id: session.session_id }, pinned }, requestTimeoutMs: RUNTIME_TIMEOUT_MS }),

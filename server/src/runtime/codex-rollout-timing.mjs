@@ -21,12 +21,18 @@ function remember(map, key, at) {
 }
 
 async function scan(file, size) {
-  const ids = new Map(), texts = new Map()
+  const ids = new Map(), texts = new Map(), parts = new Map(), messages = new Map()
+  let automaticContinuation = false
   let turn = null, count = 0, tail = '', oversized = false
   function line(value) {
     let entry
     try { entry = JSON.parse(value) } catch { return }
-    if (entry.type === 'turn_context') { turn = entry.payload?.turn_id ?? null; return }
+    if (entry.type === 'turn_context') { turn = entry.payload?.turn_id ?? null; automaticContinuation = false; return }
+    if(entry.type==='event_msg'&&entry.payload?.type==='item_completed'){
+      const payload=entry.payload,start=payload.started_at_ms,end=payload.completed_at_ms
+      if(typeof payload.item?.id==='string'&&Number.isFinite(start)&&Number.isFinite(end)&&end>=start)remember(parts,payload.item.id,JSON.stringify({created_at:new Date(start).toISOString(),updated_at:new Date(end).toISOString(),timing_source:'native'}))
+      return
+    }
     const item = entry.payload
     if (entry.type !== 'response_item' || item?.type !== 'message' || !['user', 'assistant'].includes(item.role)) return
     const time = typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : NaN
@@ -37,6 +43,8 @@ async function scan(file, size) {
     const content = item.content ?? []
     if (!Array.isArray(content) || content.some(part => !['input_text', 'output_text', 'text'].includes(part.type))) return
     const text = content.map(part => part.text ?? '').join('\n')
+    if(item.role==='user')automaticContinuation=text.startsWith('<hook_prompt')
+    if(item.role==='assistant'&&typeof item.id==='string')messages.set(item.id,{...(['commentary','partial_answer','final_answer'].includes(item.phase)?{phase:item.phase}:{}),origin:automaticContinuation?'hook':'agent'})
     remember(texts, fingerprint(turn, item.role, text), at)
   }
   const buffer = Buffer.alloc(64 * 1024), decoder = new StringDecoder('utf8')
@@ -56,7 +64,7 @@ async function scan(file, size) {
     }
   }
   // A partial final line can be an active write; wait for a complete record.
-  return { ids, texts }
+  return { ids, texts, parts, messages }
 }
 
 export function createCodexRolloutTiming({ dataRoot, resolvePath, clock = Date.now }) {
@@ -79,13 +87,26 @@ export function createCodexRolloutTiming({ dataRoot, resolvePath, clock = Date.n
       return value
     } finally { await file.close() }
   }
+  async function load(metadata){
+    const path=resolvePath(metadata)
+    if(typeof path!=='string'||!isAbsolute(path))return null
+    if(!pending.has(path))pending.set(path,catalog(path).catch(()=>null).finally(()=>pending.delete(path)))
+    return pending.get(path)
+  }
   return {
+    async hydrateParts(metadata,parts){
+      if(parts.every(part=>Number.isFinite(Date.parse(part.created_at))&&(part.type!=='text'||part.origin&&part.phase)))return parts
+      const value=await load(metadata)
+      if(!value)return parts
+      return parts.map(part=>{
+        const message=part.type==='text'?value.messages.get(part.id):null
+        const timing=!Number.isFinite(Date.parse(part.created_at))?value.parts.get(part.id):null
+        return message||timing?{...part,...message,...(timing?JSON.parse(timing):{})}:part
+      })
+    },
     async hydrate(metadata, entries) {
       if (!entries.some(entry => ['userMessage', 'agentMessage'].includes(entry.item?.type) && !messageTimestamp(entry))) return entries
-      const path = resolvePath(metadata)
-      if (typeof path !== 'string' || !isAbsolute(path)) return entries
-      if (!pending.has(path)) pending.set(path, catalog(path).catch(() => null).finally(() => pending.delete(path)))
-      const value = await pending.get(path)
+      const value = await load(metadata)
       if (!value) return entries
       return entries.map(entry => {
         if (messageTimestamp(entry)) return entry

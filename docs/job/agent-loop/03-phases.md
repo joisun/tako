@@ -393,3 +393,218 @@ Playwright 实际查看原截图“测试 03”（06dd73fa-44a5-4b1c-a89a-035167
 - 直接读取 ECC 官方 API，版本 b38be6a7f6350964d59328b52f0624e1d1d552d1，发现 71 个角色。读取 agents/planner.md 完整指令 7747 字符，并在隔离临时 HOME 完成真实文件导入，返回 local:ecc-planner、MIT 及正确 commit，Codex 模型为 null，重复导入 imported=false；临时目录已清理，真实全局定义未改动。
 - Playwright 从实际预览的“添加 Agent / Agent 市场”加载 ECC 71 个角色，搜索并选择 planner，强制刷新返回 200，保留“我的规划师”草稿，来源 URL 固定到该 commit。来源选择切换 Agency Agents 返回 200、214 个角色。未点击正式导入或加入团队，没有写入真实全局文件或启动模型。弹窗按钮仍为 88×32，无横向溢出。
 - 扫描 204 份 Markdown，同步相关活跃来源和 HTTP 契约，本地文档链接无断链。预览重载前确认无未结束 Run。没有提交、合并、发布或更新正式安装；未变更 Scheduled、sun 或正式 43127。
+
+### 2026-11-02：真实动作时间线及思考/行动交替
+
+用户明确要求按“做了什么动作就展示什么”排列，而非将整轮 Run 放在创建时间后统一展示。现在文字、公开思考摘要、工具动作、真实委派/回复及失败按各自时间交错排列；只有连续同作者同 Run 的动作共用作者头。接收人以显式 @ 置于消息正文，点击仍打开对应稳定成员 ID 的定义。
+
+新 parts 记录首次观测时间、更新与 sequence。历史 Codex Run 只按已登记的 provider/store/session 及精确 item ID，从原生日志恢复实际 started/completed 时间；限定真实根目录、唯一身份、文件大小及 Run 时间范围。新增 timeline 读取投影，不改写数据库或原生日志。缺失可靠时间的旧内容单列为时间未记录的详情，不编造顺序。
+
+按官方 AI Elements Reasoning 源码及 Base UI 文档接入 Reasoning / ReasoningContent，沿用项目既有 Base UI，不引入另一套 primitives 或 AI SDK transport。遵循用户的直接摘要要求，受控展开且无额外卡片、标题图标、折叠按钮或虚构时长。Codex item 开始/结束显式更新 reasoning/text 状态，Claude 完整内容块直接记为完成。流式动画仅作用于该成员当前尚未结束的最后一段；reasoning → tool → reasoning → tool 中旧段及时停止，成员状态分别计算。普通回复不被当作实际行动。
+
+主要修改：collaboration/run-parts、runtime/adapters/codex-interactive-session 与 claude；runtime/codex-rollout-timing、codex/session-inventory、新增 team-part-timing、daemon-runtime、collaboration-runtime/http；dashboard-api/loop-types、message-timeline、room-messages、message-mentions、Reasoning 组件、teams.css、构建输出及相关文档。测试仅留本地。
+
+实际验证：
+
+- node --test test/codex-interactive-session.test.mjs test/team-part-timing.test.mjs test/claude-runtime.test.mjs：17 项通过。覆盖真实协议形状的两轮思考/行动交替、精确 native ID 时间恢复、错误身份与越界时间不猜测，以及读取投影不改写记录。
+- node --test test/codex-rollout-timing.test.mjs test/codex-session-inventory.test.mjs test/room-teammates.test.mjs test/room-conversation.test.mjs：28 项通过。
+- npx vitest run ui/react/features/teams/room-messages.test.tsx ui/react/features/teams/message-timeline.test.ts ui/react/features/teams/message-mentions.test.tsx ui/react/features/teams/teams-view.test.tsx：44 项通过。覆盖交错排序、显式正文提及、两轮状态转换、旧段停止动画、多成员独立状态和空摘要等待事件。
+- 应用源码严格类型检查、npm run build、189 个源码语法检查及 git diff --check 通过。全量 npm run check:types 仍只有此前记录的 5 处旧测试错误：design-system.test.tsx 的旧模块及 Tooltip delay，dashboard-event-source.test.ts 的旧参数数量。package.json 无独立 lint 命令，未声称全量检查通过。
+- 本机真实历史日志只读核对：目标团队 9 个 Run 的 68 段内容全部恢复精确时间，无缺失。Playwright 在 58019 用户指定团队加载 79 个事件，DOM 时间单调递增，12 段摘要全部无流式状态，无整轮执行框或时间缺失补充区。正文 @Frontend Developer 可打开正确定义，工具详情可展开/关闭；无页面横向溢出或会话节点越过右边界。截图为 element-2026-11-02T07-15-06-097Z.png。
+- 更新预览前只读核对 16 个团队，无 queued/starting/running/stopping/unknown Run；仅重载 58019 预览，健康检查、完整性及外键检查正常。没有向原团队发消息、重跑模型或改写历史内容。两轮实时交替通过隔离协议和 UI 测试验证，未宣称新增真实模型验收。
+- 盘点 204 份 Markdown，更新 README、架构、Teams 接口与 UI 来源维护说明。保留历史记录中当时的呈现方式。
+
+边界：最新修改在 f04d981 之后，尚未提交、合并、推送、发布或更新正式安装；没有操作正式 43127、sun、真实定时任务或用户全局配置。Linux 与真实 Claude 模型侧验收本轮未执行。
+
+### 2026-11-02：移除指派标签，提及进入正文行内
+
+按用户截图调整：指派消息不显示单独的“指派” Badge。没有出现在原文中的已登记接收人插入正文首段行内，与后续文字间隔一个空格；已存在的提及不重复，稳定 ID 路由和点击查看定义保持原样。验证、回复和广播的现有标记不变。若原始 Markdown 首块不是段落，保留其代码、标题或列表结构，不把提及插入代码。
+
+修改 message-mentions.tsx、room-messages.tsx 和对应局部样式，同步 README、architecture 和 agent-loop 当前说明。更新已有相关测试，37 项通过；应用源码类型检查、生产构建及 git diff --check 通过。Playwright 在用户原团队确认委派消息无指派标签，@Frontend Developer 与正文首字位于同一行、同一段落，点击仍打开成员定义。更新前核对预览无未结束 Run，仅重载 58019。没有修改历史消息、发起模型执行、提交或发布。
+
+### 2026-11-02：团队移出与全局 Agent 定义删除分离
+
+用户明确将成员菜单限定为移出当前团队，定义删除放在添加 Agent 的本地目录。成员菜单改为 UserMinus 图标和“移出当前团队”，确认后只删除成员行、保留历史身份并解除看板负责人；不读取或删除本地定义，不影响其他团队。未结束协作或未知执行仍阻止移出。
+
+本地 Agent 目录新增“删除定义”，不依赖是否已加入当前团队或客户端是否可用，市场条目没有删除按钮。确认弹窗展示 canonical 文件与使用团队数。服务端核对文件列表/digest，删除仅作用于文件，不移出任何团队成员。已有成员继续使用加入时的指令快照。失败保留别名和运行配置，成功刷新本地目录及相关定义缓存。
+
+HTTP：DELETE teams/:id/members/:member 只接收 confirm 并移出；GET agent-catalog/deletion?id 查询计划，DELETE agent-catalog/definition?id 接收 confirm/files 删除定义。不再提供成员删除文件计划接口。loop_schema 以增量迁移升级到 6，新增独立 loop_catalog_deletions 日志，staging 回滚、committed 完成清理；旧 loop_definition_deletions 只为真实历史记录继续恢复。目录本地读取、导入与定义删除串行，清理未完成时返回可重试错误而非空目录。没有借用某个团队成员作为全局删除的提交标记。
+
+修改 room-member-list、room-dialogs、teams-view、teams.css、dashboard-api；collaboration-http/runtime/schema；相关测试与 README、architecture、agent-loop。没有提交或发布。
+
+实际验证：
+
+- node --test test/room-teammates.test.mjs test/room-catalog-http.test.mjs test/collaboration-recovery.test.mjs test/agent-catalog.test.mjs test/room-memory.test.mjs test/collaboration-store.test.mjs：56 项通过。新增部分暂存失败/提交后清理失败的验证后，重跑 teammates 与 catalog-http 共 20 项通过；新增 1 项失败恢复验证，本轮合计 57 项独立后端用例。所有定义删除在显式临时 home/codexHome 下执行。
+- npx vitest run ui/react/features/teams/teams-view.test.tsx：32 项通过，含成员菜单不调用全局删除、目录独立删除、市场无删除入口、成功刷新列表与失败保留别名。
+- 应用源码严格类型检查、npm run build、189 个源码语法检查及 git diff --check 通过。全量类型检查的 5 处既有旧测试错误未在本任务改动；没有新增 lint 命令。
+- Playwright 在 58019 原用户团队只打开并取消两类确认框。菜单没有“删除成员与本地定义”，移出确认说明当前团队范围；目录展示实际 canonical 定义文件和 9 个使用团队，取消后正确返回目录。未点击任何最终移出/删除确认。目录宽 800px、无横向溢出，三个 footer 按钮均为 88×32。截图 element-2026-11-02T07-47-29-672Z.png。
+- 预览迁移前使用 SQLite backup 留存 before-agent-removal-1793605573108.sqlite。确认无未结束 Run 后仅重载 58019，schema 从 5 到 6；rooms=22、members=44、tasks=18、runs=55、messages=79、work_items=3，迁移前后逐项相同，完整性 ok、外键错误为空、健康检查正常。没有启动模型或改动正式 43127、sun、定时任务或用户全局定义。
+- 盘点 204 份 Markdown，扫描受影响符号和旧行为，活跃契约已同步；历史日志保留当时事实。本机正式安装与已发布版本未更新。
+
+### 2026-11-02：Teams 全局 Agent 管理与真实 Marketplace
+
+先审计现有 React/Query/设计系统、Agent Catalog、SQLite、Daemon、Runtime 与 Sessions，实施前在 docs/agent-marketplace.md 记录计划。用户随后要求管理入口仍属 view=teams，并把成员 + 改为先选本地角色、再配置身份；最终遵循该交互，没有第四个顶层导航。
+
+Teams 左侧新增跨团队的“Agent 管理”，使用 team_view=agents 与 market_tab，保留所选团队。提供本地定义、发现、托管安装、更新和来源。App 通过 ReactNode 注入管理视图，Teams 与 Marketplace feature 不互相导入。本地全局定义可查看/确认删除，Rillo 托管定义走安装管理。成员 + 是 480px 本地搜索选择器，不加载网络市场或暴露删除；选中后进入 620px 的名字、头像、客户端、模型及 effort 配置弹窗。加入失败保留配置，返回保留关键词。
+
+后端新增 agent-marketplace 的 GitHub 来源、定义解析、SQLite store、安装服务、Runtime 能力和 HTTP 模块；Daemon 复用 scheduler.sqlite 及 existing API server。来源支持独立 GitHub 仓库、分支和可选目录范围，默认 Agency 与 ECC，持久缓存 10 分钟、来源刷新合并、失败保留真实缓存并标明错误。使用受限 bare Git HTTPS，不 checkout、不执行 hooks/脚本/过滤器或子模块；GitHub API 限流不会导致伪造目录。读取原始 UTF-8 Markdown 和实际 LICENSE，名称/简介/分类/标签/职责/工作流来自实际内容或明确的目录/正文回退，排除指南和 Skill/Rule。来源没有 featured 元数据时不生成假精选；最近发现与来源 commit 时间分别标明。
+
+安装原文及版本登记位于 Rillo 数据目录 agents/installed 和现有 SQLite 的 marketplace_* 表，不写入全局客户端目录。安装绑定审核 commit 与 digest，更新显示原版/本地/远端逐行差异；本地修改默认阻止更新/卸载，勾选备份并再次核对摘要后才继续。操作日志支持文件与数据库之间中断恢复，异常修改不会被覆盖。路径、符号链接、文件大小和内容总量受限。Markdown 复用 Streamdown sanitize，不解释 raw HTML 或加载外部图片。
+
+托管定义以 managed: ID 通过组合层注入原有目录，可以沿用现有 Teams addMember 和执行机制，保存版本及完整指令快照。更新不修改已有成员。Codex/Claude 已有 Run 指令注入路径，Runtime 可用性从现有 registry/Claude 探测读取；OpenCode 客户端可用不等于定义适配已接入。现有 Sessions 没有带角色定义创建独立会话的公开接口，因此提供版本化 session-context 和客户端选择，明确禁用执行，不用临时 Team/Schedule 冒充 Session，没有新增执行器。
+
+主要文件：server/src/agent-marketplace/{definition,github-source,store,service,runtime-adapters,http}.mjs；agent-catalog、api-server、daemon-runtime 及 managed 成员 ID 接受处。ui/react/features/marketplace 的页面、来源、本地定义、详情、差异和确认弹窗；app/dashboard-app 组合、API 类型/客户端及 queryKeys；Teams 的成员选择器/配置与全局入口。package.json 和 lockfile 未改变，无新增/移除依赖。旧有用户与其他任务改动保留，测试留本地。
+
+实际验证：
+
+- node --test test/agent-marketplace.test.mjs test/agent-catalog.test.mjs test/room-catalog-http.test.mjs test/daemon-runtime.test.mjs test/runtime-api.test.mjs test/definition-schedule-service.test.mjs：35 项通过。包含真实数据契约解析、发现/维护文件/目录范围、确认与版本保护、原文持久化、离线重启、来源独立性、更新备份、卸载保护、异常路径与符号链接、操作恢复、Teams 版本快照、HTTP 及现有 Daemon/Runtime/Schedule 回归。
+- npx vitest run ui/react/features/teams/teams-view.test.tsx ui/react/features/marketplace/marketplace-view.test.tsx ui/react/app/app-shell.test.tsx：43 项通过。覆盖搜索/空结果/错误、详情/确认、修改保护、差异、来源管理、全局本地删除、创建 Session 未接入状态、Markdown 安全、Teams 范围入口、两步添加及失败/返回状态、既有导航/调度交互。
+- 应用源码严格类型检查、npm run build、195 个源码语法检查、git diff --check 通过。npm package-lock v3 与 package.json 的 dependencies/devDependencies 一致，依赖无改动。仓库没有独立 lint 命令。全量 check:types 仍只有原有 5 处旧测试错误：design-system 的旧 icon-button/tabs 及 Tooltip delay，dashboard-event-source 的旧参数数量，未宣称全量通过。
+- 真源读取：Agency b37b5bb33b78f2c1d6567d98e25ca818e3259219 识别 283 个角色、12 个 Security 角色，解析错误 0；ECC b38be6a7f6350964d59328b52f0624e1d1d552d1 在其 agents 目录识别 71 个角色，错误 0。发现过程中校正了文档/技能误判，没有把示例或维护材料当作 Agent。
+- Playwright 真实安装 Frontend Developer 至隔离预览数据目录，文件 SHA256 与来源一致、原文逐字保留，并出现在 Teams 本地目录。检查过版本化 Session 上下文，独立创建按钮禁用；真实本地文件的逐行审核可读。给验证文件加入本地修改后，更新/卸载按钮在未选择备份时禁用；确认备份后恢复原文，备份文件确实保留修改。最终卸载验证安装，installed=0、pending operations=0。没有调用模型或写全局定义。
+- 最终交互用真实用户团队只打开选择和配置、返回/取消，没有加入成员。picker 初始没有名字/市场字段；选 Backend Architect 后名字、头像、模型、effort 可见，宽 620px，footer 三个按钮均 88×32，返回保留关键词。管理 URL 为 view=teams&team_view=agents，顶层仍为 Sessions、Schedule、Teams。1440px 发现页三列，390px 单列且无页面/工作区横向溢出，局部导航可横向滚动，移动导航抽屉有全局入口；检查了 reduced-motion 状态。最终截图 element-2026-11-02T09-35-39-575Z.png。
+- 重载 58019 前确认无未结束 Run，保留 before-marketplace-1793608311891.sqlite。验证前后 loop_rooms=22、members=46、tasks=19、runs=64、messages=90、work_items=3 完全相同，完整性 ok、外键错误为空。验证用备份留在隔离预览的 agents/backups，原用户工作未修改。
+- 盘点 205 份 Markdown，更新 README、architecture、agent-loop 与新增 Marketplace 契约，旧执行记录保留其历史事实。没有提交、合并、推送、发布或更新正式安装，没有改正式 43127、sun、认证、全局模型/工具权限或 Git 远端。
+
+已知边界：独立 Session 创建、OpenCode 定义适配、原生 CLI 格式导出未实现；目录需要 Git 与 GitHub 网络，未知许可证明确提示，原始数据恢复仍遵循本地摘要保护。真正执行复用 Teams，本轮没有把 UI/协议验证当作新模型执行证据。
+
+
+### 2026-11-02：对话回执去重与结果收件人
+
+- 成功 `send_message` 仅在同 Run 的持久化消息 ID 可核对时隐藏技术卡片；成功 `submit_result` 在正式结果可读时隐藏回执，复用原生汇报正文或保存的摘要。失败、未完成和无法核对的调用保留。只去除精确匹配的系统摘要副本，不合并其他独立消息。
+- 工作汇报按执行路由显示内联提及：成员回报 Leader，成员间委派且要求回报时另外提及实际委派者；Leader 自己不自我提及。不追加持久化消息或重复唤醒模型，原始工具部分及结果保留。执行详情可读取尚未结束 Run 已接受的正式结果。
+- 实际验证：四个 Teams 测试文件 54 项通过；源码 tsc 通过；npm run build、git diff --check 通过。npm run check:types 仍是 design-system.test.tsx 与 dashboard-event-source.test.ts 中既有的 5 项错误，无新增类型错误。
+- 58019 隔离预览在确认没有活动/未知 Run 后更新。headless Playwright 查看“测试08”：6 个成功 send_message 卡片和 9 个成功 submit_result 卡片不再展示，对应委派正文仍为一条，前端工作汇报在正文段落内显示 @Leader，事件仍按时间排序，无水平溢出及浏览器错误。截图：.playwright-mcp/element-2026-11-02T10-23-23-861Z.png。未重新执行模型任务，未提交、推送或发布。
+
+
+### 2026-11-02：连续汇报提及与 shadcn Trace 首批接入
+
+- 连续同作者、同 Run、相同接收人的原生汇报仅首段补齐 @ 前缀。出现思考、工具或其他成员消息后重新显示；正文原有提及继续可点击，不删除或改写持久化内容。移除验证标签，保留验证消息的 inline mention。
+- 已核对旧 AI Elements 站点的 2026 年 11 月底弃用公告，以及 shadcn/ui Base UI 的 Task、Chain of Thought、Tool、Reasoning 与 Trace 官方文档。新版为源码组合，沿用本项目 Base UI。首批将 Tool 改为 Trace 紧凑动作行；原工具名、输入、输出按需展开，已结束的 MCP isError 仍显示失败。其余 Task、ChainOfThought、Message、PromptInput 等保留现有实现，后续按场景迁移，不宣称已完成全量迁移。
+- CLI info/docs/search 的 Node HTTPS 请求被远端关闭；改用官方 registry JSON 和文档核对源码。Trace 来源 https://ui.shadcn.com/r/styles/base-nova/trace.json，SHA256 8533d800f5216797578f0954bf917aed6b8cd48016f73975c6a4caaf7ab539d4。替换 monorepo cn、Base UI 和占位图标导入，省略外部 shimmer，保留 reduced-motion。MIT notice 已同步，无 package.json 或 lockfile 变动。
+- 四个 Teams 测试文件实际通过 59 项，源码 tsc 和 npm run build 通过，git diff --check 通过。全量 check:types 仍有 design-system 与 dashboard-event-source 旧测试的 5 项错误。旧“验证必须带标签”断言已随需求更新。
+- 58019 隔离预览无活动 Run 后更新。Playwright：连续报告仅一个自动前缀、验证标签为零、10 个剩余工具使用 Trace；键盘可展开原始参数，动作行宽 152px 且无外框，时间线顺序未变。1440px 与 390px 无水平溢出，reduced-motion 下折叠过渡为 none，浏览器无错误。截图 .playwright-mcp/element-2026-11-02T10-43-30-766Z.png。重启前仍为 22 rooms / 64 runs / 90 messages，未执行模型任务，未提交、推送或发布。
+
+
+### 2026-11-02：Task 与历史 ChainOfThought 迁移收尾
+
+- 按官方 Base UI Task / Chain of Thought 迁移说明，沿用已有名称与 props，使用共享 Trace 组合；保留 Base UI 原生受控/非受控用法，父摘要关闭后保留内部工具展开状态。完整结果文本继续换行展示，产物、复制 Session ID 和未知进程核对操作保留。历史折叠不扩展到正常精确时间线，公开 reasoning 仍直接展示。
+- 清理旧 DOM 结构对应的样式并适配新 Trace 槽位，任务、状态和成员分列。浏览器截图复核发现旧双层 span 选择器误将整个标题限制到 80px，已改为只限制成员名；最终标题区 183px、间距 6px，详情可展开，无横向溢出。截图 .playwright-mcp/element-2026-11-02T11-03-36-047Z.png。
+- 五个相关 Teams / Session identity 测试文件通过 64 项，源码 tsc、build 与 diff 检查通过。额外运行 session-interaction.test.tsx 得到 17 通过、15 失败；临时恢复此次迁移前 Task / ChainOfThought 源码后再次运行，仍是相同的 15 个测试名称失败，随后精确恢复迁移源码。基线记录 /tmp/rillo-session-interaction-baseline.json；没有修改这些既有失败对应的 Sessions 行为。未宣称全量测试通过。
+- 已更新 58019 隔离预览。未新增依赖、未执行模型任务、未提交、推送或发布。Message、PromptInput、纯文本 Reasoning 及定义/附件组件继续保留现有适配；本批行动展示迁移范围为 Tool、Task 与历史 ChainOfThought。
+
+
+### 2026-11-02：连续过程摘要与正文分层
+
+- 新增纯展示 activitySections，仅收拢连续、同作者、同 Run 的 reasoning/tool。正文、真实提及消息、其他成员或不同 Run 立即断开，原事件 ID、时间和展开顺序不变。单个工具保持动作行，纯思考片段不另加折叠。过程摘要只统计实际工具/命令，不猜测业务结论。
+- 使用现有 ChainOfThought / Trace：活动过程默认展开、结束后默认收起；手动开关优先并跨原生状态刷新保留，已确认失败明确标记并默认展开。命令参数和结果仍可继续展开。消息与 @ 不收入过程详情，不重新按整轮重排。
+- 5 个相关测试文件 69 项通过；源码 tsc、npm run build 与 git diff --check 通过。更新旧“完成后直接点击内部工具”的测试，先展开过程再读取工具结果，保留原始结果可读性验证。之前已确认的全量类型错误与 Sessions 交互旧失败没有在此任务修改。
+- 58019 预览确认无活动 Run 后更新。截图对应初始 Leader 的 2 条命令折叠为一行，展开精确顺序为 tool/reasoning/tool/reasoning，@Frontend Developer 与 @Backend Architect 委派正文仍可见。全时间线时间排序保持，1440px/390px 无水平溢出，reduced-motion 折叠过渡为 none，浏览器无错误。截图 .playwright-mcp/element-2026-11-02T11-17-07-313Z.png。
+- 预览数据仍为 22 rooms / 64 runs / 90 messages；未启动模型、未新增依赖，未提交、推送或发布。
+
+
+### 2026-11-02：Teams 实时片段、公开思考详情与指标
+
+- 保留 codex app-server JSON-RPC/stdio、成员路由、资源锁和默认并发。Teams 新增 GET /api/v1/loop-tasks/:id/events，复用 RunEventHub；首次与重连发持久化快照，随后发约 180ms 批处理内变化的公开片段。页面停止连接期间的任务整份重查，保留原查询作为初始化/断线路径；按 Task/Run/Item 合并，恢复旧时间字段，切换团队清理旧源。状态与真实消息通过快照及时更新，无新执行系统或数据库。
+- 本机 codex-cli 0.166.0 generate-json-schema 输出到 /tmp/rillo-codex-live-schema，确认 ReasoningSummary detailed、summaryIndex、summaryPartAdded、tokenUsage 和 kind.type。Teams Turn 由 concise 改为 detailed；不改本地客户端配置，仅展示公开返回内容，不接 raw reasoning。Reasoning 使用共享 Trace 的触发器及完整分段流，运行时展开、完成后收起、手动优先。不能保证模型实际返回完整内部思考，旧会话不补内容。
+- 接入原生会话 Token 累计及最近一次用量/上下文窗口。文件变化仅保存路径、类型、状态，不传播 diff；修正真实文件 kind.type 对象解析。命令输出实时追加，最终结果校准。保留既有记录大小上限，公开超大 Item 保留截断标志和结束状态，避免完成事件静默丢失；订阅者错误不影响执行。
+- 后端主集 60 项通过（team-live-stream、codex-interactive-session、collaboration-runtime、room-conversation、room-catalog-http、team-part-timing、run-service）；补充超大公开思考结束用例后 codex-interactive-session 单文件 12 项通过，其中 11 项与主集重叠。UI 6 文件 75 项通过，包括全局缓存失效时任务不重查即可接收 thinking、未知执行不误报工具状态、断线校准和原生时间保留。源码 tsc、build 通过；全量 check:types 仍为两个旧测试文件的 5 项错误。未运行 Linux 或真实新模型任务。
+- 58019 预览无活动 Run 后更新。真实“测试08”只首次读 1 次 timeline，SSE 已连接、55 个事件仍按时间排序。浏览器另用明确标注“模拟，无执行”的只读 EventSource 夹具验证多段 Thinking、文件路径和 Token；无 diff viewer，1440px/390px 无横向溢出，键盘可开关，测试后恢复原生 EventSource 与真实团队。模拟截图 .playwright-mcp/element-2026-11-02T13-01-20-815Z.png。夹具未写入产品数据，未调用模型。数据仍为 22 rooms / 64 runs / 90 messages。
+- 未新增依赖，未提交、推送或发布。Claude 保留已有公开内容解析；本批 Codex detailed/Token 行为不宣称适用于其他运行客户端。
+
+### 2026-11-02：真实团队时间线与重复协作回传排查
+
+- 通过用户指定的 Chrome computer use 检查“测试08 副本”（179a91d0-28ee-4607-ac9e-19d3a0448c45），任务 369b8dbb-954b-407c-8e69-3cd9685f80c5，13 次执行。确认页面已有完整原生源码，Leader 上下文却仅有最后完成说明；只读统筹者把自己的 sandbox 误当作整个团队限制；客户端 Stop hook 在正式 final_answer 后又生成结束确认。精确 Session 的公开消息记录证实上述来源，没有读取原始内部推理或修改全局 hooks。
+- 结果索引按已投递的完成事件游标补充，保持来源 Run 和有界摘要；新增 results + source_run_id 精确读取已保存公开正文，保留容量截断信息并限制在当前 Task。复用会话且原定义未改变/已投递时不重复注入完整定义。提示明确本进程只读与可委派写入不同、每个指派一个负责人、不要重复他人的职责、结果提交后无需完成回复。
+- reply 落盘显示后等待来源进程退出再交接，与完成结果合并一次通知；先恢复成员工作链，再触发 Leader，避免委派者和 Leader 同时重复处理。原 sandbox、写锁、全局并发、权限检查保持。未创建新存储或引入其他项目执行代码。
+- 时间线不再插入随后被移除的 submit 临时报告或排队消息。记录原生 phase/hook 来源，精确消息 ID 只读补回旧记录，hook 尾声进入默认收起详情，不被反复加上 @Leader。连续活动从第一段就保持同一容器，已打开的流式思考/工具结束不自动收起；断线保留已看到的内容，REST 和 SSE 合并保持首次时间与新内容，拒绝旧序号快照。
+- 研究 Multica squad_briefing.go（ed7c001778c0226e4ac4e5c4133d6a047922e226）与 Hivemind team_chat_job.rb / sub_agent_job.rb（538f670aa2d28d3d2cf868711098e9b241d5c370）。参考简短职责指派、结束当前轮、按任务引用读取完整返回、有界上下文。Hivemind 群聊无明确收件人默认全员响应，不照搬该规则。没有复制上游代码或新增依赖。
+- 验证：node --test 10 个受影响后端文件 99 项通过（room-conversation、room-teammates、room-memory、collaboration-runtime、codex-interactive-session、team-part-timing、team-live-stream、loop-tool-server、collaboration-store、collaboration-recovery）；npx vitest run 4 个 Teams 测试文件 69 项通过（message-timeline、room-messages、use-team-stream、teams-view）；源码 tsc、npm run build、196 源文件语法检查及 git diff --check 通过。npm run check:types 仍被 design-system.test.tsx 与 dashboard-event-source.test.ts 的既有 5 项错误阻断。
+- 真实页面重载后 76 个时间线事件按时间递增，ID 无重复，14 个自动续轮详情可展开/键盘收起，内容保留。预览数据库仍为 23 rooms / 77 runs / 106 messages，本任务没有新增 Run、发送团队消息或改写历史。既有“只读”错误声明与重复源码属于历史记录，不改成虚假成功。未重新执行真实模型任务，因此新的协作质量和 Token 降幅尚未实测。没有测试 Linux；没有提交、推送或发布。
+
+### 2026-11-02：隔离真实模型验收与新 Run 空片段修复
+
+- 真实验收一：临时独立数据目录 rillo-real-coordination-olhGz2，Task a491f909-0fb3-4f85-a5d3-5461ff9e93cd。离线金额汇总 CLI 由实现者落盘、数据顾问单独评估，Leader 读取了完整结果后委派独立验证。实现者报告22项自检，独立验证者报告20项实跑通过；本代理额外独立执行正常输入、空数组、非法JSON、非数组、缺失金额、小数金额6项，符合预期。6个Run中无重复索要源码或空确认Run，Leader已成功调用deliver及submit_result；但测试脚本8分钟硬上限在最终客户端结束前取消了本Task，因此最终canceled，不能计为完整生命周期通过。保留原记录，没有改写状态或恢复已取消任务。
+- 真实验收二：另一个临时独立数据目录 rillo-real-finalization-cwNUpj，Task 91554ed5-08c4-477f-b2ad-2598adb61583。请求交付精确正文的greeting.txt，由Leader委派实际写入、独立成员只读验证、Leader核对交付。4个真实Run全部succeeded，verifier=pass，143352ms后进入review并保存delivery_ready；无leader_no_action、预算耗尽或未消费通知。文件实读为RILLO_READY加一个换行，hex=52494c4c4f5f52454144590a。成员还纠正了Leader指派里误写的11字节计数，实际12字节；没有机械复述错误结论。该用例验证完整收尾，不代表复杂任务均已验收。
+- 实跑打开新队列时捕获白屏：后端parts_json初始为NULL，SSE合并keepNativeTiming的previous参数默认值只覆盖undefined，没有覆盖null，触发null.map。修正LoopRun.parts的真实可空类型，合并按previous??[]处理；增加初始null快照、第一段流和新增成员null快照的回归。71项Teams UI测试与源码tsc、构建通过；99项后端结果沿用上节（本次未改后端）。全量check:types的既有5项错误仍独立记录。
+- 浏览器通过同一Chrome computer use，使用真实store/API构建的内存队列夹具（执行器不启动、页面明确标记“未启动模型”）复测NULL快照，SSE连接后保持正常三栏与排队状态，没有该地址的新渲染异常；不是模型执行成功的证据。已完成任务的历史页面与该初始状态分别检查，避免只用已有片段掩盖新Run问题。
+- 顺带修正实跑发现的纯思考双层同名折叠：仅显示Reasoning自身入口，后来出现工具时仍保留同一容器。对应回归已覆盖，58019历史页面确认7个纯思考段没有额外外层按钮。
+- 两个真实测试使用独立服务、独立数据库及临时托管工作目录，保留记录供追查，没有向58019用户团队发送消息或重跑历史任务；其23 rooms / 77 runs / 106 messages保持。没有修改全局模型或hooks，Stop hook本身仍会产生原生尾声，仅展示与Rillo交接区分处理。没有可比任务基线，未声称Token或耗时降低比例。未提交、推送、发布或测试Linux。
+
+### 2026-11-03：已知工作目录直接准备与等待期间的成员汇报
+
+- 只读核查用户团队 e5b4b7e4-3983-4285-8936-897e0b1271d4，Task 2df6cb67-3aad-47c6-a0a6-e81f2c287ebc。已准备Whitehouse一个项目并收到前端7项产物；其他5个目录被用户消息路径字符串匹配阻断。两个独立复核Run均在Leader结束并把Task置为waiting后提交，得到LOOP_CREDENTIAL_EXPIRED，最终记为LOOP_RESULT_MISSING；9:48:26切为waiting、9:48:44被拒清楚复现该先后关系。当前191个静态事件按时间排序，无重复ID，不能据此宣称流式过程没有跳动。
+- 按用户“工作目录不要拦截”的明确要求，移除projectContext对用户消息路径/分支文字及source_message_id的检查，不引入新的确认、提议或审批流程。prepare_projects直接接收任务、对话、需求文档和已有上下文中明确的目录；删除MCP的该来源字段和限制描述，projects_prepared记录实际resources。保留目录存在性/realpath、分支与worktree真实性、既有任务绑定一致性、成员角色、执行中的资源变更及sandbox约束；无重复粘贴路径要求。
+- Leader的wait仅在没有未结束成员时让Task进入waiting；排队、执行或待核对成员仍存在时保持active，允许其正常提交结果并唤醒Leader处理。显式pause/cancel/revise仍撤销旧凭据和代次。未将历史失败结果补写为pass，未自动重跑业务任务。
+- 验证：node --test运行room-conversation、collaboration-runtime、collaboration-store、collaboration-recovery共50项通过；loop-tool-server、room-teammates、team-live-stream另22项通过，共7文件72项。覆盖用户消息不含目录/不传来源ID仍可准备真实临时Git项目、已知分支选择、幂等、目录确实不存在仍报错、Leader等待时已运行和排队成员仍可提交、成员回传后再等待，以及pause/cancel仍使旧授权失败。MCP源码与构建产物握手通过，request_action schema不再含source_message_id；read_context附件的同名字段保留。npm run build、196源文件语法检查、git diff --check通过。未新增依赖，未运行真实新模型或Linux测试。
+- 检查文档树并更新README、agent-loop.md、architecture.md中的当前契约；历史日志保留当时限制与本次移除原因。58019更新前无未解决执行，用户数据为26 rooms / 98 runs / 131 messages；更新保持这些记录及原有等待/失败状态。未提交、推送或发布，没有修改Simboss业务项目或全局配置。
+
+
+### 2026-11-03：移除 Teams 固定流程拦截
+
+- Codex Teams 的 Skills/integrations 改为 inherit，不强制关闭网络，沿用客户端配置；不修改用户全局设置。执行提示不再一律禁止用户已经明确授权的提交、发布等动作，也不要求重复确认。本文记录实现能力，不构成本次开发的提交或发布授权。
+- prepare_projects 允许在无关成员排队或执行时追加项目；保持正在执行的目录快照、真实资源占用和既有项目绑定检查。没有移除实际目录不存在、分支冲突、运行进程未退出等保护。
+- 删除 conversation 交付必须另起独立只读验证 Run 并获得结构化 pass 的条件。Leader 按任务检查证据，未结束成员仍需完成或明确处理。原生成功不因缺少 submit_result 判失败；公开结果与接收人正常展示，不伪造 submission、pass 或产物。旧固定阶段仍要求结构化结果。
+- conversation 不再用默认 24 轮/600 秒截断；旧记录中的默认值也不再影响续接。新团队不写入这两个默认字段，界面显示实际执行次数。Codex 以及 Claude 的无截止时间执行均不创建超时计时器，进程 supervisor 仅显式 null 表示无截止时间；已有显式超时和取消机制保留。Schedule 和旧固定阶段任务的配置保持。
+- 修改范围：collaboration-runtime、collaboration/{conversation,store,context,schema}、Codex/Claude adapter、runtime/process-supervisor、MCP 工具说明，以及 Teams 次数和原生汇报接收人的显示。文档树共 203 份 Markdown，检查直接相关 README、架构、Agent Loop 活跃说明并同步；历史方案保留当时约束。
+- 验证：node --test 执行 room-conversation、collaboration-runtime/store/recovery、codex-interactive-session、process-supervisor、claude-runtime、loop-tool-server、room-teammates、team-live-stream，共 105 项通过。Vitest 执行 Teams message-timeline、room-messages、use-team-stream、teams-view，共 72 项通过。npm run build、业务源码 tsc（/tmp/rillo-rooms-app-tsconfig.json）、196 文件语法检查和 git diff --check 通过。npm run check:types 仍有既有 5 错误：design-system.test.tsx 的旧模块与 Tooltip 参数，以及 dashboard-event-source.test.ts 的旧函数参数；本次未扩大修改这些文件。未运行 Linux 测试或新的真实模型任务，未新增依赖。
+- 58019 检查时有两个用户 Agent 正在运行，未重启打断；源码和构建已更新，但该进程尚未切换。未修改真实业务项目、历史失败结果或全局配置，未提交、推送、合并或发布。Claude 当前仅支持只读讨论/审阅的适配限制仍存在，不宣称获得完整写入能力。
+
+- 预览补充：当前仍有真实实施与排队任务，因此启动一次性 /tmp/rillo-preview-update-when-idle.mjs 等待空闲后自动切换。只在所有 queued/starting/running/stopping/unknown 归零、再次检查空闲且 PID/启动命令仍匹配时重启；进程被替换即退出，最长等待一小时，超期不打断任务。状态记录 /tmp/rillo-preview-idle-update.log，只有 readiness 确认后记录成功。此时仍在等待，未声称预览已生效。
+
+
+### 2026-11-03：修复旧预算耗尽后“继续”无法领取遗留指派
+
+- 用户团队 e5b4b7e4-3983-4285-8936-897e0b1271d4 的旧预览仍运行旧源码：Task 有 24 个 Run，连续 task_resume 后立即产生 budget_exhausted。遗留 queued 指派 generation=1，Task 已到 generation=6；claim 因代次不符拒绝，但旧 queued 记录又阻止同成员重新排队。之前一次性更新脚本把 queued 也视作必须先清空的运行状态，导致无法切换。本次停止该等待脚本，不再等待被旧逻辑卡住的队列清空。
+- 修复 store.control 的 conversation resume：只为当前 revision 且未启动的 queued Run 更新 generation，保留 Run ID、路由、前置依赖和 inbox。已运行/未知执行仍按原规则核对，已完成或取消记录不重放。增加回归测试覆盖恢复后真实 claim 与认证、结果回传和无重复成员 Run。
+- 验证：room-conversation、collaboration-store/recovery/runtime 共 57 项通过；npm run build、业务源码 tsc、196 文件语法与 git diff --check 通过。同步 Agent Loop 与架构活跃说明；README 概览未因该局部修复失效，无需追加流水记录。未运行 Linux 或新的独立模型验收。
+- 切换前确认没有 starting/running/stopping/unknown，仅有 waiting Task 下的未启动队列。旧服务优雅关闭被现有 SSE 长连接等待；刷新当前团队页断开旧连接后正常退出，未强杀任何 Agent。切换 PID 9480 -> 53324，readiness=200，26 rooms /112 runs /152 messages 启动前后完全一致，所有历史保留。
+- 在用户当前 Chrome 团队页点击既有“继续”，Task 变 active、generation=7，旧 Run 89c7af08-954e-4b44-9781-7be1c8ef7789 保留 ID 并变为 running（generation=7，有实际 PID）；另一项待处理实施工作正常入队。页面显示进行中、25 次执行和暂停按钮，不再卡在 24/24。未添加新的业务要求或重跑完成记录，未代做业务改动；由团队继续其原先收到的用户任务。
+- 预览已经切换并实际恢复，无需此前的空闲更新脚本。未提交、推送或发布；整项业务需求仍在执行，不能宣称已经交付。
+
+
+### 2026-11-03：原生 shadcn 会话组件与过程层级整理
+
+- 用户要求以 Copilot 的次要过程行为参考，减少框线，并优先采用官方 shadcn。核对 ui.shadcn.com 的 Chat、Prompt Input、Reasoning、Message/Scroller、Trace 和 shimmer；shadcn.io 为独立社区站点，未再接一套聊天框架。CLI 官方文档请求因 HTTPS 关闭失败，直接获取并审阅官方 base-nova registry JSON；Context7 和上游源代码交叉核对。未使用 task-doc-workflow、subagent 或 Linux 验证。
+- Teams 使用官方 Message、Bubble、Message Scroller、Input Group、Code Block 和现有 Trace。新增官方 @shadcn/react 0.3.1 供滚动组件使用，没有替换执行协议；旧 use-stick-to-bottom 仍供 Schedule 使用，不删除仍在使用的依赖。Input Group 将既有 Tiptap 标为自定义 control，保留稳定 ID Mention、Command/Ctrl+Enter、附件路径、失败草稿及重复发送防护。逐个消息组登记 messageId，进入团队到末尾，保留人工浏览与跳转按钮。Provider 与 Composer 使用不同 key，避免重复 DOM；片段与 MessageScrollerItem 的稳定 ID 保持。
+- 普通过程不再套命令数量分组，工具和思考直接按真实时间行展示。工具使用语义图标、可读动作名和必要状态，原参数/结果按需展开；失败仍可见，不再默认摊开整段 JSON。思考首行作为预览，完整内容可展开，用户展开状态跨工具增量与完成保持；只在实际流式片段显示官方 shimmer CSS，减少动态效果时停用。未引入虚假思考或重排消息。
+- 用量移至作者行 Popover；RUN_CANCELED 等改为可读状态，诊断码仍可查。移除回复/广播用途徽章，收件人的稳定 ID 和行内提及保留。用户消息只显示右侧正文及时间，去除重复身份。Teams Markdown 使用单层 Code Block 和真实复制反馈，原文保留；全局 MessageResponse 维持原样，未把迁移扩大到 Sessions/Schedule。只调整 Teams 视觉样式。
+- 来源 registry JSON SHA256：message=52a75a2bc0719d361005db6a720a1e64c88c0489d620c1956b079776363e0b8b；message-scroller=0cc3c066e37b731b3fc56dff8c17191aae254ef47c09f28004019e0c9415d628；input-group=f1d0593b74c29a15379f1013755ca9e26576d79f0b492d13bbe8a4f58388d241；bubble=db357f724df9182d4c66c266da6c7990cbe80e467a1f6212e6f860aa395ddb7a；code-block=e522a2d62a472802fc34e94721beb3cdffe68de9e0b9fc1c423948822b5e3237。shimmer 保留 shadcn 4.22.0 tailwind.css 的基础 utility、property 和 keyframes，不打包 CLI；新增 MIT 来源说明。
+- 验证：Vitest 的 Teams room-messages、teams-view、message-timeline、use-team-stream、message-mentions 共 5 文件 84 项通过，涵盖思考/工具交替、增量节点稳定、手动展开保持、收件人、Mention 发送、用户身份、取消标签、单层代码块和复制。npm run build、业务源码 tsc、196 文件语法及 git diff --check 通过。扩展运行 Sessions interaction 与 Schedule editor 时另有 16 项失败（Sessions 15、Schedule 1）；共享 MessageResponse 恢复原样后相同失败仍复现，未调整这些模块，也未宣称全量测试通过。npm run check:types 仍为既有 5 处测试文件错误，无新增源码类型错误。项目没有独立 lint script。
+- Chrome 使用只读 58020 镜像检查真实团队记录，不发送消息或触发执行。默认桌面观察、工具参数/结果展开、390px 窄屏和成员抽屉通过；输入和正文无横向页面溢出。原生滚动组件刷新后定位真实记录末尾。恢复 viewport 后关闭只读服务；未使用生产数据写入来制造 UI 成功。未运行新的模型验收，流式行为由已有真实事件数据和回归测试验证。
+- 同步活跃 Agent Loop、architecture、组件 registry README 和 UI notices。原有 README 概览无需新增迁移流水。58019 更新前检查无实际运行/未知进程、用户输入框无草稿，刷新 SSE 后优雅切换 PID 53324 -> 98262，readiness 200。26 rooms /118 runs /155 messages 启动前后完全一致；用户原团队页已加载原生 Messages 结构。未提交、推送、合并或发布，也未修改业务项目。
+
+
+### 2026-11-03：思考仅作为临时状态
+
+- 按用户最新要求，Teams 思考期间每位当前成员只显示一条 Thinking…，使用现有官方 shadcn shimmer。去除常驻摘要、展开按钮以及作者头里重复的“正在思考”。工具/回复到达、思考结束、失败/取消/未知时立即移除；纯历史思考不留下空作者或时间缺失占位。当前客户端 hook 的思考不藏进历史折叠。
+- 仅过滤会话展示，原 reasoning parts、原始事件时间和内容仍保存。已显示工具节点保持稳定，工具展开交互不受影响；并行成员各自显示当前状态。用户旧的“查看完整思考”偏好被这次明确的临时状态要求替代。
+- Vitest 运行 Teams room-messages、teams-view、message-timeline、use-team-stream、message-mentions 共 85 项通过。覆盖思考→工具→思考→工具、用量增量不中断、历史摘要移除、并行状态、终止状态和 hook 可见性。npm run build、业务源码 tsc 和 git diff --check 通过；未新增依赖或运行模型/Linux 测试。更新 Agent Loop 和组件维护说明。
+- 确认预览无实际运行进程、输入框无未发送内容后，更新 58019，PID 98262 -> 42264，readiness 200；26 rooms /122 runs /160 messages 切换前后相同。用户原团队页已刷新。未提交、发布或改动真实业务工作区。
+
+
+### 2026-11-03：临时思考行使用实时摘要
+
+- 用户澄清临时状态仍应显示摘要。本次将固定 Thinking… 改为当前公开 reasoning 的首个非空文本行，去除标题/粗体标记并随增量更新；该行使用官方 shimmer，过长单行省略并可悬停阅读。仅尚无摘要时暂显“正在思考…”，不编造内容。保留每位成员一条、结束/工具/回复后消失、不保留历史摘要的行为；未改消息路由或持久化。
+- 相关 5 文件 85 项测试、构建、业务源码类型检查与 git diff --check 通过；覆盖实时摘要内容更新、用量增量、结束移除、并行成员与 hook。直接更新 Agent Loop 和组件维护说明。未运行 Linux 或新模型测试，未新增依赖。
+- 58019 在无活动进程及无输入草稿时切换，PID 42264 -> 78095，readiness 200，26 rooms /123 runs /161 messages 保留，用户页已刷新。未提交或发布。
+
+
+### 2026-11-03：首段内容前立即显示真实 Agent 状态
+
+- 用户截图对应消息 07:32:12.876Z 入库，Run 07:32:12.879Z 排队、07:32:12.975Z 领取，首段 reasoning 07:32:27.740Z 返回。约 0.1 秒已派发，14.9 秒才有内容；现有对话只按内容生成 Agent 行，漏掉了前面的真实状态。当前数据不能精确拆分客户端启动、会话恢复与模型等待各自耗时，未宣称模型提速。
+- 添加独立临时 presence：根据真实 Run/Session 显示对应成员等待执行、启动客户端或等待模型响应。首个 reasoning/text/tool 到达即交接原内容；仅 usage 不算首段内容。取消后不保留占位，不写入历史，不提前显示虚假思考。实际摘要仍按原规则使用 shimmer 并在思考结束后移除。
+- Teams 5 文件 88 项测试通过，覆盖无内容状态逐步变化、首段摘要接替、取消清除和 usage-only 等待；构建、业务源码类型检查及 git diff --check 通过。未调用新的真实模型、未运行 Linux，未提交或发布。文档同步首段前状态的当前契约。
+
+- 本地预览已切换 PID 78095 -> 9125，readiness 200。切换前无活动执行、无未发送草稿，27 rooms /124 runs /163 messages 前后相同，保留用户当前新团队页面。未发送测试消息或启动真实 Agent。
+
+
+### 2026-11-03：移除 Teams Codex 的角色沙箱限制并刷新 Git 绑定
+
+用户确认取消导致分支/worktree 改名失败的额外限制。Teams Codex 的 thread/start、thread/resume 使用 danger-full-access，每次 turn/start 显式覆盖 dangerFullAccess/never；移除 Teams writable_roots 和仅凭上游 write_access 拒绝委派实施的判断。write_access 保留为实施调度分类，用户明确只读等任务约束仍适用。Codex Leader 使用排他目录占用以协调其可写操作；暂停、取消、未知进程对账保留。Claude 适配器当前仍只提供只读工具，未扩展或宣称其实施能力。Scheduled、旧固定阶段任务及全局客户端配置不变。
+
+项目准备保存 git_directory 和 project_relative_path；执行前后通过 worktree 的 gitdir 指针更新分支与路径，保留 base_commit、项目编号和原生会话。prepare_projects 可显式替换同一 source_workspace 的绑定，不再要求新任务；旧目录已移除时也可明确选择实际目录恢复。刷新采用旧资源比较，避免覆盖异步期间的新绑定。
+
+实际验证：node --test test/collaboration-runtime.test.mjs test/room-conversation.test.mjs test/codex-interactive-session.test.mjs test/collaboration-recovery.test.mjs test/collaboration-store.test.mjs test/loop-tool-server.test.mjs test/execution-resource-coordinator.test.mjs，79/79 通过。包含临时 Git 仓库的分支改名、worktree 移动、未提交与未跟踪文件保留、子目录绑定、失效绑定替换、Leader 执行后自动刷新、原生会话续接及 full-access 新建/恢复协议测试。使用本机 codex-cli 0.166.0 生成 JSON Schema，确认线程与轮次权限字段。node scripts/check-syntax.mjs 检查 196 个源文件通过；npx tsc --noEmit --project /tmp/rillo-rooms-app-tsconfig.json 通过；npm run build 通过；git diff --check 通过。npm run check:types 被测试文件的 6 个类型错误阻塞：design-system.test.tsx 3 个、room-messages.test.tsx 的 modelContextWindow 缺失 1 个、dashboard-event-source.test.ts 2 个。
+
+扫描活动文档并同步 README.md、docs/agent-loop.md、docs/architecture.md。空闲时更新本地 58019 预览，ready 返回 200；更新前后 27 个团队、140 次执行、179 条消息保持。浏览器恢复原团队页面与实时连接，未发送测试消息、启动真实模型任务或修改业务仓库分支。本次未验证真实 Agent 自主执行改名，也未提交、合并或发布。

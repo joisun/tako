@@ -1,3 +1,4 @@
+import { MarketplaceView } from '@/features/marketplace/marketplace-view'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 
@@ -19,7 +20,7 @@ export function DashboardApp() {
   return (
     <AppShell connectionState={connectionState} countLabel={view === 'sessions' ? '本机会话' : view === 'teams' ? 'Teams' : `${schedules.data?.jobs.length ?? '—'} 个计划`} onViewChange={setView} view={view}>
       <div className="sessions-host" hidden={view !== 'sessions'}><SessionsView api={api} /></div>
-      {view === 'teams' ? <TeamsView api={api} /> : null}
+      {view === 'teams' ? <TeamsView api={api} agentManagement={<MarketplaceView api={api}/>} /> : null}
       {view === 'scheduled' ? <ScheduledView api={api} data={schedules.data ?? null} isPending={schedules.isPending} error={schedules.error} /> : null}
     </AppShell>
   )

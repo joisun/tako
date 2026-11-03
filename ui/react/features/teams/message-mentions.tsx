@@ -2,6 +2,7 @@ import { useMemo, useRef, type ComponentProps } from 'react'
 import { defaultRemarkPlugins } from 'streamdown'
 import { MessageResponse } from '@/components/ai-elements/message'
 import { InlineCitationLink } from '@/components/ai-elements/inline-citation'
+import {MarkdownCodeBlock} from '@/components/ui/code-block'
 import { Button } from '@/components/ui/button'
 
 interface Recipient { id:string; name:string; available:boolean }
@@ -11,7 +12,7 @@ const RECIPIENT_PREFIX='#rillo-recipient-'
 const EXCLUDED=new Set(['link','linkReference','code','inlineCode','html','image','imageReference'])
 
 // Only persisted routing IDs authorize a visual mention; text never changes routing.
-function mentionPlugin({recipients,label}:{recipients:Recipient[];label:string}) {
+function mentionPlugin({recipients,prependRecipients}:{recipients:Recipient[];prependRecipients:boolean}) {
   const names=new Map<string,Recipient[]>()
   for(const recipient of recipients)names.set(recipient.name,[...(names.get(recipient.name)??[]),recipient])
   const candidates=recipients.filter(recipient=>names.get(recipient.name)?.length===1).sort((a,b)=>b.name.length-a.name.length)
@@ -40,31 +41,34 @@ function mentionPlugin({recipients,label}:{recipients:Recipient[];label:string})
     }
     visit(tree)
     const remaining=recipients.filter(recipient=>!matched.has(recipient.id))
-    if(!remaining.length||!tree.children)return
-    const children:MarkdownNode[]=[{type:'text',value:label+' · '}]
+    if(!prependRecipients||!remaining.length||!tree.children)return
+    const children:MarkdownNode[]=[]
     for(const recipient of remaining){
-      if(children.length>1)children.push({type:'text',value:'、'})
-      children.push({type:'link',url:RECIPIENT_PREFIX+encodeURIComponent(recipient.id),children:[{type:'text',value:label==='发送给'?recipient.name:`@${recipient.name}`}]})
+      if(children.length)children.push({type:'text',value:' '})
+      children.push({type:'link',url:RECIPIENT_PREFIX+encodeURIComponent(recipient.id),children:[{type:'text',value:`@${recipient.name}`}]})
     }
-    tree.children.unshift({type:'paragraph',children})
+    children.push({type:'text',value:' '})
+    const first=tree.children[0]
+    if(first?.type==='paragraph'&&first.children)first.children.unshift(...children)
+    else tree.children.unshift({type:'paragraph',children})
   }
 }
 
-export function MentionMessage({text,recipients,onInspect,recipientLabel='发送给'}:{text:string;recipients:Recipient[];onInspect:(id:string)=>void;recipientLabel?:string}){
+export function MentionMessage({text,recipients,onInspect,prependRecipients=true}:{text:string;recipients:Recipient[];onInspect:(id:string)=>void;prependRecipients?:boolean}){
   const inspect=useRef(onInspect);inspect.current=onInspect
-  const identity=JSON.stringify({recipients,label:recipientLabel})
+  const identity=JSON.stringify({recipients,prependRecipients})
   const rendering=useMemo(()=>{
-    const options:{recipients:Recipient[];label:string}=JSON.parse(identity),members=options.recipients
+    const {recipients:members,prependRecipients:prepend}:{recipients:Recipient[];prependRecipients:boolean}=JSON.parse(identity)
     const targets=new Map(members.flatMap(member=>[[INLINE_PREFIX+encodeURIComponent(member.id),member],[RECIPIENT_PREFIX+encodeURIComponent(member.id),member]] as const))
     function Link({href,children}:ComponentProps<'a'>){
       const member=targets.get(href??'')
       if(!member)return <InlineCitationLink href={href??''}>{children}</InlineCitationLink>
-      const className=href?.startsWith(RECIPIENT_PREFIX)?'team-message-recipient':'team-message-mention'
+      const className=href?.startsWith(RECIPIENT_PREFIX)?'team-message-mention team-message-recipient':'team-message-mention'
       if(!member.available)return <span className={className} title="成员已移除">{children}</span>
       return <Button variant="link" size="xs" className={className} aria-label={`查看 ${member.name} 的 Agent 定义`} onClick={()=>inspect.current(member.id)}>{children}</Button>
     }
-    const plugins:NonNullable<ComponentProps<typeof MessageResponse>['remarkPlugins']>=[...Object.values(defaultRemarkPlugins),[mentionPlugin,options]]
-    return {components:{a:Link},plugins}
+    const plugins:NonNullable<ComponentProps<typeof MessageResponse>['remarkPlugins']>=[...Object.values(defaultRemarkPlugins),[mentionPlugin,{recipients:members,prependRecipients:prepend}]]
+    return {components:{a:Link,pre:MarkdownCodeBlock},plugins}
   },[identity])
   // Streamdown memoizes Markdown by text; remount when persisted recipient identity changes.
   return <MessageResponse key={identity} mode="static" className="room-markdown" remarkPlugins={rendering.plugins} components={rendering.components}>{text}</MessageResponse>

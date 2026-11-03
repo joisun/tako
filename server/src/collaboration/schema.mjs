@@ -36,7 +36,7 @@ export function createCollaborationSchema(db) {
     CREATE INDEX IF NOT EXISTS loop_events_task ON loop_events(task_id,sequence);
   `)
   const version = db.prepare('SELECT version FROM loop_schema').get()?.version
-  if (version != null && ![1, 2, 3, 4, 5].includes(version)) throw Object.assign(new Error('Unsupported collaboration schema'), { code: 'LOOP_SCHEMA_UNSUPPORTED' })
+  if (version != null && ![1, 2, 3, 4, 5, 6].includes(version)) throw Object.assign(new Error('Unsupported collaboration schema'), { code: 'LOOP_SCHEMA_UNSUPPORTED' })
   // Historical executions retain immutable identities independently of live membership.
   if (version != null && version < 5) {
     db.exec('PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE')
@@ -81,13 +81,14 @@ export function createCollaborationSchema(db) {
       const previous = db.prepare('SELECT config_json,workspace FROM loop_tasks WHERE room_id=? ORDER BY rowid DESC LIMIT 1').get(room.id)
       const settings = previous ? JSON.parse(previous.config_json) : {}
       const first = db.prepare('SELECT id FROM loop_members WHERE room_id=? ORDER BY rowid LIMIT 1').get(room.id)
-      db.prepare('UPDATE loop_rooms SET config_json=? WHERE id=?').run(JSON.stringify({ leader_id: settings.coordinator ?? first?.id ?? null, workspace: settings.source_workspace ?? previous?.workspace ?? null, instructions: '', max_runs: 24, timeout_seconds: 600 }), room.id)
+      db.prepare('UPDATE loop_rooms SET config_json=? WHERE id=?').run(JSON.stringify({ leader_id: settings.coordinator ?? first?.id ?? null, workspace: settings.source_workspace ?? previous?.workspace ?? null, instructions: '' }), room.id)
     }
     db.exec('CREATE INDEX IF NOT EXISTS loop_runs_session ON loop_runs(session_id); CREATE INDEX IF NOT EXISTS loop_runs_task ON loop_runs(task_id,stage); CREATE INDEX IF NOT EXISTS loop_inbox_pending ON loop_inbox(task_id,member_id,consumed_by)')
     db.exec("CREATE TABLE IF NOT EXISTS loop_definition_deletions (id TEXT PRIMARY KEY,room_id TEXT NOT NULL,member_id TEXT NOT NULL,files_json TEXT NOT NULL,state TEXT NOT NULL)")
     db.exec("UPDATE loop_runs SET member_snapshot_json=(SELECT json_object('id',m.id,'name',m.name,'runtime_id',m.runtime_id,'avatar',json(m.avatar_json)) FROM loop_members m WHERE m.id=loop_runs.member_id) WHERE member_snapshot_json IS NULL")
-    if (version == null) db.prepare('INSERT INTO loop_schema VALUES (5)').run()
-    else db.prepare('UPDATE loop_schema SET version=5').run()
+    db.exec("CREATE TABLE IF NOT EXISTS loop_catalog_deletions (id TEXT PRIMARY KEY,definition_id TEXT NOT NULL,files_json TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('staging','committed')))")
+    if (version == null) db.prepare('INSERT INTO loop_schema VALUES (6)').run()
+    else db.prepare('UPDATE loop_schema SET version=6').run()
     db.exec('COMMIT')
   } catch (error) { db.exec('ROLLBACK'); throw error }
 }
