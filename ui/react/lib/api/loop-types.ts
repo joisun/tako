@@ -12,13 +12,18 @@ export interface LoopAvatar {seed:string;style?:string;version?:number;hairVaria
 export interface LoopUsage {total:Partial<Record<'inputTokens'|'cachedInputTokens'|'cacheWriteInputTokens'|'outputTokens'|'reasoningOutputTokens'|'totalTokens',number>>;last:LoopUsage['total'];modelContextWindow:number|null}
 export interface LoopPart {created_at?:string;updated_at?:string;sequence?:number;timing_source?:'observed'|'native';id:string;type:'reasoning'|'text'|'tool'|'usage';phase?:'commentary'|'partial_answer'|'final_answer';origin?:'agent'|'hook';text:string;state:string;truncated?:boolean;label?:string;input?:string;output?:string;summary?:{index:number;text:string}[];files?:{path:string;kind:'add'|'update'|'delete'}[];usage?:LoopUsage}
 export interface LoopMember { id: string; room_id: string; name: string; runtime_id: 'codex' | 'claude'; instructions: string; profile?: AgentDefinition | null; avatar?:LoopAvatar|null; execution_config?: {model:string|null;effort?:string|null} | null }
-export interface LoopSubmission {summary:string;verdict:string;artifacts:string[]}
+export interface TeamEvidence {id:string;reference:string;sha256:string;read_at:string;state?:'unchanged_since_read'|'needs_recheck'|'unavailable'}
+export interface TeamFinding {id:string;text:string;evidence_ids:string[];review_state?:'unverified'|'needs_recheck'|'evidence_version_current'}
+export interface TeamReport {id:string;version:number;run_id:string;member_id:string;excerpt:string;submission:LoopSubmission|null;evidence:TeamEvidence[];findings:TeamFinding[];evidence_boundary:string}
+export interface TeamInbox {id:string;member_id:string;message_id:string|null;source_run_id?:string|null;kind:string;delivery:{state:'pending'|'sending'|'delivered'|'unknown'};processing:{state:'pending'|'in_progress'|'answered'|'completed'|'canceled';report_id?:string|null}}
+export interface RunTiming {queued_ms:number|null;resource_wait_ms:number|null;startup_ms?:number|null;model_wait_ms:number|null;processing_ms:number|null;waiting_for_resources:boolean}
+export interface LoopSubmission {summary:string;verdict:string;artifacts:string[];answered_message_ids?:string[];evidence_ids?:string[];findings?:TeamFinding[]}
 export interface LoopRun {
   id: string; task_id: string; member_id: string; phase: LoopPhase; stage: number; status: string
   revision: number; generation: number; attempt: number; pid: number | null; session_id: string | null
   error_code: string | null; created_at: string; finished_at: string | null
-  routing?: { intent: string; write_access: boolean; assignment?: string; reply_expected?:boolean; parent_run_id?: string | null } | null
-  submission?:LoopSubmission|null;parts?:LoopPart[]|null;member_snapshot?:LoopMember|null
+  routing?: { intent: string; write_access: boolean; assignment?: string; expected_output?:string|null;acceptance?:string|null;inbox_id?:string;source_message_id?:string|null;reply_expected?:boolean; parent_run_id?: string | null } | null
+  timing?:RunTiming;submission?:LoopSubmission|null;parts?:LoopPart[]|null;member_snapshot?:LoopMember|null
   result: { final_message?: string | null; submission?: LoopSubmission | null;usage?:LoopUsage|null;file_changes?:{path:string;kind:string}[] } | null
 }
 export interface LoopTask {
@@ -28,11 +33,12 @@ export interface LoopTask {
   created_at: string; updated_at: string
 }
 export interface LoopTaskDetail extends LoopTask {
+  reports?:TeamReport[];inbox?:TeamInbox[];metrics?:{usage:{total:LoopUsage['total'];native_sessions:number;method:string;unattributed_runs:number}}
   runs: LoopRun[]
   events: { sequence: number; kind: string; run_id: string | null; payload: Record<string, unknown>; created_at: string }[]
 }
-export type LoopMessageIntent = 'delegate' | 'verify' | 'reply' | 'announce'
-export interface LoopMessage { id: string; sequence: number; task_id: string | null; run_id: string | null; author: string; text: string; created_at: string; intent?:LoopMessageIntent|null; mentions?: string[] | null;author_snapshot?:LoopMember|null;attachments?:LoopAttachment[]|null }
+export type LoopMessageIntent = 'delegate' | 'verify' | 'ask' | 'reply' | 'announce'
+export interface LoopMessage { id: string; sequence: number; task_id: string | null; run_id: string | null; author: string; text: string; created_at: string; intent?:LoopMessageIntent|null;reply_to_message_id?:string|null;assignment_id?:string|null; mentions?: string[] | null;author_snapshot?:LoopMember|null;attachments?:LoopAttachment[]|null }
 export interface LoopAttachment {path:string;name:string;media_type:string;size:number;digest:string;text?:string;truncated?:boolean}
 export interface LoopRoom { id: string; title: string; created_at: string; config?: { dissolved_at?:string|null;deleted_at?:string|null;leader_id: string | null; workspace: string | null; workspaces?:string[]; memory_directory?:string|null; instructions?: string } | null }
 export interface LoopRoomDetail extends LoopRoom { definition_deletions?:{member_id:string;state:string}[]; memory_sync?:{revision:number;exported_revision:number;last_error:string|null}; members: LoopMember[]; tasks: LoopTask[]; messages: LoopMessage[] }
@@ -43,6 +49,13 @@ export interface LoopTaskInput {
 
 export interface RoomRuntime { id:string; state:'ready'|'unavailable'; source:string; models:{id:string;displayName?:string;reasoningLevels?:(string|{reasoningEffort?:string;reasoning_effort?:string})[];defaultReasoningLevel?:string}[]; model_override_supported:boolean; error_code?:string|null }
 export type WorkItemColumn = 'backlog'|'working'|'review'|'done'
-export interface RoomWorkItem { id:string; room_id:string; number:number; name:string; column:WorkItemColumn; owner_id:string|null; type:'task'|'bug'|'review'|'note'; details:string; position:number; created_at:string; updated_at:string; [key:string]:unknown }
+export interface RoomWorkTracking {
+  kind:'task'|'assignment'; task_id:string; task_title:string; assignment_id:string|null; source_message_id:string|null; requester_id:string|null
+  state:string; task_status:string; processing_state:string|null; run_ids:string[]; run_status:string|null; owner_name:string
+  expected_output:string|null; acceptance:string|null; dependencies:{run_id:string;status:string}[]
+  questions:{message_id:string;member_id:string;text:string;state:string;delivery:string}[]
+  report:{id:string;version:number;run_id:string;verdict:string|null;excerpt:string;truncated:boolean;artifacts:string[]}|null; error_code:string|null
+}
+export interface RoomWorkItem { id:string; room_id:string; number:number; name:string; column:WorkItemColumn; owner_id:string|null; type:'task'|'bug'|'review'|'note'; details:string; position:number; created_at:string; updated_at:string; tracking?:RoomWorkTracking; [key:string]:unknown }
 export interface RoomBoard {revision:number;items:RoomWorkItem[]}
 export interface RoomMemberDefinition {member:LoopMember;definition:AgentDefinition|null;source:'snapshot'|'local'|'missing';message?:string}

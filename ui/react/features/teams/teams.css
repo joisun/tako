@@ -242,3 +242,19 @@
 .room-message .team-thinking { color:var(--text-muted); font-size:12px; line-height:1.65; margin:4px 0; }
 
 .team-thinking .shimmer { display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
+
+.room-tracked-cards { display:flex; flex:1; min-height:0; flex-direction:column; gap:6px; padding:6px; overflow:auto; scrollbar-width:thin; }
+.room-tracked-cards:empty,.room-manual-cards:not(:has(.room-kanban-card)) { display:none; }
+.room-manual-cards { flex:1; min-height:80px; overflow:auto; }
+.room-tracked-card { cursor:default; }
+.room-tracked-card footer { flex-wrap:wrap; }
+.room-tracked-card footer .room-work-state { color:var(--info); }
+.room-tracked-card[data-work-state=failed] footer .room-work-state,.room-tracked-card[data-work-state=review_failed] footer .room-work-state,.room-tracked-card[data-work-state=dependency_failed] footer .room-work-state { color:var(--danger); }
+.room-tracked-details { font-size:12px; overflow-wrap:anywhere; }
+.room-tracked-details dl { display:grid; grid-template-columns:72px minmax(0,1fr); gap:8px 12px; }
+.room-tracked-details dt { color:var(--text-muted); }
+.room-tracked-details dd { margin:0; white-space:pre-wrap; }
+.room-tracked-details section { margin-top:18px; }
+.room-tracked-details section h3 { font-size:12px; }
+.room-tracked-details section p { white-space:pre-wrap; }
+@media(max-width:1100px) { .room-tracked-cards,.room-manual-cards { flex:none; max-height:420px; } }

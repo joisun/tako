@@ -1,12 +1,12 @@
 # Agent Loop 团队协作
 
-状态：`feature/agent-loop` worktree 中的源码实现，尚未合并或发布。已有安装版不会自动更新。[验证记录](job/agent-loop/03-phases.md)区分原始固定阶段原型与当前消息驱动流程。
+状态：当前源码实现，尚未发布。已有安装版不会自动更新。[验证记录](job/agent-loop/03-phases.md)区分原始固定阶段原型与当前消息驱动流程。
 
 ## 团队、成员与消息
 
 Teams 与 Sessions、Scheduled 并列。创建团队只填写名称，存储与内部执行目录均由 Rillo 管理。用户直接在消息框说明目标，服务建立内部任务；独立新应用或其他产物可在托管执行目录直接创建，操作已有项目时再指定项目路径和分支，无须新建任务表单。新团队默认有 Codex Leader，可从成员中更换。
 
-用户未指定收件人时唤醒 Leader；显式 `@成员` 直接派发给选中的稳定成员 ID，不先转交 Leader。多个明确收件人可各自执行，不广播唤醒其他成员。成员通过 `send_message` 互相委派、求助或回复。未填写 mentions 的 reply 默认回复本次委派来源；执行结果自动返回实际委派者，并通知 Leader。Leader 在成员工作结束后汇总、安排后续工作或交付。普通回复不自动形成新的委派回调，避免无任务的互相确认循环。等待用户时不保持模型轮询。Leader 请求 wait 时，如仍有排队或运行中的成员，Task 保持 active，成员凭据和结果回传继续有效；成员结果唤醒 Leader 处理后，确实只剩用户输入时才进入 waiting。用户显式暂停、取消或修订仍立即撤销旧执行凭据。每个指派只设一个负责成员与明确产出，不重复派发其他成员的职责；`submit_result` 已自动回传，无须额外发送完成通知或确认。reply 消息立即落盘显示，在发送者退出后交接；与该次完成通知合并为一次唤醒。先恢复待处理的成员工作链，再让 Leader 汇总，避免双方抢着处理同一结果。
+用户未指定收件人时唤醒 Leader；显式 `@成员` 直接派发给选中的稳定成员 ID，不先转交 Leader。多个明确收件人可各自执行，不广播唤醒其他成员。成员通过 `send_message` 互相委派、求助或回复。未填写 mentions 的 reply 默认回复本次委派来源；执行结果返回实际请求者；仅需要协调时通知 Leader，不因普通完成确认唤醒。Leader 在成员工作结束后汇总、安排后续工作或交付。普通回复不自动形成新的委派回调，避免无任务的互相确认循环。等待用户时不保持模型轮询。Leader 请求 wait 时，如仍有排队或运行中的成员，Task 保持 active，成员凭据和结果回传继续有效；成员结果交回实际请求者处理后，确实只剩用户输入时才进入 waiting。用户显式暂停、取消或修订仍立即撤销旧执行凭据。每个指派只设一个负责成员与明确产出，不重复派发其他成员的职责；`submit_result` 已自动回传，无须额外发送完成通知或确认。reply 消息立即落盘显示，在发送者退出后交接；与该次完成通知合并为一次唤醒。先恢复待处理的成员工作链，再让 Leader 汇总，避免双方抢着处理同一结果。
 
 Teams 的 Codex 进程统一使用完整访问，不再按 Leader、讨论、实施或验证角色强制设置只读或目录写入白名单。Leader 可直接完成当前职责，也可用 `send_message(intent=delegate,write_access=true)` 委派实施；`write_access` 用于实施分类与目录占用调度，不是权限授予开关。用户明确要求只读时，成员仍须遵守任务约束。Leader 按任务选择验证方式，检查实际实现与验证证据；独立验证在有必要或用户要求时安排，不再强制另起验证 Run 或要求结构化 pass 作为交付门槛。未结束成员仍需完成或明确处理后才能交付。服务不会仅凭 CLI 退出成功认定交付，也不会把文本中的“完成”当作状态。Leader 明确请求 `deliver` 且其执行成功后，任务进入 `review`，界面显示“已交付”。用户可完成归档，或继续发送修订要求。
 
@@ -48,19 +48,24 @@ Kibo 的完整文档工具栏、表格和代码高亮不属于消息框需求，
 
 Teams 使用局部深灰主题，不改变 Sessions 和 Scheduled。1440px 时左栏 200px、右栏 248px，团队页头 54px，正文 14px。小于 950px 时成员进入抽屉，小于 600px 时导航进入抽屉。用户消息在右侧显示完整气泡，Agent 消息在左侧开放排版。角色姓名为主要身份，CLI 是次要标签，所有关联使用成员 ID。
 
-顶部“对话 / 看板”切换当前团队的中间区域，左侧仅保留团队列表，不提供重复的看板入口。看板采用 Kibo UI Kanban 的 KanbanProvider、KanbanBoard、KanbanHeader、KanbanCards 和 KanbanCard，依赖 dnd-kit 及 tunnel-rat。保留上游 MIT 许可证，并修正不可变数据更新、空列拖放、取消与排序行为。卡片在 1100px 以下为两列，600px 以下为单列，另有原生状态选择器供键盘和触屏使用。
+顶部“对话 / 看板”切换当前团队的中间区域，左侧仅保留团队列表，不提供重复的看板入口。看板采用 Kibo UI Kanban 的 KanbanProvider、KanbanBoard、KanbanHeader、KanbanCards 和 KanbanCard，依赖 dnd-kit 及 tunnel-rat。保留上游 MIT 许可证，并修正不可变数据更新、空列拖放、取消与排序行为。卡片在 1100px 以下为两列，600px 以下为单列，人工卡片另有原生状态选择器供键盘和触屏使用。
 
-三种实体的语义分别为：
+实体的语义分别为：
 
 | 实体 | 含义与状态来源 |
 |---|---|
 | 协作 Task | 用户消息触发的一次完整协作，由 Leader 和执行结果推进 |
 | Agent Run | 某位成员的一次受控执行，由原生进程结果推进 |
-| 看板工作项 | 用户整理的工作内容，由用户拖动或选择状态，不自动创建 Task 或 Run |
+| 会话卡片 | 从 Task、委派待办、执行和正式报告读取的工作视图，状态跟随真实记录 |
+| 人工工作项 | 用户整理的记录，可拖动或选择状态，不自动创建 Task 或 Run |
 
-看板固定 backlog、working、review、done 四列，分别显示待处理、进行中、待验收、已完成。工作项 review 表示该工作项待人工核对，与协作 Task 的 review“已交付”相互独立。任务归档不移动卡片，卡片返工也不自动恢复 Agent。只有“在对话中继续”填入草稿，并由用户确认发送，才进入原有协作流程。
+看板固定 backlog、working、review、done 四列，分别显示待处理、进行中、待验收、已完成。当前团队的会话目标使用 T- 编号，delegate/verify 工作使用 W- 编号；其稳定 ID 直接关联原 Task 或 inbox，不写入 loop_work_items，也不按 Run 创建重复卡片。续接通过成员拥有的 assignment_id 归入同一项工作；不同的新指派保留独立卡片，不按文本相似度合并。普通聊天、ask、reply、announce 不另建工作卡，相关问题在工作详情展示。历史工作随已持久化事实恢复，无须重跑 Agent。
 
-工作项支持名称、类型、负责人、说明、搜索、筛选、列内排序和跨列移动。owner_id 必须属于当前团队。排序请求包含全部卡片及 expected_revision，服务在一个事务中核对并保存。版本不符返回 LOOP_BOARD_CONFLICT，防止多个页面相互覆盖。失败时前端回滚并重新读取真实状态，保留错误提示。创建 request_key 防止重复添加。
+会话卡片的排队、目录等待、执行、依赖阻塞、等待答复、暂停、失败及取消分别展示。正式报告已交付进入待验收，原生执行成功不推断为验收通过；结构化 fail 保留“验收未通过”及原报告。Task 的 review 表示待用户验收，用户归档后目标卡进入已完成，失败结论不会被改写为 pass。卡片详情包含来源工作、负责人快照、要求、依赖、问答及正式报告摘录。点击“查看对话”选择对应协作，不发送消息；不承诺精确滚动到原消息；完整委派正文保留在工作详情中，早于当前消息窗口的会话正文不承诺已加载。事件更新会重新读取看板，不依赖人工 revision 增长。
+
+人工记录使用 R- 编号，仍由用户编辑和排序。人工卡片 review 表示待人工核对，任务归档不移动人工卡片，人工卡片返工也不自动恢复 Agent。“在对话中继续”只填入草稿，由用户发送后才进入协作。会话卡片不提供人工改状态或拖动，服务拒绝通过人工更新接口改写它们，避免显示状态脱离真实执行。
+
+人工工作项支持名称、类型、负责人、说明、搜索、筛选、列内排序和跨列移动。owner_id 必须属于当前团队。排序请求仅包含全部人工卡片及 expected_revision，服务在一个事务中核对并保存。版本不符返回 LOOP_BOARD_CONFLICT，防止多个页面相互覆盖。失败时前端回滚并重新读取真实状态，保留错误提示。创建 request_key 防止重复添加。
 
 团队视图写入 URL 的 team_view 参数。Command/Ctrl+K 搜索团队及当前已载入的消息，界面明确检索范围，不声称全文检索。没有接入原型的浏览器演示存储或定时推进。
 
@@ -102,18 +107,18 @@ flowchart TD
 | `loop_boards`、`loop_work_items` | 独立的团队工作项、状态、顺序和保存版本 |
 | `loop_tasks` | 内部目标、项目、输入版本和暂停代次；旧固定阶段任务另有预算 |
 | `loop_messages` | 用户及成员消息，包含明确的接收成员 ID |
-| `loop_inbox` | 持久待处理消息、派单及结果通知，记录领取者 |
+| `loop_inbox` | 持久待处理消息、派单及结果通知，分别记录领取、原生投递及工作处理状态 |
 | `loop_runs`、`loop_outbox` | 一次有限执行、路由、原生 Session ID、结果及派发状态 |
 | `loop_memories` | 带消息或 Run 来源的决定与摘要；决定仅由 Leader 记录 |
 | `loop_memory_sync` | 与业务变更同事务增加的资料版本及成功导出版本 |
-| `loop_events` | 委派、进度、失败、等待和交付事件 |
+| `loop_events` | 委派、进度、版本化正式报告、证据读取、执行计时和交付事件 |
 | `execution_resources` | Scheduled 与 Teams 共同的真实目录占用 |
 
 消息、inbox 和派发记录在同一事务内保存。完成结果和下一次派发也在同一事务内保存。每个任务中的同一成员最多有一个未结束 Run，Leader 等待成员结果时合并通知。继续 conversation 任务时，未启动的 queued 指派保留原 ID、依赖和消息关联，并同步到新的执行代次，避免旧代次使领取永久失败；已启动或未知进程仍先核实退出，不自动重放。重复 request key 不重复投递，正文或接收成员变化则报冲突。Teams 聊天协作不再使用默认 24 次执行或每次 600 秒的硬截断，旧 conversation 记录中的这两个值也不再阻断续接。用户暂停、取消及实际客户端故障仍按真实状态处理；去重、无动作续接限制和资源占用继续防止重复派发。旧固定阶段任务与 Schedule 的显式预算及超时保持原行为。
 
-`loop_schema` 当前为 6。从版本 1–5 增量迁移；版本 6 新增独立的全局定义删除日志表，其余迁移添加成员头像、历史身份快照、消息文件引用和运行内容。历史 Run 和已消费 inbox 不再依赖仍存在的成员行，真删除成员后仍能读取和迁移历史；迁移保留全部记录。Scheduled 的 `PRAGMA user_version=4` 不变。旧固定阶段任务保留原有执行语义和接口，新的聊天使用 `workflow: conversation`。
+`loop_schema` 当前为 7。从版本 1–6 增量迁移；版本 7 增加消息关联与 inbox 的投递、处理状态，版本 6 引入独立全局定义删除日志表，其余迁移添加成员头像、历史身份快照、消息文件引用和运行内容。历史 Run 和已消费 inbox 不再依赖仍存在的成员行，真删除成员后仍能读取和迁移历史；迁移保留全部记录。Scheduled 的 `PRAGMA user_version=4` 不变。旧固定阶段任务保留原有执行语义和接口，新的聊天使用 `workflow: conversation`。
 
-原生会话仍由客户端保存，Run 引用 Session ID。相同成员、Task、角色模式在同一客户端及任务目录续接自己的会话；其他成员不会继承该成员的私人上下文。成功投递游标只在 provider 接受 turn 或执行成功后推进，不以新建 Run 代替投递回执。限流、网络或认证失败不会改成新会话重试；续接失败进入等待并保留错误，当前不自动删除或重建原生会话。成员间委派不是原生 fork 或父子关系，不篡改原生关系。
+原生会话仍由客户端保存，Run 引用 Session ID。Teams 的同一成员在同一 Task 版本、客户端及任务目录续接自己的会话，讨论、实施和验证切换不另建会话；明确修订任务或更换客户端后重新开始；其他成员不会继承该成员的私人上下文。成功投递游标只在 provider 接受 turn 或执行成功后推进，不以新建 Run 代替投递回执。限流、网络或认证失败不会改成新会话重试；续接失败进入等待并保留错误，当前不自动删除或重建原生会话。成员间委派不是原生 fork 或父子关系，不篡改原生关系。
 
 ## 团队资料与恢复
 
@@ -125,7 +130,7 @@ SQLite 是团队消息、任务、决定、摘要与执行状态的持久存储�
 
 团队目录不搬迁 Git 仓库、未提交代码及客户端原生 Session 日志。已迁移任务不能直接重放旧工作目录；确认旧执行后，可在恢复的团队发送消息，由服务分配本机内部执行目录并按需准备项目，并按需读取原决定、历史和已提交产物。原始项目改动须单独迁移。文件在提交前已经缺失或不可读取时，资料标记 unavailable，不伪造产物成功；归档文件在恢复时校验内容哈希。
 
-模型初始输入包含最近消息、结果索引和记忆。续接原生会话时，通过输入快照中的 result_cursor 只补充上次投递之后完成的结果，不反复注入旧汇报；角色定义未变化时沿用已投递的完整指令。结果索引保留简短汇报、产物和 Run 引用。`read_context(section=results,source_run_id=精确 Run ID)` 返回该 Run 保存的全部公开助手正文（public_messages，受 Run.parts 容量限制）、结构化结果与截断标记；不得仅凭最后一句完成说明断言正文或源码不存在。该查询只能访问当前 Task。`read_context(section=messages|results|memories, before, limit, query)` 可读取更早完整内容；每页最多 50 项、约 64 KiB，next_before 为下一页游标。记忆必须引用当前团队消息或当前任务 Run，摘要不构成授权。`section=artifact` 使用 source_run_id、reference、offset，按最多 32 KiB UTF-8 正文读取；返回 next_offset，二进制仅返回元信息。
+模型初始输入包含最近消息、结果索引和记忆。续接原生会话时，通过输入快照中的 result_cursor 只补充上次投递之后完成的结果，不反复注入旧汇报；角色定义未变化时沿用已投递的完整指令。结果索引保留简短汇报、产物和 Run 引用。`read_context(section=results,source_run_id=精确 Run ID)` 返回该 Run 保存的全部公开助手正文（public_messages，受 Run.parts 容量限制）、结构化结果与截断标记；不得仅凭最后一句完成说明断言正文或源码不存在。该查询只能访问当前 Task。`read_context(section=messages|results|memories, before, limit, query)` 可读取更早完整内容；每页最多 50 项、约 64 KiB，next_before 为下一页游标。记忆必须引用当前团队消息或当前任务 Run，摘要不构成授权。 Teams 默认记忆上下文优先保留当前任务版本的决定，再按本轮指派与目标的中英文关键词匹配筛选。最多 20 条、合计 12,000 字符，每条正文预览最多 2,000 字符，长内容标记 truncated；原记录与来源完整保存，read_context(section=memories,source_memory_id=...) 可精确读取原文。该筛选使用 SQLite 和本地分词，不调用额外模型，不引入向量数据库。remember 可用 supersedes 明确替代本团队同类型旧记忆；被替代记录不再默认注入，仍保留历史与备份，精确读取返回 superseded_by。替代关系进入既有 memory_recorded 事件，重复请求不得改变关系。历史记忆不覆盖当前用户要求，系统不自动推断两段文字互相矛盾。`section=artifact` 使用 source_run_id、reference、offset，按最多 32 KiB UTF-8 正文读取；返回 next_offset，二进制仅返回元信息。
 
 ## 执行权限和恢复
 
@@ -145,7 +150,7 @@ Claude Code 通过 stream-json CLI 执行，只开放 Read、Glob、Grep，关�
 
 领取派发记录后先持久化 `starting`，再启动原生进程。重启时已领取的 Run 转为 `unknown`，不会自动重放。未领取队列可继续。暂停、取消和修改目标撤销 Run 凭据；旧结果必须匹配 revision 与 generation 才能推进。
 
-目录占用按真实路径及父子目录判重。Codex Leader 可执行写操作，因此与实施成员及 Scheduled 一样取得排他写锁；讨论、验证成员按不写文件的职责使用共享读锁，同一目录可并行读取。Leader 分派后应结束当前轮次，成员在其目录占用释放后执行。锁用于 Rillo 的任务协调，并非 Codex 沙箱；需要写文件的工作应委派为实施，避免与读取或其他写入同时修改同一目录。读写冲突仍等待，未知占用不共享。全局默认并发为 2；同一成员在同一 Task 中最多一个未完成执行。PID 不明或仍存在时不按超时释放。未知执行需要核实旧进程退出后明确对账，服务仍管理的进程不能手动释放。该协调只覆盖 Rillo 启动的工作，不控制用户手动启动的外部写入者，也不保证外部副作用 exactly-once。
+目录占用按真实路径及父子目录判重。Teams 依据 resource_scope 选择目录与访问方式，Leader 统筹默认只观察内部执行目录，不因身份取得全部项目写占用；观察性审查允许其他会话编辑，实际写入之间仍互斥。调度先检查资源再领取运行名额，工作默认并发 2，另保留默认 1 个协调名额，配置见下文。同一成员在同一 Task 中最多一个未结束执行。PID 不明或仍存在时不按超时释放，未知执行先核对旧进程，不自动重放。Scheduled 与旧固定阶段任务保持原有目录占用语义。该协调只覆盖 Rillo 启动的工作，不控制用户手动启动的外部写入者。
 
 ## Run 专用 MCP
 
@@ -154,21 +159,29 @@ Claude Code 通过 stream-json CLI 执行，只开放 Read、Glob、Grep，关�
 | 工具 | 行为 |
 |---|---|
 | `read_context` | 默认读取快照；messages、results、memories 提供正文分页与字面关键词查找；results + source_run_id 精确读取公开助手正文和结果；artifact 按 Run 与引用读取已归档产物 |
-| `remember` | 保存 decision 或 summary、来源消息/Run ID、request_key；只有 Leader 能记录决定 |
-| `report_progress` | 保存进度事件 |
-| `send_message` | 使用成员 ID 委派、验证、回复或公告；公告不启动收件人 |
+| `remember` | 保存 decision 或 summary、来源消息/Run ID、request_key；可用 supersedes 替代同类型旧记忆，原文保留；只有 Leader 能记录决定 |
+| `report_progress` | 保存有来源执行 ID 的内部进度事件，notification=internal_only，不写聊天消息、不唤醒成员；供恢复时重建工作进度 |
+| `send_message` | 使用成员 ID 委派、验证、提问、关联答复或告知；告知不启动收件人 |
 | `submit_result` | 可选的结构化结果与相对产物路径，退出后自动交接；使用验证汇报时须为 pass 或 fail。Teams 原生成功不因缺少此调用而失败，旧固定阶段任务仍要求提交 |
-| `request_action` | 当前 Leader 请求 prepare_projects、wait、deliver 或 cancel_assignment；旧固定流程支持 advance |
+| `request_action` | 当前 Leader 请求 prepare_projects、wait、deliver 或 cancel_assignment；接收人或 Leader 可 reconcile_delivery 核对未知投递，旧固定流程支持 advance |
 
 `request_action(action=prepare_projects)` 使用 workspaces，以及可选 execution_mode、branch；不再使用 source_message_id 或 LOOP_PROJECT_SOURCE_INVALID。Leader 可直接采用任务、对话、需求文档与已有工作区上下文中已经明确的目录，不要求用户在某一条消息原样填写或再次确认。仅在无法判断实际目标项目时询问；目录存在性、真实路径、Git 分支和 worktree 仍按实际状态检查。没有已准备项目或历史绑定时使用绝对路径或 ~/ 路径；有项目后可使用相对路径。只有当前 Leader 可操作；可在无关成员执行时追加项目，也可显式更新已有项目的绑定，不修改已启动进程的目录快照。分支/worktree 改名应协调该项目成员先结束工作。服务在准备项目时保存 Git 管理目录与项目相对路径，在执行前后依据 worktree 的 gitdir 指针刷新实际分支和目录；base_commit、项目顺序与原生会话位置保持。刷新采用旧值比较，避免覆盖异步期间新选的绑定。旧记录在目录仍存在时补齐标识；旧路径已缺失且没有标识时不猜测目标，可通过 prepare_projects 明确选择实际分支或目录恢复。幂等请求不会重建工作区。资源追加到当前 Task，最多 8 个项目，不会改变稳定 CLI 目录，下一轮仍续接同一 Task。代码任务缺少明确项目路径时在团队询问；非代码任务可在内部执行目录直接完成。
 
 常见参数示例：继续用户指定的本地 feature/foo 分支时，用 `execution_mode: existing_branch, branch: feature/foo`；明确要求原目录执行时用 `execution_mode: in_place`；基于 develop 隔离执行时用 `execution_mode: isolated, branch: develop`。
 
-`send_message` 的 `intent` 为 delegate、verify、reply 或 announce。仅 Leader 或已获写入权限的成员能委派写入，不能扩大到 Claude 或验证任务。每条消息最多指定 6 位当前团队成员。委派返回本轮实际创建的 Run ID；`depends_on` 可指定同 Task 的前置 Run，仅当前置全部 succeeded 才派发。失败或未知依赖保持阻塞，Leader 可从 read_context 的 blocked 列表取 inbox ID，使用 cancel_assignment 取消该待执行指派再重新安排。不相关的就绪指派不被前面的依赖项挡住。
+`send_message` 的 `intent` 为 delegate、verify、ask、reply 或 announce。每条消息最多指定 6 位当前团队成员。`write_access` 标识实施调度，当前实施客户端为 Codex，不是按上游角色授予权限。可选 `expected_output`、`acceptance` 各最多 2,000 字符，描述产物与验收要求，不引入额外批准步骤。委派回执返回 `assignments[]` 的 inbox_id、member_id、run_id、status、reused，以及已启动的 `runs[]`；成员仍忙时 run_id=null、status=pending，不声称已启动。`depends_on` 可指定同 Task 的前置 Run，仅当前置全部 succeeded 才派发。失败或未知依赖保持阻塞，Leader 可从 read_context 的 blocked 列表取 inbox ID，使用 cancel_assignment 取消该待执行指派再重新安排。不相关的就绪指派不被前面的依赖项挡住。
+
+同一 Task 与 revision 内，同一请求者给同一成员的完全相同且未完成的委派会复用既有 inbox 和 Run。比较正文、用途、实施标记、依赖、预期产物与验收要求，不做模糊语义匹配；已完成或失败的工作可明确重新指派，其他请求者及普通回复不自动合并。全部复用时不新建聊天消息，回执 reused=true；混合目标仅为新增收件人创建消息。复用回执作为内部工具反馈，不重复显示为正文。原请求标识的重试保持原任务关联，参数变化返回幂等冲突；回执从持久 inbox 动态读取当前执行状态，服务重启后仍可重试。
+
+当前上下文的 assignment 明确给出 inbox_id、requester_id、source_run_id、source_message_id、正文、expected_output 和 acceptance。结果索引附有界的同类信息，read_context(section=results,source_run_id=...) 返回完整任务交接信息与公开结果。正式结果仅交接给实际请求者。成员有未回答问题或未完成的下游工作时保留原工作关联，收到答案后续接原生会话，不额外发送完成确认。
 
 凭据通过进程环境传递，数据库仅存 hash，绑定具体 Run 和当前任务版本。工具入口在异步读请求后再次授权。产物必须实际存在、为文件，真实路径不能通过符号链接越出对应工作目录。普通相对路径始终指向本次 Task 的稳定执行目录；项目文件使用 project:1/path、project:2/path，按 resources 顺序编号，避免准备项目后改变旧产物的路径含义。文件备份在归档时读取内容并保存带 SHA-256 的不可变快照，后续同名文件不覆盖已有快照。备份失败不会阻断执行；界面保留未同步提示，不能将未归档文件宣称为已备份。
 
 Codex 使用对此服务器的内联 MCP 配置。Claude 的配置使用环境变量展开，argv 包含变量名，不包含凭据值。Codex、Claude 的认证、默认模型和执行权限配置保持不变。市场保存只创建明确选择的 Agent 定义文件，可能落在 dotfiles 维护的共享 Agent 目录，不执行 dotfiles 同步。
+
+Teams 在同一 Task、revision、成员与运行客户端内，讨论、实施和验证复用最近的原生会话。职责改变只更新当前指派，不另起会话，也不重发已经投递的消息与结果；定义改变时补充新定义。明确修订任务或更换运行客户端后开启新会话，未知执行仍先对账。旧固定阶段任务保持按阶段续接，不改变 Scheduled 的会话策略。
+
+工作进度从现有 Run、inbox 与 report_progress 事件重建，不另建状态库。新原生会话、失败或中断后的续接，以及暂停后恢复时提供有界 work_progress；正常续接不重复注入，可主动 read_context(section=progress) 查询。进度区分成功执行、未成功执行、待派发委派与最近进度报告，保留原始状态、错误、来源 Run/inbox 和产物引用。取消执行仍保持取消，不自动重跑；执行成功不代表验证通过或整个任务已交付。进度正文合计最多 12,000 字符，每组最多 8 条执行或委派，附完整数量与截断标记；完整结果按 source_run_id 读取。普通成员默认只看自己、自己委派和当前依赖的进度，Leader 查看当前任务版本，其他团队不混入。完整历史继续随团队资料备份，恢复不把旧进程当作已经退出。
 
 ## HTTP 接口
 
@@ -194,10 +207,10 @@ Codex 使用对此服务器的内联 MCP 配置。Claude 的配置使用环境�
 | `GET /api/v1/teams-runtime/:runtime` | 实际客户端状态、live 模型目录及 model_override_supported |
 | `POST /api/v1/teams/:id/members` | 本地 definition_id、runtime_id、name、avatar、可空 model/effort；保存成员快照和配置 |
 | `GET /api/v1/teams/:id/members/:member/definition` | 返回 member、definition、source，按成员关联读取 |
-| `GET /api/v1/teams/:id/board` | 看板 revision 和按顺序排列的 items |
+| `GET /api/v1/teams/:id/board` | 人工 revision 及 items；会话卡片包含 tracking 来源、真实状态、报告和问答，不因读取写入数据库 |
 | `POST /api/v1/teams/:id/work-items` | name、column、owner_id、type、request_key、expected_revision |
-| `PUT /api/v1/teams/:id/board` | 全部卡片的 id/column 数组及 expected_revision，原子保存顺序与状态 |
-| `PATCH /api/v1/teams/:id/work-items/:item` | 修改 name、owner_id、type、details；须带 expected_revision |
+| `PUT /api/v1/teams/:id/board` | 全部人工卡片的 id/column 数组及 expected_revision，原子保存人工顺序与状态 |
+| `PATCH /api/v1/teams/:id/work-items/:item` | 修改人工记录 name、owner_id、type、details；须带 expected_revision；会话卡片返回 LOOP_WORK_TRACKED |
 | `POST /api/v1/teams/:id/messages` | text、mentions、request_key，可绑定 task_id；驱动协作 |
 | `POST /api/v1/teams/:id/tasks` | 兼容旧固定阶段任务；新 UI 不使用 |
 | `GET /api/v1/loop-tasks/:id` | 任务、Run、最近事件 |
@@ -210,7 +223,7 @@ Codex 使用对此服务器的内联 MCP 配置。Claude 的配置使用环境�
 
 团队快照当前包含最近 100 项任务和 200 条消息，任务详情包含最近 200 条事件。浏览器仍只检索当前已载入消息；Run 工具已支持完整历史分页。跨团队搜索、Scheduled 触发团队、OpenCode 成员和统一 context 用量尚未实现。
 
-参考 [Multica Squads](https://github.com/multica-ai/multica/blob/2083970b51c03c0773188636c24a96acd09ad4c3/apps/docs/content/docs/squads.mdx) 的 Leader 消息驱动协作机制，以及 [GetLastTaskSession](https://github.com/multica-ai/multica/blob/2083970b51c03c0773188636c24a96acd09ad4c3/server/pkg/db/queries/agent.sql#L1016) 对同一 Agent/Issue 的会话及实际输入快照的续接。Rillo 按成员、Task 和角色模式分别续接，团队资料持久化由自身实现提供。服务端实现为 Rillo 自身增量模块。原始设计及其后续修订保存在[实施记录](job/agent-loop/03-phases.md)。
+参考 [Multica Squads](https://github.com/multica-ai/multica/blob/2083970b51c03c0773188636c24a96acd09ad4c3/apps/docs/content/docs/squads.mdx) 的 Leader 消息驱动协作机制，以及 [GetLastTaskSession](https://github.com/multica-ai/multica/blob/2083970b51c03c0773188636c24a96acd09ad4c3/server/pkg/db/queries/agent.sql#L1016) 对同一 Agent/Issue 的会话及实际输入快照的续接。Rillo 按同一任务版本、成员和客户端续接，职责切换不另建会话，团队资料持久化由自身实现提供。服务端实现为 Rillo 自身增量模块。原始设计及其后续修订保存在[实施记录](job/agent-loop/03-phases.md)。
 
 ## 原型字段转换
 
@@ -233,7 +246,7 @@ Codex 使用对此服务器的内联 MCP 配置。Claude 的配置使用环境�
 
 团队列表菜单可以解散团队：先撤销该团队的 Run 凭据、停止其执行，确认退出后标记 dissolved_at。其他团队执行不受影响。未知进程阻止最终解散，历史对话、任务及资料保留，解散后禁止新对话和成员添加。
 
-成员菜单的“移出当前团队”只删除该团队成员行，保留本地定义和其他团队成员。过去的 Run、消息保留身份快照，看板负责人解除关联；移出 Leader 后需要指定新 Leader。同一团队有未结束协作或成员未知执行时禁止移出。
+成员菜单的“移出当前团队”只删除该团队成员行，保留本地定义和其他团队成员。过去的 Run、消息保留身份快照，人工看板记录解除负责人关联，会话卡片保留历史成员身份；移出 Leader 后需要指定新 Leader。同一团队有未结束协作或成员未知执行时禁止移出。
 
 Teams 左侧的全局“Agent 管理 / 本地 Agent”提供“删除定义”；成员区 + 的本地选择器不提供删除。Marketplace 托管定义通过安装管理卸载，市场条目不可删除。先查询 canonical 路径、digest 和使用此定义的团队数量，确认后仅删除全局定义文件，所有团队成员及保存的完整指令快照保留。目录范围为应用扫描的共享/Claude/Codex 定义及已知 Codex API 运行副本；根目录 symlink 解析到真源，同路径去重后处理 .md/.toml 同角色文件。服务重新计算文件列表和摘要，内容改变要求重新确认，不接受任意客户端路径。
 
@@ -268,7 +281,7 @@ Teams 对话使用 shadcn MessageScrollerProvider / Viewport / Content / Item / 
 
 Message / MessageContent / MessageResponse 展示正文。文字、公开摘要、工具动作、真实指派/回复以及失败按各自时间合并，不再把整轮内容挂在 Run 创建时间或统一折叠为执行过程。仅连续同作者且同 Run 的相邻动作共用作者头，其他成员插入后会分开，不移动动作以维持整轮分组。对话中的思考仅以当前成员的临时实时摘要展示，完成后移除；Tool 显示真实输入输出和状态，Task 用于实际协作执行记录。InlineCitation 仅用于真实 HTTP(S) 来源链接，并支持悬停查看来源，不生成虚假引用。Agent / AgentHeader / AgentContent / AgentInstructions / AgentTools 用于成员定义及目录预览，声明的工具不等同于运行权限。
 
-成功的 `send_message` 回执只有在精确匹配同一 Run 已持久化的正文消息时才从对话隐藏；成功的 `submit_result` 回执匹配当前 Run 且正式结果可读时隐藏。失败、进行中、无法确认成功或找不到对应消息的工具仍显示。正式汇报复用原生提交后的正文；没有该正文时使用已存结果摘要，不再同时展示重复的系统摘要。汇报正文按执行路由内联提及 Leader；需要回报的成员间委派还提及实际委派者，Leader 的汇总不提及自己。同一作者、同一 Run 连续向相同收件人汇报时，仅首段补充收件人前缀；被工具、思考或其他成员打断后重新显示，正文原有提及保持不变。提及仅展示已有结果通知关系，不额外发送消息或启动执行。原始 parts、正式结果和实际时间保留，完整摘要及产物仍可在执行详情查看。
+成功的 `send_message` 回执精确匹配同一 Run 已持久化的正文消息，或明确返回 reused=true 时从对话隐藏；成功的 `submit_result` 回执匹配当前 Run 且正式结果可读时隐藏。失败、进行中、无法确认成功或找不到对应消息的工具仍显示。正式汇报复用原生提交后的正文；没有该正文时使用已存结果摘要，不再同时展示重复的系统摘要。汇报正文根据持久化结果通知内联提及实际接收人，不再自动为每份成员报告添加 @Leader。旧记录仅在明确的委派回报关系中补充原请求者，Leader 的汇总不提及自己。同一作者、同一 Run 连续向相同收件人汇报时，仅首段补充收件人前缀；被工具、思考或其他成员打断后重新显示，正文原有提及保持不变。提及仅展示已有结果通知关系，不额外发送消息或启动执行。原始 parts、正式结果和实际时间保留，完整摘要及产物仍可在执行详情查看。
 
 正文、思考和工具按真实事件顺序交错显示。普通动作直接展示无边框 Trace 行，不再套“已执行 N 条命令”分组。工具参数及结果默认收起，失败保留明确状态，用户可用键盘展开；思考时每位当前成员仅显示一条带 shadcn shimmer 的实时摘要，采用当前公开 reasoning 的首个非空文本行并随增量更新，不使用固定 Thinking 文本；尚未返回摘要时暂显“正在思考…”，不编造内容。摘要过长时单行省略，悬停可读该行完整内容，不增加历史思考按钮；进入工具、回复或终止状态后立即移除。公开 reasoning 原记录仍保留，但不占据会话时间线或留下空作者行。减少动态效果时停止 shimmer。工具的手动展开在后续增量与执行结束时保持。客户端自动续轮仍单独折叠。Token 用量移入作者行的用量按钮，取消和中断显示可读状态，原错误码留作诊断；回复及广播不再加独立徽章，实际收件人仍通过稳定 ID 行内显示。用户消息右侧显示，不重复姓名和头像；代码块使用单层背景及复制操作。
 
@@ -309,3 +322,54 @@ Teams 左侧“Agent 管理”面向所有团队，URL 为 view=teams&team_view=
 ## 本轮协作排查参考
 
 [Multica Squad 协议](https://github.com/multica-ai/multica/blob/ed7c001778c0226e4ac4e5c4133d6a047922e226/server/internal/handler/squad_briefing.go)要求 Leader 按职责简短指派、派发后结束，并在无需处理时保持安静。[Hivemind 的异步子任务](https://github.com/hivementality-ai/hivemind/blob/538f670aa2d28d3d2cf868711098e9b241d5c370/app/jobs/sub_agent_job.rb)向原委派者发送有界结果与任务引用，完整结果按需读取；其[群聊实现](https://github.com/hivementality-ai/hivemind/blob/538f670aa2d28d3d2cf868711098e9b241d5c370/app/jobs/team_chat_job.rb)使用有界最近消息和各成员独立会话，但无明确目标时唤醒全部成员，不作为 Rillo 的派发规则。以上仅参考协作契约，没有复制上游代码或引入其执行系统。
+
+
+## 消息处理与工作交接
+
+消息的用途由 Agent 工具填写，用户保持普通聊天和显式 @。delegate、verify 建立有负责人的工作，ask 建立待回答问题。reply 用 reply_to_message_id 关联问题，用 assignment_id 关联所属工作。submit_result 的 answered_message_ids 可让一份报告同时回答多条问题。announce 只进入共享上下文，即使提及多人也不启动执行。新增要求保留新消息与工作要求，不以文本相似度吞掉。
+
+loop_inbox 的 delivery_json 记录 pending、sending、delivered、unknown，processing_json 记录 pending、in_progress、answered、completed、canceled。原生端确认接收才标记 delivered；上下文投递不会把问题标记 answered。关联答复或正式报告关闭问题，并取消尚未开始的重复执行，不终止其他正在运行的工作。原生投递时间保留首次确认值。
+
+例如 SDK 用 ask 询问 React 是否保留旧回调，React 接收问题后仍显示处理中。React 的 submit_result 引用原消息 ID 后问题才关闭，报告只交回 SDK。SDK 的续接继续原工作，完成后再交给其原请求者。
+
+相关补充先落盘。Codex 正在执行时复用现有交互句柄的 steer，并核对返回的原生 Turn ID。确认后记录已投递，续接同一成员 Session 时按精确消息 ID 排除已接收输入，不通过跳过全部游标范围丢弃未接收消息。不支持 steer 或确认未发出的输入留待续接。原生请求发出后响应不明则保留 unknown，重启把 sending 转为 unknown。reconcile_delivery 只读原生消息，找到该投递的唯一标记才确认成功；未找到不自动重发或另建 Run。
+
+## 调度容量与实际状态
+
+RILLO_TEAM_WORK_CONCURRENCY 控制工作并发，默认 2。RILLO_TEAM_COORDINATION_CONCURRENCY 保留协调容量，默认 1，两者范围均为 1–32。用户要求、问题和统筹具有起始优先级，等待每 30 秒增加优先级。候选每批最多 32 条并轮转分页，前一批的目录等待不阻塞后续就绪工作。先检查资源占用再占运行名额，等待目录的工作仍保持 queued。同一任务成员的未结束 Run 和原生会话互斥规则保留。
+
+resource_scope 用 access=none、read、write 和 projects=[项目编号] 声明实际资源。Leader 默认统筹不占全部项目。显式长审查或写入使用工作容量。Teams 的 read 以观察方式允许其他会话修改文件；写入仍互斥。未知进程的占用仍须核对，Scheduled 和旧固定阶段任务的原有读写规则不变。资源声明不是权限授予，用户只读约束与客户端权限继续有效。
+
+界面分别显示已安排等待执行、启动、处理和完成。排队、目录等待、客户端准备、原生确认输入后至首次模型输出的等待及处理时间来自持久化事件，未记录的数据不编造。未返回模型内容时没有虚构思考。Token 按 provider、store、native Session 的累计最大值去重，不把多次 Run 的同一累计值相加，不推测费用。
+
+## 正式报告与审查证据
+
+正式报告保存在已有 report_recorded 事件中，以工作 inbox ID 保持同一报告，修正产生新版本。结构化提交优先，非 Hook 的正式答复正文及消息引用保留。Hook 与自动续轮属于执行记录，不覆盖正式报告；Hook 提交新的 evidence_ids 或 findings 时更新原报告版本。仅修正文案或结论时由 Agent 填写 correction_reason，未带修正原因和新证据的结构化结束确认保留为 hook_report 事件，不替换既有报告。不增加模型总结调用。
+
+结果索引最多提供最近 20 份报告，每份摘要 600 字符，证据与发现各最多 8 项。完整报告及历史版本通过 read_context(section=reports,report_id=...,version=...,offset=...) 读取。恢复进度与 results 精确读取优先使用正式报告，排除 Hook 的结束确认。一次结果按报告、版本和接收人只交接一次。报告交付、Run 成功和审查 verdict 分开记录，可以同时是“审计工作已交付”和“审计对象未通过验收”。
+
+每个已准备项目的 Run 开始与结束记录 Git HEAD、采样时间、tracked diff 指纹、status 指纹及条目数，不保存或展示 diff。HEAD 前后变化、指纹变化或读取失败只说明版本边界，dirty=true 不能证明成员检查了同一内容。未跟踪文件内容不在 Git 指纹中。
+
+read_context(section=evidence,reference=project:1/path) 读取实际文件并返回 evidence ID、SHA-256、读取时间和有界正文。submit_result 的 findings 使用稳定发现 ID 及 evidence_ids。提交和退出时重新检查所引文件，内容变化的发现标为 needs_recheck，未登记证据标为 unverified。复核时重新读取并用新证据 ID 更新同一发现和报告版本，旧版本仍可查。仅核对证据版本不代表发现已经被独立验证；通过其他 CLI 工具读取但未登记的文件没有虚构的读取时间或哈希。审查不阻止编辑，也不强制切换分支。
+
+
+## 提示词与工具通知回执
+
+所有成员共享同一份简短协作约定：当前 assignment 决定职责，团队目标提供背景；已有负责人的工作不重复承接；问题交给能回答的成员；背景信息不触发新工作；结果报告一次；恢复先读已有结果。角色定义、当前指派、执行环境与 Skills 使用分开描述。未变更的定义沿用原生 Session 中的内容，Skills 与 integrations 继续继承客户端配置，按需使用。没有实现第二套 Skills 加载器。
+
+Leader 负责分工、冲突、依赖和验收，必要时可以检查代码及技术证据或完成适合自己的工作。成员负责当前工作，可以直接向其他成员提问。等待答案时可继续独立工作，确实阻塞则让出执行，不要求再发一条公开确认。自动续轮不视作新指派。新问题用 ask，回答用关联原消息的 reply，正式报告也可通过 answered_message_ids 关闭问题。查询的 query 匹配正文，不按消息 UUID 检索；报告和结果分别使用 report_id、source_run_id 精确读取。
+
+工具回执说明通知的实际去向，和投递、执行状态分别理解：
+
+| 工具 | notification | 含义 |
+|---|---|---|
+| report_progress | internal_only | 仅更新内部进度，不发聊天或建立接收人待办 |
+| send_message | context_only | 告知保存在共享上下文，不唤醒成员，不代表原生静默注入 |
+| send_message | member_inbox | 明确接收人有持久化记录；实际接收与执行看 delivery 和 Run 状态 |
+| submit_result | after_exit | recipients 是当前计划的退出后交接对象，还没有投递；退出时按实际未完成工作和已回复关系重新判断 |
+| submit_result | none | 报告已经保存并可查看，当前没有额外成员通知计划 |
+| 被忽略的 Hook 结束确认 | internal_only | 保存为执行记录，不替换正式报告或通知成员 |
+
+Leader 与成员使用同一套结果交接规则。Leader 在统筹 Run 中回答成员问题后，同样向实际提问者交回报告。答复保留提问者的原工作关联，不让提问者重新承接 Leader 的任务。正式报告通知也可通过 Codex steer 进入正在处理相关工作的请求者；包含稳定 inbox ID、来源 Run、报告 ID、版本和有界摘录，全文按报告 ID 读取。原生端确认后才记 delivered。相同原生 Session 续接时，已投递的结果不再次放入新增结果输入。不支持实时补充的 Runtime 继续保留待投递记录，续接时处理。
+
+上述提示词为 Rillo 自行编写。[DSH 的职责约定](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/prompts/shared.md)和[报告通知实现](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/tools/executor.ts)用于机制参考，没有复制上游源码或成段提示词，也没有将 Leader 限定为纯路由角色。

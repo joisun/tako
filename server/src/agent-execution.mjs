@@ -3,13 +3,13 @@ import { runtimeEvent } from './runtime/runtime-event.mjs'
 // Persistence, ownership and scheduling stay with the calling domain.
 export function createAgentExecution({ registry, supervisor, clock = () => new Date() }) {
   return async function execute({ runId, runtimeId, spec, signal, logs, onSpawn,
-    emit, invocationSpec = spec, onInteractive = () => {}, nextSequence }) {
+    emit, invocationSpec = spec, onInteractive = () => {}, onContinuation=()=>{},nextSequence }) {
     const launch = await abortable(registry.resolve(runtimeId), signal)
     if (signal.aborted) throw Object.assign(new Error('RUN_CANCELED'), { code: 'RUN_CANCELED' })
     const definition = registry.get(runtimeId)
     if (typeof definition.createInteractiveSession === 'function') {
       const session = definition.createInteractiveSession({
-        launch, run: spec, signal, logs,
+        launch, run: spec, signal, logs,onContinuation,
         onSpawn: value => onSpawn({ ...value, runtime_version: launch.version }),
         emit: event => emit(runtimeEvent({ runId, sequence: nextSequence(),
           observedAt: new Date(clock()).toISOString(), type: event.type, payload: event.payload })),

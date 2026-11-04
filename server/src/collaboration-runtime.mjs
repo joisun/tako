@@ -12,16 +12,18 @@ import { prepareRoomAttachments,readRoomAttachment } from './collaboration/attac
 import { createRunParts } from './collaboration/run-parts.mjs'
 import { createTeamLiveStream } from './collaboration/live-stream.mjs'
 import { loopError } from './collaboration/errors.mjs'
+import { captureProjectVersions,readEvidence,checkEvidence } from './collaboration-runtime/evidence.mjs'
 
-export function createCollaborationRuntime({ store, executeAgent, resources, registry, logs, onChange = () => {}, concurrency = 2, catalog = null, memoryRoot = null, workspaceRoot = null,
+export function createCollaborationRuntime({ store, executeAgent, resources, registry, logs, onChange = () => {}, concurrency = Number(process.env.RILLO_TEAM_WORK_CONCURRENCY??2), coordinationConcurrency = Number(process.env.RILLO_TEAM_COORDINATION_CONCURRENCY??1),catalog = null, memoryRoot = null, workspaceRoot = null,
   hydrateRunParts=async run=>run,
   toolServerPath = fileURLToPath(new URL('../vendor/loop-server.mjs', import.meta.url)) }) {
   const active = new Map()
+  if(![concurrency,coordinationConcurrency].every(value=>Number.isSafeInteger(value)&&value>0&&value<=32))throw loopError('LOOP_CONCURRENCY_INVALID','Teams 并发数须为1–32')
   const messageQueues = new Map()
   let creationQueue = Promise.resolve()
   let copyQueue = Promise.resolve()
   let catalogDeletionQueue = Promise.resolve()
-  let stopping = false, timer = null, baseUrl = null, pumping = false
+  let stopping = false, timer = null, baseUrl = null, pumping = false, queueCursor=0, pumpFinished=Promise.resolve(),finishPump=null
   const live=createTeamLiveStream(store)
   const changed = () => { live.refresh();try { onChange({ kind: 'rooms' }) } catch {} }
 
@@ -55,19 +57,16 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     store.refreshProjects(taskId,previous,refreshed)
   }
 
-  async function execute(candidate, controller) {
+  async function execute(candidate, controller, preparedLease) {
     const parts=createRunParts(value=>store.recordParts(candidate.id,value),updates=>{live.parts(candidate.task_id,candidate.id,updates);try{onChange({kind:'rooms'})}catch{}})
-    let lease = null, pid = null, handle = null, result = null, claimed = false
+    let lease = preparedLease, pid = null, handle = null, result = null, claimed = false
     try {
-      await refreshProjects(candidate.task_id)
-      const current = store.context(candidate.id)
-      const leaderWrite = current.task.config.workflow==='conversation' && current.member.runtime_id==='codex' && current.run.routing?.intent==='lead'
-      lease = await resources.wait({ owner: 'collaboration', runId: candidate.id, workspace: current.task.workspace, workspaces:[current.task.workspace,...(current.task.config.resources?.map(resource=>resource.workspace)??[])], signal: controller.signal, access:current.run.phase==='implementing'||leaderWrite?'write':'read' })
       if (controller.signal.aborted) return
       const token = randomBytes(32).toString('hex')
       const context = store.claim(candidate.id, token)
       if (!context) return
       claimed = true
+      if(context.task.config.workflow==='conversation'&&context.task.config.resources?.length)store.recordProjectVersions(candidate.id,'start',await captureProjectVersions(context.task))
       backup(context.task.room_id)
       changed()
       const writing = context.run.phase === 'implementing'
@@ -89,6 +88,8 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       let sequence = 0
       result = await executeAgent({
         runId: candidate.id, runtimeId: context.member.runtime_id, signal: controller.signal, logs: handle,
+        onContinuation(value){store.executionOrigin(candidate.id,value.origin)},
+        onInteractive(session){const entry=active.get(candidate.id);if(entry)entry.interactive=session},
         spec: { workspace: context.task.workspace, resume_session_id: context.continuity.session_id, additional_workspaces:context.task.config.resources?.map(resource=>resource.workspace).filter(path=>path!==context.task.workspace)??[], images:attached.filter(item=>item.media_type.startsWith('image/')).map(item=>item.path), prompt: executionPrompt(context), sandbox_mode: unrestricted ? 'danger-full-access' : writing ? 'workspace-write' : 'read-only',
           reasoning_effort:context.member.execution_config?.effort??null, reasoning_summary:'detailed',
           timeout_seconds: context.task.config.workflow === 'conversation' ? undefined : context.task.config.timeout_seconds, model: context.member.execution_config ? context.member.execution_config.model : context.member.profile?.model ?? null,
@@ -96,14 +97,17 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
           execution_config: executionConfig, execution_env: executionEnv, loop_mcp: loopMcp },
         nextSequence: () => ++sequence,
         onSpawn(value) { pid = value.pid; lease.spawned(pid); store.spawned(candidate.id, value); changed() },
-        emit(event) { parts.emit(event); if (event.type === 'turn_started') store.inputDelivered(candidate.id); if (event.type === 'session') { store.recordSession(candidate.id, event.payload.session_id,context.member.runtime_id==='codex'?{provider:context.member.runtime_id,store_id:createHash('sha256').update(resolve(process.env.CODEX_HOME??join(homedir(),'.codex'))).digest('hex').slice(0,20),session_id:event.payload.session_id}:null); changed() } },
+        emit(event) { parts.emit(event); if(((event.type==='thinking'||event.type==='assistant_delta')&&event.payload?.text)||event.type==='activity_started')store.firstResponse(candidate.id,event.observedAt); if (event.type === 'turn_started') {store.inputDelivered(candidate.id);void deliverPending(candidate.id)} if (event.type === 'session') { store.recordSession(candidate.id, event.payload.session_id,context.member.runtime_id==='codex'?{provider:context.member.runtime_id,store_id:createHash('sha256').update(resolve(process.env.CODEX_HOME??join(homedir(),'.codex'))).digest('hex').slice(0,20),session_id:event.payload.session_id}:null); changed() } },
       })
       await refreshProjects(candidate.task_id)
     } catch (error) {
       result = { status: controller.signal.aborted ? 'canceled' : 'failed', error_code: error.code ?? 'LOOP_EXECUTION_FAILED', final_message: error.message }
       if(!claimed&&!controller.signal.aborted)store.failQueued(candidate.id,result)
     } finally {
+      if(active.get(candidate.id)?.deliveryPromise)await active.get(candidate.id).deliveryPromise
       parts.flush()
+      if(claimed){const task=store.detail(candidate.task_id);if(task.config.workflow==='conversation'&&task.config.resources?.length)store.recordProjectVersions(candidate.id,'end',await captureProjectVersions(task))}
+      if(claimed&&result){const report=store.formalReport(candidate.id);if(report?.evidence?.length)result.evidence_checks=await Promise.all(report.evidence.map(value=>checkEvidence(store.detail(candidate.task_id),value)))}
       await handle?.close().catch(() => {})
       const exited = lease ? await lease.releaseWhenExited(pid) : true
       if (claimed) {
@@ -120,18 +124,72 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
   async function pump() {
     if (pumping || stopping || !baseUrl) return
     pumping = true
+    pumpFinished=new Promise(resolve=>{finishPump=resolve})
     try {
-      for (const candidate of store.queued()) {
-        if (active.size >= concurrency) break
+      const priority=candidate=>Math.floor((Date.now()-Date.parse(candidate.created_at))/30000)+(['lead'].includes(candidate.routing?.intent)||candidate.routing?.message_kind==='ask'||candidate.routing?.message_kind==='user'?2:0)
+      const page=store.queued({after:queueCursor})
+      queueCursor=page.at(-1)?.queue_cursor??0
+      for (const candidate of page.sort((a,b)=>priority(b)-priority(a)||a.created_at.localeCompare(b.created_at))) {
         if (active.has(candidate.id)) continue
+        const coordination=(candidate.routing?.intent==='lead'||candidate.routing?.message_kind==='ask')&&(!candidate.routing?.resource_scope||candidate.routing.resource_scope.access==='none')
+        if([...active.values()].filter(entry=>entry.coordination===coordination).length>=(coordination?coordinationConcurrency:concurrency))continue
         const controller = new AbortController()
-        const entry = { controller, promise: null, taskId:candidate.task_id }
+        let lease
+        try{
+          await refreshProjects(candidate.task_id)
+          const context=store.context(candidate.id),scope=candidate.routing?.resource_scope
+          const projects=scope?.projects?scope.projects.map(index=>context.task.config.resources[index-1]?.workspace).filter(Boolean):context.task.config.resources?.map(resource=>resource.workspace)??[]
+          const access=scope?.access??(coordination?'none':candidate.phase==='implementing'?'write':'read')
+          lease=await resources.wait({owner:'collaboration',runId:candidate.id,workspace:context.task.workspace,workspaces:[context.task.workspace,...(access==='none'?[]:projects)],access:access==='write'?'write':context.task.config.workflow==='conversation'?'observe':'read',signal:controller.signal,immediate:true})
+          if(!lease){store.resourceWaiting?.(candidate.id);continue}
+        }catch(error){if(stopping)break;store.failQueued(candidate.id,{status:'failed',error_code:error.code??'LOOP_WORKSPACE_UNAVAILABLE',final_message:error.message});changed();continue}
+        if(stopping){await lease.releaseWhenExited(null);break}
+        const entry = { controller, promise: null, taskId:candidate.task_id,coordination,interactive:null,deliveryPromise:null,deferredDeliveryIds:new Set() }
         active.set(candidate.id, entry)
-        entry.promise = execute(candidate, controller)
+        entry.promise = execute(candidate, controller,lease)
       }
-    } finally { pumping = false }
+    } finally { pumping = false;finishPump?.() }
   }
-  function wake() { if (!stopping) void pump() }
+  function wake() { if (!stopping){void pump();for(const id of active.keys())void deliverPending(id)} }
+  async function reconcileDelivery(row) {
+    const run=store.run(row.delivery.run_id),task=store.detail(run.task_id)
+    if(!run.session_id||!row.delivery.marker)return {state:'unknown'}
+    const definition=registry.get(store.room(task.room_id).members.find(member=>member.id===run.member_id)?.runtime_id??run.member_snapshot?.runtime_id)
+    if(!definition.readConversation)return {state:'unknown'}
+    try{
+      const history=await definition.readConversation({launch:await registry.resolve(definition.id),run:{session_id:run.session_id,snapshot:{workspace:task.workspace}}})
+      if(history.messages?.some(message=>message.role==='user'&&message.text?.includes(row.delivery.marker))){store.recordDelivery(run.id,[row.id],'delivered',{marker:row.delivery.marker,mode:row.delivery.mode,reconciled:true});changed();return{state:'delivered'}}
+    }catch{}
+    return {state:'unknown'}
+  }
+  async function deliverPending(runId) {
+    const entry=active.get(runId)
+    if(!entry?.interactive?.steerable||entry.controller.signal.aborted||entry.deliveryPromise)return
+    entry.deliveryPromise=(async()=>{
+      for(const pending of store.pendingDeliveries(runId)){
+        if(entry.deferredDeliveryIds.has(pending.id))continue
+        if(entry.controller.signal.aborted||!entry.interactive.steerable)break
+        const marker=`[Rillo input ${pending.id}]`,message=store.room(store.detail(entry.taskId).room_id).messages.find(value=>value.id===pending.message_id)
+        const source=!message&&pending.source_run_id?store.run(pending.source_run_id):null
+        const report=source?store.formalReport(source.id):null
+        if(!message&&!source)continue
+        const input=message?{message_id:message.id,kind:pending.payload.message_kind,from:message.author,reply_to_message_id:message.reply_to_message_id,assignment_id:message.assignment_id,text:message.text,attachments:message.attachments}:{kind:'result',from:source.member_id,assignment_id:pending.payload.assignment_id,source_run_id:source.id,status:source.status,error_code:source.error_code,report:report?{id:report.id,version:report.version,excerpt:report.content.slice(0,2000),read:'read_context(section=reports,report_id,version,offset)'}:null}
+        store.recordDelivery(runId,[pending.id],'sending',{marker,mode:'steer'})
+        try{
+          for(const attachment of message?.attachments??[])await readRoomAttachment(attachment,{extract:false})
+          await entry.interactive.steer({expectedTurnRevision:entry.interactive.turnRevision,text:`${marker}\n${JSON.stringify(input)}\nThis is additional input for your current team work. Delivery alone does not resolve work. For a question, reply with its message link or include answered_message_ids in your formal report. For a result, read the cited report and continue only your unfinished work; do not send a receipt acknowledgement.`,images:(message?.attachments??[]).filter(value=>value.media_type.startsWith('image/')).map(value=>value.path)})
+          store.recordDelivery(runId,[pending.id],'delivered',{marker,mode:'steer'})
+        }catch(error){
+          store.recordDelivery(runId,[pending.id],error.delivery_unknown?'unknown':'pending',{marker,mode:'steer',error_code:error.code??'LOOP_DELIVERY_FAILED'})
+          if(!error.delivery_unknown)entry.deferredDeliveryIds.add(pending.id)
+          if(error.delivery_unknown)await reconcileDelivery({...pending,delivery:{run_id:runId,marker}})
+          break
+        }
+        changed()
+      }
+    })().catch(error=>console.error('Teams input delivery failed:',error.code??error.message)).finally(()=>{entry.deliveryPromise=null;store.schedulePending(entry.taskId,[store.run(runId).member_id]);void pump()})
+    return entry.deliveryPromise
+  }
   async function recoverDefinitionDeletions(roomId=null){
     const jobs=store.database.prepare('SELECT * FROM loop_definition_deletions WHERE (? IS NULL OR room_id=?)').all(roomId,roomId)
     for(const job of jobs){
@@ -206,7 +264,8 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     changed(); wake(); return value
   }
   async function close() {
-    stopping = true; clearInterval(timer)
+    stopping = true
+    await pumpFinished; clearInterval(timer)
     for (const entry of active.values()) entry.controller.abort()
     await Promise.allSettled([...active.values()].map(entry => entry.promise))
     live.close()
@@ -259,6 +318,13 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     try { return await operation } finally { if (messageQueues.get(roomId) === tail) messageQueues.delete(roomId) }
   }
   async function requestAction(id,input) {
+    if(input.action==='reconcile_delivery'){
+      const context=store.context(id),row=store.deliveryRows(context.task.id).find(value=>value.id===input.inbox_id)
+      if(!row||context.run.member_id!==context.task.config.leader&&row.member_id!==context.run.member_id)throw loopError('LOOP_NOT_FOUND','投递记录不属于当前工作',404)
+      if(row.delivery.state==='delivered')return{accepted:true,state:'delivered'}
+      if(row.delivery.state!=='unknown')throw loopError('LOOP_STATE_CONFLICT','只有结果不明的投递需要对账',409)
+      return {accepted:true,...await reconcileDelivery(row)}
+    }
     if(input.action!=='prepare_projects'){const value=store.requestAction(id,input);changed();return value}
     const context=store.projectContext(id,input),bound=context.task.config.resources??[]
     const paths=await canonicalWorkspaces(input.workspaces.map(path=>{
@@ -324,7 +390,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     },
     async restoreRoom(input) {const workspaces=input.workspaces?.length?await canonicalWorkspaces(input.workspaces):[];const id=await store.memory.restore({...input,workspaces,default_root:memoryRoot});changed();return store.room(id)},
     async flushMemory(roomId){try{return await store.memory.flush(roomId)}finally{changed()}},
-    readContext(id,input={}) {if(input.section==='attachment'){const room=store.context(id).task.room_id;const message=store.database.prepare('SELECT attachments_json FROM loop_messages WHERE id=? AND room_id=?').get(input.source_message_id??'',room);const attachment=JSON.parse(message?.attachments_json??'[]')[input.attachment_index??0];if(!attachment)throw loopError('LOOP_NOT_FOUND','文件引用不属于此团队',404);const offset=input.offset??0;if(!Number.isSafeInteger(offset)||offset<0)throw loopError('LOOP_INPUT_INVALID','文件读取位置无效');return {...attachment,text:attachment.text?.slice(offset,offset+12000),next_offset:attachment.text?.length>offset+12000?offset+12000:null}};return input.section==='artifact'?store.memory.readArtifact(store.context(id).task.room_id,input):store.readContext(id,input)},
+    async readContext(id,input={}) {if(input.section==='evidence'){const context=store.context(id);return store.recordEvidence(id,await readEvidence(context.task,input.reference,input))};if(input.section==='attachment'){const room=store.context(id).task.room_id;const message=store.database.prepare('SELECT attachments_json FROM loop_messages WHERE id=? AND room_id=?').get(input.source_message_id??'',room);const attachment=JSON.parse(message?.attachments_json??'[]')[input.attachment_index??0];if(!attachment)throw loopError('LOOP_NOT_FOUND','文件引用不属于此团队',404);const offset=input.offset??0;if(!Number.isSafeInteger(offset)||offset<0)throw loopError('LOOP_INPUT_INVALID','文件读取位置无效');return {...attachment,text:attachment.text?.slice(offset,offset+12000),next_offset:attachment.text?.length>offset+12000?offset+12000:null}};return input.section==='artifact'?store.memory.readArtifact(store.context(id).task.room_id,input):store.readContext(id,input)},
     catalogSources:()=>{if(!catalog)throw loopError('AGENT_CATALOG_UNAVAILABLE','Agent目录尚未初始化',503);return {sources:catalog.sources()}},
     catalog: async (source,options={}) => { if (!catalog) throw loopError('AGENT_CATALOG_UNAVAILABLE', 'Agent目录尚未初始化', 503); return source === 'local' ? catalogOperation(async()=>{await recoverCatalogDeletions(true);return catalog.local()}) : catalog.marketplace(source,options) },
     agentDefinition: (id, runtimeId) => catalog.get(id, runtimeId),
@@ -358,7 +424,13 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       const artifacts = input.artifacts ?? []
       if (!Array.isArray(artifacts) || artifacts.length > 32 || artifacts.some(path => typeof path !== 'string' || !path.trim() || path.includes('\0') || path.length > 2048 || isAbsolute(path) || path.split(/[\\/]/).includes('..'))) throw loopError('LOOP_ARTIFACT_INVALID', '产物须为工作目录内的相对文件路径')
       for (const path of artifacts) await resolveCollaborationArtifact(context.task,path).catch(error=>{throw loopError(error.code==='ENOENT'?'LOOP_ARTIFACT_MISSING':error.code??'LOOP_ARTIFACT_INVALID',`无法读取产物：${path}`)})
-      const value = store.submit(id, input); changed(); return value
+      if(input.evidence_ids!==undefined&&(!Array.isArray(input.evidence_ids)||input.evidence_ids.length>64||input.evidence_ids.some(value=>typeof value!=='string')))throw loopError('LOOP_INPUT_INVALID','证据标识列表无效')
+      if(input.findings!==undefined&&(!Array.isArray(input.findings)||input.findings.length>32||input.findings.some(value=>!value||typeof value.id!=='string'||!value.id||value.id.length>128||typeof value.text!=='string'||!value.text||value.text.length>2000||!Array.isArray(value.evidence_ids)||value.evidence_ids.length>64||value.evidence_ids.some(id=>typeof id!=='string'))))throw loopError('LOOP_INPUT_INVALID','审查发现及证据引用无效')
+      const findingIds=(input.findings??[]).flatMap(value=>value.evidence_ids??[])
+      const ids=[...new Set([...(input.evidence_ids??[]),...findingIds])]
+      const evidence=await Promise.all(store.evidenceForRun(id,ids).map(value=>checkEvidence(context.task,value)))
+      const findings=(input.findings??[]).map(finding=>({...finding,review_state:!finding.evidence_ids?.length?'unverified':finding.evidence_ids.some(key=>evidence.find(value=>value.id===key)?.state!=='unchanged_since_read')?'needs_recheck':'evidence_version_current',checked_at:new Date().toISOString()}))
+      const value = store.submit(id,{...input,evidence,findings}); changed(); return value
     },
     progress(id, input) { const value = store.progress(id, input); changed(); return value },
     requestAction, createTask, control, start, close, copyRoom,

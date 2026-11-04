@@ -1,4 +1,5 @@
 import { loopError } from './errors.mjs'
+import { conversationWork } from './board/conversation-work.mjs'
 const COLUMNS = new Set(['backlog','working','review','done'])
 const TYPES = new Set(['task','bug','review','note'])
 function text(value, max) { if (typeof value !== 'string' || !value.trim() || value.length>max || value.includes('\0')) throw loopError('LOOP_INPUT_INVALID','工作项内容无效'); return value.trim() }
@@ -7,7 +8,7 @@ export function createRoomBoard({db,clock,createId}) {
   function snapshot(id) {
     checkRoom(id)
     return { revision:db.prepare('SELECT revision FROM loop_boards WHERE room_id=?').get(id)?.revision??0,
-      items:db.prepare('SELECT id,room_id,number,name,column_id AS "column",owner_id,type,details,position,created_at,updated_at FROM loop_work_items WHERE room_id=? ORDER BY position,id').all(id) }
+      items:[...conversationWork(db,id),...db.prepare('SELECT id,room_id,number,name,column_id AS "column",owner_id,type,details,position,created_at,updated_at FROM loop_work_items WHERE room_id=? ORDER BY position,id').all(id)] }
   }
   function writable(id){checkRoom(id);const row=db.prepare('SELECT config_json FROM loop_rooms WHERE id=?').get(id);if(JSON.parse(row.config_json??'{}').dissolved_at)throw loopError('LOOP_ROOM_DISSOLVED','团队已解散，看板仅供查看',409)}
   function checkRevision(id,value) {writable(id); if(!Number.isSafeInteger(value)||snapshot(id).revision!==value) throw loopError('LOOP_BOARD_CONFLICT','看板已更新，请刷新后重试',409) }
@@ -28,13 +29,14 @@ export function createRoomBoard({db,clock,createId}) {
   }
   function reorder(id,input) {
     checkRevision(id,input.expected_revision)
-    const current=snapshot(id).items, items=input.items
+    const current=snapshot(id).items.filter(item=>!item.tracking), items=input.items
     if(!Array.isArray(items)||items.length!==current.length||new Set(items.map(item=>item?.id)).size!==current.length||items.some(item=>!current.some(row=>row.id===item?.id)))throw loopError('LOOP_INPUT_INVALID','看板排序须包含当前团队的全部工作项')
     for(const [index,item] of items.entries()) db.prepare('UPDATE loop_work_items SET column_id=?,position=?,updated_at=? WHERE id=? AND room_id=?').run(column(item.column),index,new Date(clock()).toISOString(),item.id,id)
     return bump(id)
   }
   function update(id,itemId,input) {
     checkRevision(id,input.expected_revision)
+    if(itemId.startsWith('assignment-')||itemId.startsWith('task-'))throw loopError('LOOP_WORK_TRACKED','会话工作由实际执行更新，请在对话中调整')
     const item=snapshot(id).items.find(row=>row.id===itemId)
     if(!item)throw loopError('LOOP_NOT_FOUND','工作项不存在',404)
     const details=input.details===undefined?item.details:input.details

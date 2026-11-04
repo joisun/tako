@@ -32,7 +32,7 @@ export function createCodexInteractiveSessionFactory({
 
 function createSession({
   launch, run, signal, emit, onSpawn, createClient, resolveCapabilityLaunch,
-  setTimer, clearTimer, random, logs,
+  setTimer, clearTimer, random, logs,onContinuation=()=>{},
 }) {
   if (typeof launch?.executable !== 'string' || !run || typeof run !== 'object'
     || typeof run.workspace !== 'string' || typeof run.prompt !== 'string'
@@ -48,6 +48,7 @@ function createSession({
   let turnId = null
   let turnRevision = 0
   let finalMessage = ''
+  const formalMessages=new Map(),hookMessages=new Map()
   let automaticContinuation = false
   let usage = null
   let retryTimer = null
@@ -112,7 +113,7 @@ function createSession({
       if (params?.threadId !== threadId || params?.turnId !== turnId
         || typeof params?.item?.id !== 'string') return
       const item = params.item
-      if (item.type==='hookPrompt') { automaticContinuation = true; return }
+      if (item.type==='hookPrompt') { automaticContinuation = true;onContinuation({origin:'hook'});return }
       if (method==='item/started' && item.type==='agentMessage') safeEmit(emit,{type:'assistant_delta',payload:{item_id:item.id,text:'',delta:false,phase:item.phase,origin:automaticContinuation?'hook':'agent'}})
       if (!READ_ONLY_ITEMS.has(item.type)) {
         if (method === 'item/started') pendingOperations.add(item.id)
@@ -123,7 +124,11 @@ function createSession({
       }
       if (method === 'item/completed' && item.type === 'agentMessage'
         && typeof item.text === 'string') {
-        finalMessage = appendBounded('', item.text, FINAL_MESSAGE_BYTES)
+        if(automaticContinuation)hookMessages.set(item.id,{id:item.id,text:item.text,phase:item.phase,origin:'hook'})
+        else{
+          if(item.phase==='final_answer'||!item.phase)formalMessages.set(item.id,{id:item.id,text:item.text,phase:item.phase,origin:'agent',observed_at:new Date().toISOString()})
+          finalMessage = appendBounded('', item.text, FINAL_MESSAGE_BYTES)
+        }
         safeEmit(emit,{type:'assistant_delta',payload:{item_id:item.id,text:item.text,delta:false,state:'completed',phase:item.phase,origin:automaticContinuation?'hook':'agent'}})
       }
       if (method === 'item/completed' && item.type === 'fileChange'
@@ -297,16 +302,18 @@ function createSession({
     try { Promise.resolve(logs?.writeStderr?.(JSON.stringify(value) + '\n')).catch(() => {}) } catch {}
   }
 
-  async function steer({ expectedTurnRevision, text } = {}) {
+  async function steer({ expectedTurnRevision, text, images=[] } = {}) {
     assertCurrentTurn(expectedTurnRevision)
     if (typeof text !== 'string' || text.trim() === '') {
       throw sessionError('INTERVENTION_INVALID')
     }
-    await client.request('turn/steer', {
-      threadId,
-      expectedTurnId: turnId,
-      input: [{ type: 'text', text }],
-    })
+    const expectedTurnId=turnId
+    try{
+      const response=await client.request('turn/steer', {
+        threadId,expectedTurnId,input:[{type:'text',text},...images.map(path=>({type:'localImage',path}))],
+      })
+      if(response?.turnId!==expectedTurnId)throw sessionError('RUNTIME_PROTOCOL_INVALID')
+    }catch(error){error.delivery_unknown=true;throw error}
     safeEmit(emit, {
       type: 'intervention_accepted',
       payload: { turn_revision: turnRevision, text: text.trim() },
@@ -344,6 +351,7 @@ function createSession({
     client?.close()
     resolveCompletion({
       ...result,
+      ...(formalMessages.size?{formal_messages:[...formalMessages.values()]}:{}),...(hookMessages.size?{hook_messages:[...hookMessages.values()]}:{}),
       session_id: threadId ?? result.session_id,
       final_message: result.final_message ?? (finalMessage || null),
       file_changes: [...fileChanges.values()],

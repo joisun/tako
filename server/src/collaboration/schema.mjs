@@ -36,7 +36,7 @@ export function createCollaborationSchema(db) {
     CREATE INDEX IF NOT EXISTS loop_events_task ON loop_events(task_id,sequence);
   `)
   const version = db.prepare('SELECT version FROM loop_schema').get()?.version
-  if (version != null && ![1, 2, 3, 4, 5, 6].includes(version)) throw Object.assign(new Error('Unsupported collaboration schema'), { code: 'LOOP_SCHEMA_UNSUPPORTED' })
+  if (version != null && ![1, 2, 3, 4, 5, 6, 7].includes(version)) throw Object.assign(new Error('Unsupported collaboration schema'), { code: 'LOOP_SCHEMA_UNSUPPORTED' })
   // Historical executions retain immutable identities independently of live membership.
   if (version != null && version < 5) {
     db.exec('PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE')
@@ -60,6 +60,11 @@ export function createCollaborationSchema(db) {
       message_id TEXT REFERENCES loop_messages(id), source_run_id TEXT REFERENCES loop_runs(id), reason TEXT NOT NULL,
       request_key TEXT NOT NULL UNIQUE, consumed_by TEXT REFERENCES loop_runs(id), revision INTEGER NOT NULL, payload_json TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS loop_inbox_pending ON loop_inbox(task_id,member_id,consumed_by);`)
+    for(const [table,column,definition] of [
+      ['loop_messages','intent','TEXT'],['loop_messages','reply_to_message_id','TEXT'],['loop_messages','assignment_id','TEXT'],
+      ['loop_inbox','delivery_json',`TEXT NOT NULL DEFAULT '{"state":"pending"}'`],
+      ['loop_inbox','processing_json',`TEXT NOT NULL DEFAULT '{"state":"pending"}'`],
+    ])if(!db.prepare(`PRAGMA table_info(${table})`).all().some(item=>item.name===column))db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
     db.exec(`CREATE TABLE IF NOT EXISTS loop_boards (room_id TEXT PRIMARY KEY REFERENCES loop_rooms(id), revision INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS loop_work_items (
         id TEXT PRIMARY KEY, room_id TEXT NOT NULL REFERENCES loop_rooms(id), number INTEGER NOT NULL,
@@ -87,8 +92,8 @@ export function createCollaborationSchema(db) {
     db.exec("CREATE TABLE IF NOT EXISTS loop_definition_deletions (id TEXT PRIMARY KEY,room_id TEXT NOT NULL,member_id TEXT NOT NULL,files_json TEXT NOT NULL,state TEXT NOT NULL)")
     db.exec("UPDATE loop_runs SET member_snapshot_json=(SELECT json_object('id',m.id,'name',m.name,'runtime_id',m.runtime_id,'avatar',json(m.avatar_json)) FROM loop_members m WHERE m.id=loop_runs.member_id) WHERE member_snapshot_json IS NULL")
     db.exec("CREATE TABLE IF NOT EXISTS loop_catalog_deletions (id TEXT PRIMARY KEY,definition_id TEXT NOT NULL,files_json TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('staging','committed')))")
-    if (version == null) db.prepare('INSERT INTO loop_schema VALUES (6)').run()
-    else db.prepare('UPDATE loop_schema SET version=6').run()
+    if (version == null) db.prepare('INSERT INTO loop_schema VALUES (7)').run()
+    else db.prepare('UPDATE loop_schema SET version=7').run()
     db.exec('COMMIT')
   } catch (error) { db.exec('ROLLBACK'); throw error }
 }

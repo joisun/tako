@@ -27,7 +27,7 @@ export function createExecutionResourceCoordinator({ database, isAlive = process
       const claims = database.prepare('SELECT * FROM execution_resources').all()
       const own = claims.find(row => row.owner === owner && row.run_id === runId)
       if (own) throw Object.assign(new Error('Execution already has a resource claim'), { code: 'EXECUTION_ALREADY_CLAIMED' })
-      if (claims.some(row => (access !== 'read' || row.access !== 'read' || row.state === 'unknown') && workspaces.some(path=>overlaps(row.workspace, path)))) {
+      if (claims.some(row => (row.state==='unknown'||access!=='observe'&&row.access!=='observe'&&(access !== 'read' || row.access !== 'read')) && workspaces.some(path=>overlaps(row.workspace, path)))) {
         database.exec('COMMIT')
         return null
       }
@@ -49,8 +49,9 @@ export function createExecutionResourceCoordinator({ database, isAlive = process
     }
   }
 
-  async function wait({ owner, runId, workspace, workspaces = [workspace], signal, access = 'write' }) {
+  async function wait({ owner, runId, workspace, workspaces = [workspace], signal, access = 'write', immediate = false }) {
     const canonical = [...new Set(await Promise.all(workspaces.map(path=>realpath(path))))].sort()
+    if(immediate)return signal.aborted?null:acquire({owner,runId,workspaces:canonical,access})
     while (!signal.aborted) {
       const claim = acquire({ owner, runId, workspaces: canonical, access })
       if (claim) return claim

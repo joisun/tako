@@ -16,7 +16,7 @@ import {messageTimeline,activitySections,OPEN_RUNS,isPartStreaming,type TeamTime
 import type {LoopMember,LoopPart,LoopRoomDetail,LoopTaskDetail,LoopRun} from '@/lib/api/loop-types'
 const markdownComponents={pre:MarkdownCodeBlock,a:({href,children}:ComponentProps<'a'>)=><InlineCitationLink href={href??''}>{children}</InlineCitationLink>}
 function runLabel(run:LoopRun){
-  if(run.status==='queued')return '等待执行'
+  if(run.status==='queued')return run.timing?.waiting_for_resources?'已安排，等待目录可用':'已安排，等待执行'
   if(run.status==='unknown')return '执行状态待核对'
   if(run.status==='stopping')return '正在停止'
   if(run.status==='starting'&&!run.session_id)return '正在启动客户端'
@@ -64,11 +64,12 @@ function ToolPart({part,run}:{part:LoopPart;run:LoopRun}){
   const state=toolState(part,run)
   return <Tool open={open} onOpenChange={setOpen}><ToolHeader title={toolTitle(part)} state={state} icon={part.files?.length?FileText:/^Command(?:\s*·|$)/.test(part.label??'')?Terminal:Wrench}/><ToolContent><small>{part.label}</small>{part.files?.length?<ul className="team-file-changes">{part.files.map(file=><li key={file.path}><span>{{add:'新增',update:'修改',delete:'删除'}[file.kind]}</span><code>{file.path}</code></li>)}</ul>:null}<ToolInput input={part.input}/><ToolOutput output={part.output}/>{part.truncated?<small>内容较长，当前展示部分记录。</small>:null}</ToolContent></Tool>
 }
+function duration(value:number|null){return value==null?'未记录':`${(value/1000).toLocaleString('zh-CN',{maximumFractionDigits:1})} 秒`}
 function RunUsage({run}:{run:LoopRun}){
   const usage=run.parts?.find(part=>part.type==='usage')?.usage??run.result?.usage
-  if(!usage?.total||!usage.last)return null
+  if((!usage?.total||!usage.last)&&!run.timing)return null
   const count=(value:number|undefined)=>value==null?'—':value.toLocaleString('zh-CN')
-  return <Popover><PopoverTrigger className="team-usage-trigger" aria-label="查看用量" title="查看用量"><Gauge/></PopoverTrigger><PopoverContent className="team-usage-detail"><strong>原生会话用量</strong><dl><dt>累计 Token</dt><dd>{count(usage.total.totalTokens)}</dd><dt>输入 / 输出</dt><dd>{count(usage.total.inputTokens)} / {count(usage.total.outputTokens)}</dd><dt>缓存输入</dt><dd>{count(usage.total.cachedInputTokens)}</dd><dt>最近一次上下文</dt><dd>{count(usage.last.totalTokens)}{usage.modelContextWindow?` / ${count(usage.modelContextWindow)}`:''}</dd></dl></PopoverContent></Popover>
+  return <Popover><PopoverTrigger className="team-usage-trigger" aria-label="查看用量" title="查看用量"><Gauge/></PopoverTrigger><PopoverContent className="team-usage-detail"><strong>执行与用量</strong><dl>{run.timing?<><dt>排队时间</dt><dd>{duration(run.timing.queued_ms)}</dd><dt>等待目录</dt><dd>{duration(run.timing.resource_wait_ms)}</dd><dt>客户端准备</dt><dd>{duration(run.timing.startup_ms??null)}</dd><dt>等待首次模型输出</dt><dd>{duration(run.timing.model_wait_ms)}</dd><dt>处理时间</dt><dd>{duration(run.timing.processing_ms)}</dd></>:null}<dt>累计 Token</dt><dd>{count(usage?.total.totalTokens)}</dd><dt>输入 / 输出</dt><dd>{count(usage?.total.inputTokens)} / {count(usage?.total.outputTokens)}</dd><dt>缓存输入</dt><dd>{count(usage?.total.cachedInputTokens)}</dd><dt>最近一次上下文</dt><dd>{count(usage?.last.totalTokens)}{usage?.modelContextWindow?` / ${count(usage?.modelContextWindow)}`:''}</dd></dl></PopoverContent></Popover>
 }
 function UntimedRun({run}:{run:LoopRun}){
   const [open,setOpen]=useState(false)

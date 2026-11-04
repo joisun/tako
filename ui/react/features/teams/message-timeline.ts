@@ -32,15 +32,15 @@ function loopReceipt(part:LoopPart){
       receipt=JSON.parse(text)
     }
     if(!receipt||typeof receipt!=='object'||!('accepted' in receipt)||receipt.accepted!==true)return null
-    return {name,messageId:'message_id' in receipt&&typeof receipt.message_id==='string'?receipt.message_id:null,runId:'run_id' in receipt&&typeof receipt.run_id==='string'?receipt.run_id:null}
+    return {name,reused:'reused' in receipt&&receipt.reused===true,messageId:'message_id' in receipt&&typeof receipt.message_id==='string'?receipt.message_id:null,runId:'run_id' in receipt&&typeof receipt.run_id==='string'?receipt.run_id:null}
   }catch{return null}
 }
 function resultRecipients(run:LoopRun,task:LoopTaskDetail|undefined){
   const leader=task?.config?.leader
-  if(task?.config?.workflow!=='conversation'||!leader||run.member_id===leader)return []
-  const recipients=[leader],parent=task.runs.find(value=>value.id===run.routing?.parent_run_id)
-  if(run.routing?.reply_expected&&parent&&parent.member_id!==run.member_id&&!recipients.includes(parent.member_id))recipients.unshift(parent.member_id)
-  return recipients
+  if(task?.config?.workflow!=='conversation'||!leader)return []
+  if(task.inbox)return [...new Set(task.inbox.filter(item=>item.source_run_id===run.id&&item.kind==='reply').map(item=>item.member_id))].filter(id=>id!==run.member_id)
+  const parent=task.runs.find(value=>value.id===run.routing?.parent_run_id)
+  return run.routing?.reply_expected&&parent&&parent.member_id!==run.member_id?[parent.member_id]:[]
 }
 export function messageTimeline(room:LoopRoomDetail,task?:LoopTaskDetail){
   const runs=new Map(task?.runs.map(run=>[run.id,run])??[])
@@ -50,7 +50,7 @@ export function messageTimeline(room:LoopRoomDetail,task?:LoopTaskDetail){
     let submitted=-1
     for(const [index,part]of parts.entries()){
       const receipt=loopReceipt(part)
-      if(receipt?.name==='send_message'&&room.messages.some(message=>message.id===receipt.messageId&&message.run_id===run.id))hidden.add(part)
+      if(receipt?.name==='send_message'&&(receipt.reused||room.messages.some(message=>message.id===receipt.messageId&&message.run_id===run.id)))hidden.add(part)
       if(receipt?.name==='submit_result'&&receipt.runId===run.id&&submission){hidden.add(part);if(submitted<0)submitted=index}
     }
     if(!submission&&run.status==='succeeded'){

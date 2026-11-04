@@ -335,14 +335,14 @@ Geist Sans/Mono 的拉丁字集 WOFF2 随 esbuild 以 data URL 内嵌，中文�
 
 源码合同见[Agent Loop 架构与接口](agent-loop.md)。同一 daemon 在 scheduler.sqlite 中添加独立版本的 loop_* 表及 execution_resources，Scheduled 表和公开接口不变。daemon 持有共享 SQLite 连接并最终关闭，RunStore 不关闭外部注入的连接。RunService 与协作运行时共用 agent-execution 和底层 supervisor，不互相包装。
 
-团队以用户消息建立内部任务，Leader 按依赖委派成员并根据回报继续工作。 Teams 工具、协作执行详情及历史过程展示采用 shadcn/ui Base UI Trace 组合，参数与结果按需展开；reasoning、tool、正文继续按真实事件顺序展示。Teams 消息、滚动和输入已使用官方 shadcn Message/Bubble、Message Scroller 和 Input Group，代码块使用 Code Block，摘要流式效果使用纯 CSS shimmer；剩余定义、来源及附件业务适配继续复用；不引入 AI SDK 执行或第二套组件运行时。消息、持久 inbox、outbox 及后续派发使用事务。Agent 定义来自本地全局目录、ECC 或 Agency Agents 在线目录；市场来源由服务端返回，目录按来源独立缓存并可手动刷新，定义和导入记录固定到具体 commit。市场导入原子写入真实共享 Agent 目录后才允许加入团队，成员执行配置与定义快照分别保存。Teams 看板使用独立的 loop_boards、loop_work_items 和 revision 保存人工工作项，不把卡片当作 Agent Task 或 Run。协作 loop_schema 为 5，Scheduled user_version 保持 4。六个 Run 专用 MCP 工具为 read_context、remember、send_message、submit_result、request_action、report_progress。成员续接自己的原生会话，按成功投递游标读取新增输入；完整历史通过有界分页工具读取，关键决定及摘要保留来源。SQLite 保存共享事实、执行索引和未导出版本；服务管理的资料目录异步备份完整团队与文件快照，失败不阻断协作。团队只需名称；服务为新任务分配稳定内部目录，独立新应用可直接在内部目录实现，已有项目和分支由 Leader 根据任务及已有上下文通过 prepare_projects 为当前任务准备，不校验路径字符串是否出现在某一条用户消息中，也不要求重复确认；恢复不重放旧执行。旧固定阶段记录继续按原流程执行，新聊天使用 conversation 工作流。
+团队以用户消息建立内部任务，Leader 按依赖委派成员并根据回报继续工作。 Teams 工具、协作执行详情及历史过程展示采用 shadcn/ui Base UI Trace 组合，参数与结果按需展开；reasoning、tool、正文继续按真实事件顺序展示。Teams 消息、滚动和输入已使用官方 shadcn Message/Bubble、Message Scroller 和 Input Group，代码块使用 Code Block，摘要流式效果使用纯 CSS shimmer；剩余定义、来源及附件业务适配继续复用；不引入 AI SDK 执行或第二套组件运行时。消息、持久 inbox、outbox 及后续派发使用事务。Agent 定义来自本地全局目录、ECC 或 Agency Agents 在线目录；市场来源由服务端返回，目录按来源独立缓存并可手动刷新，定义和导入记录固定到具体 commit。市场导入原子写入真实共享 Agent 目录后才允许加入团队，成员执行配置与定义快照分别保存。Teams 看板保留 loop_boards、loop_work_items 和 revision 保存人工记录；board/conversation-work.mjs 从已有 Task、inbox、Run、消息及版本化报告生成只读会话卡片，无额外数据表或模型调用。卡片关联原工作，成员续接不按 Run 重复建卡；普通消息和提问不另建卡片，相关问答进入工作详情。状态区分排队、目录等待、执行、阻塞、报告交付与验收结论。人工排序接口仅接收人工 ID，会话卡片不允许伪造状态；Task 事件和全局失效通知刷新看板，人工 revision 不承担执行版本。协作 loop_schema 为 7，Scheduled user_version 保持 4。六个 Run 专用 MCP 工具为 read_context、remember、send_message、submit_result、request_action、report_progress。成员续接自己的原生会话，按成功投递游标读取新增输入；完整历史通过有界分页工具读取，关键决定及摘要保留来源。SQLite 保存共享事实、执行索引和未导出版本；服务管理的资料目录异步备份完整团队与文件快照，失败不阻断协作。团队只需名称；服务为新任务分配稳定内部目录，独立新应用可直接在内部目录实现，已有项目和分支由 Leader 根据任务及已有上下文通过 prepare_projects 为当前任务准备，不校验路径字符串是否出现在某一条用户消息中，也不要求重复确认；恢复不重放旧执行。旧固定阶段记录继续按原流程执行，新聊天使用 conversation 工作流。
 
-新任务的 CLI 始终使用服务管理的内部目录。项目执行可选择隔离新分支、继续已有本地分支或明确复用原目录，记录实际目录、分支、起点及 dirty 状态；原子取得内部目录及全部项目目录的占用。Teams 的 Codex 在新建、恢复线程和每轮执行中使用完整访问，不再按角色限制到工作目录白名单；不修改客户端全局配置、Scheduled 或旧固定阶段任务。项目绑定可在同一任务显式更新，并保存稳定 Git 管理目录与相对路径；执行前后刷新改名或移动后的分支和 worktree，保留项目顺序与原生会话。Leader 按任务检查真实实现与验证证据，不强制独立验证 Run；未结束成员仍需完成或明确处理。暂停或改目标撤销 Run 凭据，重启不重放已领取的执行。PID 未知或旧进程仍存活时，不释放目录占用。当前 Codex 消息驱动交付已实测，Claude 讨论与审阅适配仍缺少模型侧成功证据，不开放 Claude 实施。
+新任务的 CLI 始终使用服务管理的内部目录。项目执行可选择隔离新分支、继续已有本地分支或明确复用原目录，记录实际目录、分支、起点及 dirty 状态；按实际 resource_scope 原子取得所需目录占用，目录等待不占运行名额。Teams 的 Codex 在新建、恢复线程和每轮执行中使用完整访问，不再按角色限制到工作目录白名单；不修改客户端全局配置、Scheduled 或旧固定阶段任务。项目绑定可在同一任务显式更新，并保存稳定 Git 管理目录与相对路径；执行前后刷新改名或移动后的分支和 worktree，保留项目顺序与原生会话。Leader 按任务检查真实实现与验证证据，不强制独立验证 Run；未结束成员仍需完成或明确处理。暂停或改目标撤销 Run 凭据，重启不重放已领取的执行。PID 未知或旧进程仍存活时，不释放目录占用。当前 Codex 消息驱动交付已实测，Claude 讨论与审阅适配仍缺少模型侧成功证据，不开放 Claude 实施。
 
-这是未发布分支的源码合同，既有 Release 与安装版不会随之更新。验证范围见[实施验证记录](job/agent-loop/03-phases.md)。
+这是当前未发布源码的合同，既有 Release 与安装版不会随之更新。验证范围见[实施验证记录](job/agent-loop/03-phases.md)。
 
 
-Teams 成员的 name/avatar 是团队身份，execution_config 保存模型与实际支持的 effort。用户显式 @ 直接派发，无收件人时由 Leader 承接；成员结果返回实际委派者并通知 Leader。讨论与验证共享目录读锁，Codex Leader、实施成员与 Scheduled 使用排他锁；depends_on 依赖完成后才派发。公开摘要、工具输入输出及状态保存在 Run.parts，图片/PDF 为服务端路径引用，详见 [Teams](agent-loop.md#成员身份运行内容与生命周期)。loop_schema=6 保留历史成员快照，并新增独立全局定义删除日志。团队成员菜单只移出当前团队；本地 Agent 目录才删除全局定义文件，所有团队成员继续使用定义快照。删除文件先确认 digest，暂存后按 staging/committed 日志恢复或清理；旧成员删除日志继续恢复。解散先停止本团队执行，保留历史，不改变其他团队。
+Teams 成员的 name/avatar 是团队身份，execution_config 保存模型与实际支持的 effort。用户显式 @ 直接派发，无收件人时由 Leader 承接；成员结果交回实际请求者，只有需要协调才通知 Leader。Teams 观察性审查允许并行编辑，实施按声明项目使用排他占用，Leader 统筹不因身份独占项目；depends_on 依赖完成后才派发。公开摘要、工具输入输出及状态保存在 Run.parts，图片/PDF 为服务端路径引用，详见 [Teams](agent-loop.md#成员身份运行内容与生命周期)。loop_schema=7 增加消息关联、投递与处理状态，保留版本 6 的历史成员快照和独立全局定义删除日志。团队成员菜单只移出当前团队；本地 Agent 目录才删除全局定义文件，所有团队成员继续使用定义快照。删除文件先确认 digest，暂存后按 staging/committed 日志恢复或清理；旧成员删除日志继续恢复。解散先停止本团队执行，保留历史，不改变其他团队。
 
 Teams 对话采用官方 shadcn Base UI 的 Message、Bubble、Message Scroller、Input Group、Code Block、Trace 与 shimmer；Reasoning、Tool、Task 和自动续轮组合复用 Trace，InlineCitation 保留真实来源适配；当前任务通过专属 SSE 接收规范化片段更新，初始和重连使用持久化快照校准，连接建立后停止任务级整份重查；约 180ms 的片段持久化批处理保留。Codex 公开 reasoning 请求 detailed 并保留分段，Token 与文件路径/状态同步，文件 diff 和原始推理不进入此链路。Tiptap Mention 继续使用稳定成员 ID。Agent 组件展示定义快照与配置，不接管运行时。导航顺序为 Sessions、Schedule、Teams；当前页面与接口使用 teams，旧 rooms 链接和接口保留已有数据兼容入口。团队解散/删除入口位于左侧列表；删除隐藏列表记录并保留原生会话及历史。
 
@@ -355,10 +355,30 @@ Sessions 通过 daemon 注入的 projectSessions 补充团队身份，不跨服�
 Teams 对话按动作首次观察时间合并文字、工具、公开摘要和带成员 ID 的消息，保留并行成员的交错顺序；连续同作者只共享显示头，不改变事件顺序。Run.parts 新增首次/最近时间及原生序号，历史 Codex 时间由公共组装层注入的只读时间适配器按精确 item ID 补充。适配器复用 inventory 和有界 journal 扫描，校验数据根目录及 Session/store 身份；时间缺失的历史内容单独标记，不用 Run 创建时间代替。仅连续同作者且同 Run 的公开摘要和工具片段收拢为可展开的过程，正文、真实提及或其他成员插入立即分段；流式过程中展开并保持已打开内容，结束不突然收起；历史默认收起，保留用户选择。正常内容不按整轮重排，@ 接收人直接显示在对应消息正文。结果控制回执不生成临时聊天占位；hook 续轮正文按原生来源折叠，不伪造收件人。SSE 忽略旧序号快照，断线保留已展示片段，REST 与重连合并不改已知首次时间。
 
 
-结果通过当前 Task 的精确 source_run_id 读取完整已保存公开正文，避免 UI 可见而其他成员只收到尾声。续接输入保存结果事件游标，仅补充新结果与有界索引；未改变的定义不重复注入。reply 与完成通知合并交接，先恢复委派者再调度 Leader。Leader 的 wait 不阻断未结束成员：排队或运行中的成员存在时 Task 保持 active，结果继续被接收；确实只剩用户输入时才进入 waiting。显式暂停、取消和修订的凭据撤销保持。conversation 恢复时保留未启动指派并更新其 generation，与恢复后的 Task 一致；不重建其 Run ID 或重跑已完成记录。Leader 自身只读与团队可委派实施分开说明，保留 sandbox、全局 hooks 和真实目录锁；Codex Skills/integrations 及未显式指定的网络策略继承客户端配置，不额外关闭。Teams 原生成功不强制 submit_result，公开答复可按 Run ID 读取并返回委派者，不伪造结构化验证。conversation 不再按默认 24 轮或 600 秒截断，旧固定阶段和 Schedule 的显式限制保留。
+结果通过当前 Task 的精确 source_run_id 读取完整已保存公开正文，避免 UI 可见而其他成员只收到尾声。续接输入保存结果事件游标，仅补充新结果与有界索引；未改变的定义不重复注入。reply 与完成通知合并交接，仅恢复需要继续原工作的实际请求者，不为每条完成确认再次调度 Leader。Leader 的 wait 不阻断未结束成员：排队或运行中的成员存在时 Task 保持 active，结果继续被接收；确实只剩用户输入时才进入 waiting。显式暂停、取消和修订的凭据撤销保持。conversation 恢复时保留未启动指派并更新其 generation，与恢复后的 Task 一致；不重建其 Run ID 或重跑已完成记录。Teams Codex 完整访问与角色调度分开，保留全局 hooks 和真实目录锁；Codex Skills/integrations 及未显式指定的网络策略继承客户端配置，不额外关闭。Teams 原生成功不强制 submit_result，公开答复可按 Run ID 读取并返回委派者，不伪造结构化验证。conversation 不再按默认 24 轮或 600 秒截断，旧固定阶段和 Schedule 的显式限制保留。
 
 ### Teams Agent 管理与 Marketplace
 
 全局 Agent 配置位于 view=teams&team_view=agents，由 App 将 MarketplaceView 注入 TeamsView 组合；feature 之间不互相导入。成员 + 仅选择本地角色，再配置团队身份。发现、安装、更新、来源和全局定义删除与成员添加/移出分离。
 
 agent-marketplace 下的 GitHub 来源、Markdown 解析、SQLite store、安装服务、Runtime 能力模型与 HTTP 处理各自分离。Daemon 复用 executionDatabase，托管原文位于 dataDirectory/agents，安装有固定 commit/digest、操作恢复日志和本地修改备份。additionalLocalDefinitions 由组合层注入既有 Agent Catalog，使托管角色进入现有 Teams 执行链，成员持有版本快照，不新增执行器。独立 Session 创建仍缺少公开接口，界面明确禁用。详见 [Marketplace](agent-marketplace.md)。
+
+
+Teams 成员在同一任务版本和客户端内跨讨论、实施、验证续接原生会话，明确修订任务或更换客户端才重新开始。委派在现有 inbox/routing JSON 保存来源消息、请求者、预期产物与验收要求，结果可按 source_run_id 读取完整交接信息。同一请求者、收件人和任务版本的完全相同未完成委派复用原 inbox，保持实际请求者的结果通知；回执指纹与复用关联保存在 loop_events，重试不创建重复消息或执行。比较包含用途、依赖及产物要求，不引入语义相似拦截、固定冷却或执行上限。
+
+
+Teams 共享记忆在 SQLite 中按当前任务决定与本轮指派关键词筛选，以 12,000 字符限制注入量，原文按 ID 读取。显式 supersedes 关系保存到已有 memory_recorded 事件，旧内容保留。恢复工作进度直接由 Run、inbox 和进度事件重建，保留原状态、来源和未完成事项，只在新会话或恢复时默认注入；正常续接不重复发送。成功执行不转换为业务验收完成，取消不自动重跑。上述资料随现有团队快照保存，不增加数据库、后台模型调用或执行限制。
+
+
+### Teams 消息、报告与证据
+
+collaboration/store/communication.mjs 管理既有 inbox 的投递、处理及回答关系。ask、reply_to_message_id、assignment_id、answered_message_ids 区分消息接收与问题关闭。Codex 通过既有交互句柄 steer 补充输入，结果不明先只读对账，不另建 Run 重发。独立协调容量和等待老化调度位于 collaboration-runtime.mjs，资源检查先于运行容量领取。
+
+collaboration/store/reports.mjs 使用 loop_events 保存唯一报告及版本，Hook 记录与正式报告分离。完整正文按 ID 读取，恢复摘要使用正式报告。collaboration-runtime/evidence.mjs 记录开始和结束 Git 指纹、显式证据读取时间与内容哈希，提交和退出时检查所引证据。变化只标注结论的版本边界，不禁止编辑。collaboration/store/metrics.mjs 分开计算排队、资源等待和模型等待，按原生 Session 去重累计 Token。字段、上限和示例见 [消息处理与工作交接](agent-loop.md#消息处理与工作交接)。
+
+
+### 协作约定与通知计划
+
+context.mjs 把所有成员的协作约定、稳定角色、当前工作、运行环境及工具语义分别组织。Leader 保留技术判断与验收职责，不重复成员已有工作。progress 仅进入内部事件；send_message 和 submit_result 回执明确通知去向，退出前的接收人只是计划，不是投递成功。
+
+conversation.mjs 的 reportNotification 同时用于工具回执和退出后的交接，Leader 回答问题也使用该路径。报告按稳定 inbox ID 投递到实际请求者，保留其原工作关联；运行中的 Codex 可接收报告引用及有界摘录，全文按 ID 读取。store 的续接输入排除同一原生 Session 已确认收到的结果。Runtime 无此能力时保持待投递状态，不伪造 inject 接口。详见 [提示词与工具通知回执](agent-loop.md#提示词与工具通知回执)。

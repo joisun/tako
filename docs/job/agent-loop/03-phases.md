@@ -608,3 +608,126 @@ Teams 左侧新增跨团队的“Agent 管理”，使用 team_view=agents 与 m
 实际验证：node --test test/collaboration-runtime.test.mjs test/room-conversation.test.mjs test/codex-interactive-session.test.mjs test/collaboration-recovery.test.mjs test/collaboration-store.test.mjs test/loop-tool-server.test.mjs test/execution-resource-coordinator.test.mjs，79/79 通过。包含临时 Git 仓库的分支改名、worktree 移动、未提交与未跟踪文件保留、子目录绑定、失效绑定替换、Leader 执行后自动刷新、原生会话续接及 full-access 新建/恢复协议测试。使用本机 codex-cli 0.166.0 生成 JSON Schema，确认线程与轮次权限字段。node scripts/check-syntax.mjs 检查 196 个源文件通过；npx tsc --noEmit --project /tmp/rillo-rooms-app-tsconfig.json 通过；npm run build 通过；git diff --check 通过。npm run check:types 被测试文件的 6 个类型错误阻塞：design-system.test.tsx 3 个、room-messages.test.tsx 的 modelContextWindow 缺失 1 个、dashboard-event-source.test.ts 2 个。
 
 扫描活动文档并同步 README.md、docs/agent-loop.md、docs/architecture.md。空闲时更新本地 58019 预览，ready 返回 200；更新前后 27 个团队、140 次执行、179 条消息保持。浏览器恢复原团队页面与实时连接，未发送测试消息、启动真实模型任务或修改业务仓库分支。本次未验证真实 Agent 自主执行改名，也未提交、合并或发布。
+
+
+### 2026-11-03：提交现有版本并落实 Hivemind 研究的首轮协作优化
+
+用户授权先提交当前版本再优化。基线提交 ddfb2ab 包含 73 个产品和文档文件，按用户 Git 规则未提交测试文件。提交前实际执行 117 项相关后端测试、98 项 Teams/Marketplace 界面测试与 npm run build，均通过。暂存检查报告 code-block.tsx 和 shimmer.css 的既有文件末尾空行提示；此次未做无关格式改写。
+
+首轮落实会话续接、任务交接及重复委派识别。同一 Task/revision、成员和客户端跨 discuss、implement、verify 续接最近原生会话，保留已投递的消息/结果游标；明确修订任务或更换客户端后开启新会话，旧固定阶段任务隔离保持。send_message 增加可选 expected_output、acceptance，来源消息与 inbox 随路由保存；上下文和按 Run 读取的结果明确实际请求者与预期产物。
+
+同一请求者和目标成员的完全相同未完成指派复用 inbox/Run，比较正文、用途、实施标记、依赖、产物及验收要求，不按模糊文本阻止操作。全部复用时不写重复聊天消息，混合目标只派发新增目标；等待成员空闲的指派保留 pending 与空 run_id。回执指纹与复用关联进入已有 loop_events，刷新或服务重启后可按请求标识重试，回执展示真实的最新 Run 状态。普通回复、其他请求者、不同要求以及完成后的新指派不自动合并。前端隐藏已成功复用的内部工具回执，不伪造新消息。没有新增数据库、依赖、轮数上限、固定冷却或权限拦截。
+
+验证：node --test test/agent-catalog.test.mjs test/agent-marketplace.test.mjs test/collaboration-runtime.test.mjs test/room-conversation.test.mjs test/codex-interactive-session.test.mjs test/collaboration-recovery.test.mjs test/collaboration-store.test.mjs test/loop-tool-server.test.mjs test/room-memory.test.mjs test/team-live-stream.test.mjs，126/126 通过。npx vitest run ui/react/features/marketplace/marketplace-view.test.tsx ui/react/features/teams/teams-view.test.tsx ui/react/features/teams/room-messages.test.tsx ui/react/features/teams/message-timeline.test.ts ui/react/features/teams/use-team-stream.test.tsx ui/react/features/teams/message-mentions.test.tsx，99/99 通过。npm run build、196 个源文件语法检查、业务源码类型检查与 git diff --check 通过。npm run check:types 仍被已有 6 处测试文件类型错误阻塞，未宣称全量检查通过。
+
+扫描活动 Markdown 文档，更新 README、agent-loop 与 architecture 的续接及委派契约。空闲时更新 58019，ready=200，27 个团队、159 次执行、198 条消息保持；浏览器原团队页面及实时连接恢复。未发送测试聊天或运行真实模型任务，真实 Agent 的协作质量和 Token 改善仍待实际会话验证。此轮优化保持未提交；记忆相关性筛选与工作进度 checkpoint 未在首轮改动中实现。
+
+
+### 2026-11-03：完成共享记忆筛选与恢复工作进度
+
+继续落实用户已采纳的其余建议。默认记忆上下文先保留当前任务版本的决定，再以当前指派和目标做中英文关键词匹配；最多 20 条、12,000 字符、每条预览 2,000 字符。全文不改写，read_context 的 source_memory_id 可精确读取；跨团队访问拒绝。remember 可显式 supersedes 同团队、同类型的旧记忆，关系进入既有 memory_recorded 事件，旧内容仍在历史及备份中，精确读取返回 superseded_by。没有自动语义替换、额外模型调用或新数据库。
+
+work_progress 从已有 Run、inbox 与 report_progress 事件重建，保存来源标识、真实状态、错误、产物引用和未完成报告。默认仅在新原生会话或恢复时提供，正常续接不重复注入；read_context(section=progress) 可主动读取。待派发委派排除已建立未结束 Run 的记录，避免重复统计。进度保留未成功执行的原状态，取消仍为取消，执行成功不代表验收完成。单份进度最多 12,000 字符，按组截断并提供真实计数；普通成员仅接收自己的工作、自己委派的工作及本次依赖。团队快照继续保存全部来源事实，不新增恢复执行机制或拦截。
+
+实际验证：相关 10 个后端测试文件合计 132/132 通过，命令与首轮相同；本轮新增记忆检索、替代、原文读取、团队隔离、有界恢复进度和正常续接不重复注入共 6 项场景。工具契约测试检查 source_memory_id、supersedes 与 progress 的实际转发。npm run build、196 个源文件语法检查、业务源码类型检查及 git diff --check 通过。界面无新增交互，上一轮 99 项界面测试结果保留；全量类型检查已有 6 处测试文件错误未处理。没有启动真实模型任务，因此不宣称实际 Token 降低或协作质量验收已通过。
+
+同步 README、agent-loop 与 architecture 文档。空闲时更新本地 58019，ready=200，27 个团队、159 次执行、198 条消息保持；原团队页面、消息输入和实时连接加载正常。基线仍为 ddfb2ab，后续全部优化保持未提交，没有推送、合并或发布。
+
+
+### 2026-11-04：区分消息投递、工作处理与正式结果
+
+按用户提出的四批范围实施。loop_schema 升为 7，新增消息用途和回复关联字段、inbox 投递与处理 JSON。announce 即使提及多人也不启动成员。ask 建立问题，reply 和 answered_message_ids 明确关闭原问题。已回答的排队执行取消，正在运行的无关工作保留。消息读取或原生接收不作为回答依据。
+
+执行中的补充输入复用 Codex 交互句柄 steer。先保存消息，再核对原生 Turn 回执。失败区分明确未发送和结果不明，重启后 sending 进入 unknown，只读查到唯一投递标记才确认接收。未确认不另起 Run 重发。已接收输入在同一原生 Session 的后续上下文按消息 ID 排除，首次接收时间不被完成事件覆盖。不支持实时补充的客户端保留消息，续接时投递。
+
+运行调度增加工作及协调容量配置、等待老化优先级、32 条候选分页轮转和非阻塞资源领取。目录等待不占运行名额。Leader 统筹不独占项目，审查以观察方式允许其他会话编辑，写入和未知进程保护保留。正式报告复用 loop_events 保存版本，工作关联与收件人关系分开；提问者的 assignment_id 不会让回答者覆盖提问者报告。Hook 结束确认与正式报告分离，包括 Hook 再次调用 submit_result 的情况。客户端原生 Hook 通知通过可选回调标记来源，仅 Teams 保存来源事件；有新证据或明确 correction_reason 时才更新原报告。回复只交接实际请求者。恢复摘要使用正式报告，不再使用 Hook 确认。
+
+证据读取保存文件 SHA-256 和实际读取时间，准备项目的执行记录开始和结束 HEAD、diff/status 指纹。提交和退出时核对所引证据，变化的发现标为待复核，旧报告版本保留。没有新增编辑拦截，也不显示 diff。界面区分报告已交付与审查对象未通过，展示真实收件人、问题处理和投递状态。用量详情区分排队、资源等待、客户端准备、首次模型输出等待及处理时间，Token 按 provider/store/native Session 的累计值去重。
+
+主要文件：server/src/agent-execution.mjs 的可选续轮回调；server/src/collaboration/{schema,conversation,context,store}.mjs，新增 collaboration/store/{communication,reports,metrics}.mjs；server/src/collaboration-runtime.mjs 及新增 collaboration-runtime/evidence.mjs；execution-resource-coordinator.mjs、runtime/adapters/codex-interactive-session.mjs；mcp/src/loop-server.mjs 及生成的 server/vendor/loop-server.mjs；ui/react/features/teams/{message-timeline,room-messages,team-run-task,teams-view} 与 lib/api/loop-types.ts，生成的 ui/dist/react.html。无新增依赖、数据库或执行系统。
+
+实际验证：
+
+- `node --test test/team-handoffs.test.mjs test/room-conversation.test.mjs test/collaboration-runtime.test.mjs test/collaboration-store.test.mjs test/room-memory.test.mjs test/codex-interactive-session.test.mjs test/loop-tool-server.test.mjs test/collaboration-recovery.test.mjs test/team-live-stream.test.mjs test/team-session-projection.test.mjs test/process-supervisor.test.mjs test/execution-resource-coordinator.test.mjs`：149/149 通过。新增 team-handoffs 的 20 个场景，覆盖运行中投递、结果不明、重启、多个问题同份报告、交接对象、关联工作归属、证据变更和原生 Session 去重。Codex 协议测试核对原生 steer 的 Turn 回执与未知结果。
+- `npx vitest run ui/react/features/teams/room-messages.test.tsx ui/react/features/teams/message-timeline.test.ts ui/react/features/teams/teams-view.test.tsx ui/react/features/teams/use-team-stream.test.tsx ui/react/features/sessions/session-team.test.tsx ui/react/app/app-shell.test.tsx`：89/89 通过。包含报告失败结论、真实接收人和耗时分类。
+- `node --test test/run-service.test.mjs`：10/10 通过，检查现有 Run 执行与 steer 行为。上述两组后端测试合计 159 项。构建后另跑 `node --test test/loop-tool-server.test.mjs`，2/2 通过，确认生成的 MCP 可握手并转发修正原因及回答关系。
+- `npm run build`、`node scripts/check-syntax.mjs`（200 个源文件）、`npx tsc --noEmit --project /tmp/rillo-rooms-app-tsconfig.json`、`git diff --check` 通过。项目没有独立 lint 脚本。`npm run check:types` 仍有既有 6 处测试文件错误：design-system.test.tsx 3 处、room-messages.test.tsx 的 modelContextWindow 缺失 1 处、dashboard-event-source.test.ts 2 处。没有宣称全量类型检查通过。
+
+真实 Codex 验收使用独立临时数据库与合成团队 d4309769-fa5d-4f01-8b3f-0fc1dfd25e94。Leader 委派 SDK，SDK 提问 React，React 的正式报告回答原问题，SDK 续接自己的原生 Session 汇总，再交回 Leader。执行中另发补充要求，经 steer 确认已投递，没有为该输入另起 Run。最终 Task 为 review，问题为 answered。5 次执行复用 3 个成员原生 Session。没有操作业务项目或关闭原团队，没有预先要求固定执行次数，不据此承诺 Token 降幅。真实模型验收覆盖该问答和交接链路，不代表复杂审计、Claude 或高并发模型负载均已验收。
+
+扫描 Markdown 文档树，更新 README.md、docs/agent-loop.md、docs/architecture.md 的活动契约，历史记录保留在本文件。原 58019 预览保留，检查时为 27 个团队、159 次执行、198 条消息且无活跃执行。Chrome 的当前连接不能读取 DOM 或截图，无法确认原页面草稿，因此未重载或重启原预览，也未宣称浏览器视觉检查通过。独立验收预览运行在 58021，使用合成团队资料，接口检查不等于真实浏览器验收。未提交、推送、合并或发布。
+
+
+#### 补充浏览器验收
+
+随后通过现有 playwright-headless MCP 检查 58021 的隔离团队，未安装浏览器测试依赖，未操作原业务页面。1440 × 1000 实际截图及 DOM 检查确认页面宽度为 1440px，没有横向溢出。React 的正式答复只行内提及 SDK，SDK 汇总再行内提及 Leader，已结束执行没有常驻 thinking。协作详情显示 React 的问题为“已回答、已投递”，累计 Token 对应 3 个原生 Session。用量弹窗通过点击打开，Escape 可关闭，排队、客户端准备、首次模型输出等待和处理时间分别展示；缺少原始事件的历史计时显示“未记录”。展开 React 工作显示原问题、正式报告已交付、v2 与对应答案，未展示第二份完成确认。控制台错误和警告均为 0。
+
+截图位于 /Users/joi-com/.playwright-mcp/rillo-handoff-desktop.png。此项覆盖新增问答、报告和计时展示的桌面验收，没有重做本轮未改动的拖放、附件和窄屏全流程，也没有向团队发送新消息或修改数据。原先 Chrome 连接失败的记录保留为排障经过，以上结果补齐本轮桌面浏览器检查。
+
+
+### 2026-11-04：统一协作提示词与通知回执
+
+重新检查 feature/agent-loop 的实际实现。用户引用的“用 reply 发起新问题”已在上一轮修正，未重复宣称本轮修复。此次发现末尾“给出公开答复”仍与委派后结束回合冲突，工具回执也未说明进度是否通知成员，因此继续补齐真实行为与指导。
+
+context.mjs 使用原创共享协作约定，把稳定定义、当前指派、团队背景、运行环境、Skills 使用和工具行为分别描述。当前 assignment 决定成员职责，其他已有负责人的工作不重复承接；ask、关联 reply、announce 用途一致；等待时可以直接让出执行，无须再报“已提交”“收到”或“任务完成”。Leader 继续负责技术判断、冲突和验收，必要时允许查代码与证据，不改成纯 Router。Skills 和 integrations 继承原客户端，未新增加载器或改变全局设置。query 的正文检索与报告、结果按 ID 读取分开说明。
+
+report_progress 返回 notification=internal_only，只有内部事件，没有聊天或唤醒副作用。send_message 明确 context_only 或 member_inbox，后者不代表已经启动。结构化报告回执返回 after_exit 及当前计划的 recipients，或 none；报告可见性不依赖是否通知成员。退出时按真实状态重新判断，不将计划当成投递成功。
+
+补查还发现：Leader 在统筹 Run 中通过报告回答成员问题后，问题已关闭，但旧结果交接只在非 Leader 分支执行。现在 reportNotification 同时服务回执和退出交接，所有角色均向实际提问者返回报告，并续接提问者自己的未完成工作。正在执行的 Codex 请求者可以通过原有 steer 收到正式报告引用、有界摘录及来源 Run；确认接收后记 delivered，同一原生 Session 的后续结果输入不再重放。带请求者工作关联的 ask 仍可进入其明确询问对象的当前执行，不把该关联误作询问对象的新工作。恢复进度中补齐待办负责人的 ID，避免有关联工作的问题在恢复摘要里查询失败。UI 根据实际交接记录显示 Leader 回答成员时的 inline mention，Leader 对用户的汇总不提及自己。
+
+本轮产品文件：server/src/collaboration/context.mjs、conversation.mjs、store.mjs、store/communication.mjs，server/src/collaboration-runtime.mjs，mcp/src/loop-server.mjs 及生成的 server/vendor/loop-server.mjs，ui/react/features/teams/message-timeline.ts 及生成的 ui/dist/react.html。测试补充在 room-conversation、team-handoffs、loop-tool-server 和 message-timeline；同步 README、agent-loop、architecture 与本记录。无新增依赖、数据库、执行系统或原生 inject 能力。参考 DSH 的职责与通知机制，提示词自行编写，未复制上游代码或成段提示词。
+
+实际验证：
+
+- `node --test test/team-handoffs.test.mjs test/room-conversation.test.mjs test/collaboration-runtime.test.mjs test/collaboration-store.test.mjs test/room-memory.test.mjs test/codex-interactive-session.test.mjs test/loop-tool-server.test.mjs test/collaboration-recovery.test.mjs test/team-live-stream.test.mjs test/team-session-projection.test.mjs test/process-supervisor.test.mjs test/execution-resource-coordinator.test.mjs test/run-service.test.mjs`：163/163 通过，包含等待中不发完成确认的提示词约定、内部进度无聊天副作用、通知计划非投递确认、Leader 回答成员、运行中报告交接及续接去重。
+- `npx vitest run ui/react/features/teams/room-messages.test.tsx ui/react/features/teams/message-timeline.test.ts ui/react/features/teams/teams-view.test.tsx ui/react/features/teams/use-team-stream.test.tsx ui/react/features/sessions/session-team.test.tsx ui/react/app/app-shell.test.tsx`：90/90 通过，新增 Leader 回答成员时的真实收件人检查。
+- `npm run build`、200 个源文件的 `node scripts/check-syntax.mjs`、业务源码 `npx tsc --noEmit --project /tmp/rillo-rooms-app-tsconfig.json`、`git diff --check` 通过。构建后的 `node --test test/loop-tool-server.test.mjs` 2/2 通过。全量 `npm run check:types` 仍为既有 6 处测试文件类型错误，未将其报告为通过。
+
+真实 Codex 使用独立临时数据库与合成团队 2a1ab405-74b8-469b-a1b3-f15812445641。角色定义只说明职责和合成接口事实，没有指定工具名或调用顺序。实际 Agent 选择 announce 告知 SDK、React 背景，回执 context_only、无新增 Run；SDK 用 ask 向 React 核实，React 原生正式答复关联当前问题，SDK 再汇总返回 Leader，Leader 读取报告后交付。问题先 delivered，随后在正式答复保存后 answered。委派与等待回合的原生 final_answer 为空，未出现“已提交”“收到”等重复完成确认。3 份正式报告各为 v1。合计 5 次执行、3 个原生 Session，未将执行次数设为验收硬指标，也不声称 Token 下降。执行中背景补充通过 steer 确认接收，没有触发重审。
+
+该模型验收覆盖短问答、背景通知和成员汇总。Leader 在活跃统筹中回答成员、报告实时补入请求者及并发时序由隔离运行时测试覆盖，不宣称这些分支均已真实模型复测。仍未验证 Claude 实时补充或复杂长任务的行为质量。原业务团队和 58019 保留，不发送测试消息，不操作业务项目。未提交、推送、合并或发布。
+
+#### 隔离预览更新与恢复
+
+更新 58021 时，旧进程收到关闭信号后仍被浏览器 SSE 长连接拖住退出；误提前启动了替代实例，发现后立即关闭替代实例。没有向团队发送消息，也没有操作 58019。随后通过原生浏览器界面确认 58021 的输入框仅有占位文本，刷新该隔离页释放连接，核实两个旧进程均退出后才启动单一新实例。恢复前后 SQLite integrity_check 均为 ok，保留 1 个团队、5 次成功执行、5 条消息，ready 返回 200；浏览器重新加载后显示原隔离团队与可用输入框。此预览仍展示上一轮合成验收资料，本轮真实模型的独立验收记录另存于 rillo-team-contract-native-result.json，未把两组数据混用。关闭顺序与 SSE 长连接的通用改进未纳入本次产品修改。
+
+### 2026-11-04：五成员 low 复杂实现隔离验收
+
+按用户要求使用真实多 Agent 团队验证复杂任务，未修改产品实现。使用实时模型目录核实 gpt-6.1-sol 支持 low，经实际成员配置接口设置 Leader、领域、接口、前端、验收共5位成员。验证脚本首次未复用自动创建的 Leader，配置断言在调用原生客户端前中止；修正脚本后创建全新隔离团队，不将该准备失败计入正式执行，也没有用默认 effort 运行。正式团队 e3a29aa7-86b0-4902-8569-49959ec75062，任务 92074fa2-4143-49ce-b9fe-5a698aff3dc0，数据与工程位于 /private/var/folders/hy/0pwl80vn7w180m6hynn7p7d80000gp/T/rillo-complex-low-EIT9i8。原生协议记录确认12个 turn/start 全部发送 model=gpt-6.1-sol、effort=low；每位成员复用自己的一个原生 Session。
+
+任务是从需求文件实现本地库存预订台：真实中文页面、库存领域规则、HTTP API、文件持久化、数量校验、幂等重试与冲突、重复取消、并发不超卖、重启恢复及独立验收。仅使用 Node 内置模块和原生前端，未安装依赖、初始化 Git、提交或发布。执行中补充可选 note、80个 Unicode 码点限制、原文保留与幂等冲突要求，不指定工具调用顺序或固定 Run 数。该补充在 Leader 空闲时启动了其续接 Run，本场没有发生原生 steer，不将其宣称为运行中原生补充验收。
+
+实际过程：Leader按职责委派；域成员公告模块契约，接口和前端据此实现。独立验收首先发现 note 返回 undefined，报告失败且未把后续未执行断言报告为通过；域成员随后完成新增规则，Leader安排复验。Leader最后要求仅补查尚未定位的控制台错误和截图审阅，没有重跑已通过的全部检查。团队在642955ms（约10分43秒）后交付，Task为review，等待用户验收。共12次执行、5个原生Session、8份正式报告、16条聊天记录，无未结束工作项或活跃/未知Run；执行成功不等于验收通过，首次QA失败报告仍保留。
+
+独立验证实际命令与结果：
+
+- `node /tmp/rillo-complex-low.mjs`：真实执行通过既有 collaboration runtime、MCP及Codex适配器完成。完整 result.json、protocol.ndjson、invocations.ndjson保留在隔离根目录。
+- `node /tmp/rillo-complex-acceptance.mjs`：额外19/19项HTTP检查通过，包括非法JSON/数量、未知对象、空幂等键、备注原文、80/81码点、数量/备注冲突、重复取消、20请求竞争2份库存、10个并发相同幂等键、页面访问及进程重启后的完整状态和幂等性。使用独立临时状态文件，不改变团队自己的验收数据。
+- 在隔离工程复跑 `node --test domain.test.mjs test/acceptance.test.mjs`：6/6通过，日志为隔离根目录的 delivered-tests.log。
+- 现有 playwright-headless MCP 实际操作通过键盘创建、取消、有效预订筛选、库存不足错误、失败保留输入、备注纯文本显示以及重新加载后恢复。1440×1000和390×844均无页面横向溢出；实际审阅空态、错误和有记录的桌面/窄屏截图。控制台仅有favicon 404和主动触发的库存不足409，没有未解释的JavaScript异常。未模拟断网、断电、所有浏览器或辅助技术。
+- visual-driven-review生成并校验4条覆盖记录、0条已确认视觉问题；报告位于 /Users/joi-com/.playwright-mcp/rillo-complex-low/2026-11-04-complex-low/report.html。仅针对这一个隔离产物，不代表Rillo全产品界面通过视觉回归。
+- 团队数据库重新打开后 integrity_check=ok，12次执行、16条消息保持，无活跃Run。隔离Teams预览58023 ready=200，真实浏览器可见对应团队及“实时连接正常”；产物独立预览50412。原58019与58021未重启或写入。
+
+限制与后续依据：配置3个工作名额和1个协调名额，实测最大同时2个Run，为协调加工作；共享执行目录的写锁仍使写任务串行，最久资源等待约243秒，不能宣称独立模块已并行实施。本场契约充分，成员主要通过announce共享信息，没有生成ask，不能据此证明复杂成员问答闭环。Token按5个原生Session累计去重为3369824，其中3049216为缓存输入；low不减少继承上下文和工具回合输入，本次不能证明Token浪费已解决。结果支持“能完成这一类有界复杂实现与变更复验”，不扩展为任意复杂任务、跨Runtime、高并发或故障恢复均已验证。未修改产品业务代码、全局配置或业务团队，也未提交、推送、合并或发布。
+
+### 2026-11-04：让看板读取真实会话工作
+
+用户指出看板没有跟踪实际会话。只读核对上一轮真实团队：1个Task、7项delegate工作、12次Run，但loop_work_items为0。此前独立人工看板没有执行联动，复杂任务验收也漏掉这一范围。
+
+本轮增加board/conversation-work.mjs，只读生成当前团队的目标T-卡片和委派W-卡片；人工R-记录继续存在原表。不新建执行系统、数据表、迁移或模型总结。卡片ID对应原Task/inbox；成员续接按自己拥有的assignment_id聚合多个Run，独立新指派保持独立，不按文本合并。普通聊天、ask、reply、announce不另建工作卡，相关问题显示在来源工作详情。历史数据读取即显示，不回填数据库或重跑Agent。负责人被移除后仍使用原执行身份快照。
+
+会话卡片显示排队、目录等待、准备、执行、停止、未知进程、前置依赖、等待答复、暂停、失败、中断、取消及报告交付。Task已交付进入待用户验收，归档后目标进入完成；执行成功不推断验收通过，结构化fail保留未通过结论。没有结构化verdict的原生报告只显示“报告已交付”，不根据自由文本猜测pass/fail。详情展示完整委派正文、要求、依赖、问答及版本化报告摘录。会话卡片不可人工拖动或改状态；人工排序接口只收人工ID并维持revision冲突保护，读看板不会产生新Task/Run。实时Task事件和既有全局查询失效刷新卡片，自动状态变化不依赖人工revision增加。
+
+“查看对话”选择卡片实际所属Task，历史协作有返回当前协作入口，不发送消息。浏览器发现直接DOM滚动会与MessageScroller自动定位竞争，因此移除不可靠的精确定位，未将其报告为已通过；完整委派正文仍在详情中。现有历史消息窗口限制不变。人工“在对话中继续”仍只填草稿，由用户发送后执行。
+
+改动文件：server/src/collaboration/board.mjs及新增board/conversation-work.mjs；ui/react/lib/api/loop-types.ts、features/teams/room-board.tsx、teams-view.tsx、teams.css及生成的ui/dist/react.html；测试room-board.test.mjs、新增room-board.test.tsx、teams-view.test.tsx。使用现有Kibo/shadcn组件，未增加依赖或修改组件库。shadcn CLI文档请求失败后查阅官方Base UI Dialog/Button文档，Context7核对Query行为，沿用项目实际组件API。扫描Markdown文档树，更新README、agent-loop和architecture活动契约及本记录，保留旧实施记录为历史。
+
+实际验证：
+
+- `node --test test/room-board.test.mjs test/team-handoffs.test.mjs test/room-conversation.test.mjs test/collaboration-store.test.mjs test/room-memory.test.mjs`：95/95通过。涵盖读取不写入、不重复派发、问答续接同一卡片、交付/失败结论/归档区分、目录等待、暂停、依赖失败、历史身份、团队隔离、人工排序与自动卡片并存。
+- `npx vitest run ui/react/features/teams/room-board.test.tsx ui/react/features/teams/teams-view.test.tsx ui/react/features/teams/use-team-stream.test.tsx`：40/40通过。新增报告详情只读、人工revision不变时自动卡片更新、保存失败回滚与重试只发送人工ID、历史卡片打开正确Task且不发消息。
+- `npm run build`、业务源码`npx tsc --noEmit --project /tmp/rillo-rooms-app-tsconfig.json`、`node scripts/check-syntax.mjs`（201个源文件）通过。`npm run check:types`仍为既有6处测试文件类型错误，未新增错误，也未将全量类型检查报告为通过。项目无独立lint脚本。
+- 用SQLite一致备份创建独立数据库副本，不共享原团队的写连接，重新绑定副本自己的资料目录。58025实际浏览器显示8张自动卡片（1目标、7委派），12次执行和16条消息保持不变，没有新模型调用。详情保留首次QA失败原文；负责人筛选只显示对应工作；创建人工记录、状态选择、真实鼠标拖动到进行中及数据库保存通过。标准dragTo没有驱动dnd-kit，改用实际MouseSensor并确认目标列公告、状态和落盘，未以工具返回成功代替拖动结果。
+- 浏览器仅对副本的一次PUT注入409，确认错误可见、人工状态回滚、重试成功，8张自动卡片不变。1440×1000与390×844没有页面横向溢出，桌面看板、详情和窄屏截图已实际审阅。控制台只有主动注入的409，无未解释的JavaScript异常。visual-driven-review报告位于 /Users/joi-com/.playwright-mcp/rillo-board-link/2026-11-04-team-board/report.html，3条截图覆盖记录，0条已确认视觉问题。历史多Task选择由界面测试覆盖，本浏览器副本只有一个Task。
+
+预览为 http://127.0.0.1:58025/?view=teams&group=workspace&team=e3a29aa7-86b0-4902-8569-49959ec75062&team_view=kanban。更新预览前关闭本次headless页面，确认无浏览器长连接和活跃Run，旧实例正常退出后才启动新版。原58019、58021、58023及原始复杂任务数据未改。当前副本仅新增1条人工记录，未发送消息、提交、推送、合并或发布。
