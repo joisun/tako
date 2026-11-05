@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, ChevronRight, Copy, Info, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, ChevronRight, Copy, Info, RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -38,6 +38,11 @@ type CatalogState = 'loading' | 'ready' | 'error'
 
 function shellQuote(value: string) {
   return "'" + value.replaceAll("'", "'\"'\"'") + "'"
+}
+
+function generateSecret() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  return btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 }
 
 function editorError(error: unknown) {
@@ -207,6 +212,17 @@ export function ScheduleEditorDialog({
     }))
     setError('')
     setDeleteArmed(false)
+  }
+
+  function changeExternalEnabled(checked: boolean) {
+    update('externalEnabled', checked)
+    if (checked && !draft.externalSecret.trim()) update('externalSecret', generateSecret())
+    setCopied('')
+  }
+
+  function regenerateSecret() {
+    update('externalSecret', generateSecret())
+    setCopied('')
   }
 
   async function changeAgent(agent: string) {
@@ -395,7 +411,7 @@ export function ScheduleEditorDialog({
                   <div className="schedule-editor__entry">
                     <div className="schedule-editor__entry-heading">
                       <h4>HTTP Trigger</h4>
-                      <Switch aria-label="HTTP Trigger" checked={draft.externalEnabled} disabled={busy} onCheckedChange={(checked) => update('externalEnabled', checked)} />
+                      <Switch aria-label="HTTP Trigger" checked={draft.externalEnabled} disabled={busy} onCheckedChange={changeExternalEnabled} />
                     </div>
                     {draft.externalEnabled ? <div className="schedule-editor__entry-config">
                       <div className="schedule-editor__field">
@@ -408,8 +424,11 @@ export function ScheduleEditorDialog({
                       <div className="schedule-editor__field">
                         <FieldLabel htmlFor="action-secret">Secret</FieldLabel>
                         <InputGroup className="schedule-editor__copy-group">
-                          <Input id="action-secret" autoComplete="off" spellCheck={false} disabled={busy} value={draft.externalSecret} placeholder="保存时自动生成" onChange={(event) => { update('externalSecret', event.currentTarget.value); setCopied('') }} />
-                          <InputGroupAddon><Button isIconOnly size="sm" variant="quiet" aria-label="复制 Secret" disabled={!draft.externalSecret} onClick={() => void copy(draft.externalSecret, 'secret')}>{copied === 'secret' ? <Check /> : <Copy />}</Button></InputGroupAddon>
+                          <Input id="action-secret" autoComplete="off" spellCheck={false} disabled={busy} value={draft.externalSecret} onChange={(event) => { update('externalSecret', event.currentTarget.value); setCopied('') }} />
+                          <InputGroupAddon>
+                            <Button isIconOnly size="sm" variant="quiet" aria-label="复制 Secret" disabled={!draft.externalSecret} onClick={() => void copy(draft.externalSecret, 'secret')}>{copied === 'secret' ? <Check /> : <Copy />}</Button>
+                            <Button isIconOnly size="sm" variant="quiet" aria-label="重新生成 Secret" title="重新生成 Secret" disabled={busy} onClick={regenerateSecret}><RefreshCw aria-hidden="true" /></Button>
+                          </InputGroupAddon>
                         </InputGroup>
                       </div>
                       <span className="sr-only" role="status">{copied ? '已复制' : ''}</span>

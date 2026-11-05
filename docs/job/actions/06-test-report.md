@@ -61,3 +61,9 @@
 - 使用真实发布目录执行 `scripts/verify-release-install.sh`，macOS 隔离安装 0.17.0，Dashboard、健康接口、SSE 和运行版本检查通过。
 - Codex 和 Claude adapter 的打包产物通过实际 stdio MCP 初始化与 tools/list，均返回 35 个工具，包含 action_list、action_get、action_create、action_update。
 - 完整检查仍有既有类型错误和过时测试失败，不视为通过。沿用 0.16.1 的手动发布方式，CI 和 Release workflow 保持原样。未进行 Linux 实机安装验证。
+
+## Secret 即时生成与重新生成
+
+开启 HTTP Trigger 时，空白 Secret 立即生成。输入框右侧增加重新生成图标，仍使用 32 字节安全随机数和 base64url，保存后生效。
+
+既有测试服务上的浏览器验证通过 8 项：开启时生成、开关保留已有值、刷新生成新值、保留手动值、空白值重新生成、curl 同步、复制一致、取消后持久值不变。生产源码严格类型检查、UI 构建和 diff 检查通过。未新增测试文件，尚未提交或发布这次改动。
