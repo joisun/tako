@@ -4,22 +4,22 @@
 
 Rillo 是运行在本机的 coding-agent 会话与自动化控制台。Sessions 直接浏览 CLI 保存的会话，按 workspace、分支和时间查找对话，以主子会话树和消息热力时间轴展示，支持侧边 sheet 阅读。侧栏支持 Workspace / Branch 分组，同名分支可以汇总多个项目的会话。每条会话及阅读面板提供 Pin 按钮；顶部 Pinned 入口集中查看待继续的会话，保留目录和分支筛选。Pin 独立于运行状态，关闭或恢复会话不会清除，完成后手动取消。
 
-它还支持由 Markdown 定义 Scheduled Task。到期后，常驻的 `daemon` 直接调用本机 code-agent CLI，并把 session ID、结果、文件变更和日志引用写入统一 Run ledger；对话正文仍由本机 agent CLI 持有。
+它还支持由 Markdown 定义 Action，按定时、手动或独立 HTTP 接口触发。Actions 是原 Schedule 功能的升级。到期后，常驻的 `daemon` 直接调用本机 code-agent CLI，并把 session ID、结果、文件变更和日志引用写入统一 Run ledger；对话正文仍由本机 agent CLI 持有。
 
 当前状态：
 
 - 支持 macOS 和具有 systemd 用户服务的 Linux；React Dashboard 可用；Legacy bundle 仅作为回滚资产保留，不是 production entry；
 - Codex 和 Claude Code 插件提供会话查询、关系登记、消息发送与控制工具；Sessions 正文浏览当前支持 Codex；
-- Scheduled Task runtime 支持 Codex 和 OpenCode；
+- Action runtime 支持 Codex 和 OpenCode；
 - Sessions 支持按项目目录浏览 Codex 会话、按活跃时间排列和搜索正文；macOS 可一键打开终端，Linux 复制 Session ID 后自行恢复；
 - runtime registry 已按 multi-CLI contract 设计，后续 runtime 只增加 adapter，不增加第二套调度链路；
 - 所有数据都保存在本机，不需要 cloud account 或 auth token。
 
-源码中的 **Teams / Agent Loop**：在团队中说明任务，由 Leader 按依赖委派成员、接收结果、安排验证并交付。支持从本地全局定义、ECC 和 Agency Agents 在线目录导入完整角色，市场可切换来源并手动刷新，市场角色先保存到本地，成员可配置别名、离线搭配头像、客户端、经验证的模型及推理强度。显式 @ 直接派发，独立工作按资源和可配置并发执行；结果交回实际请求者，必要时由 Leader 协调。Teams 通过 SSE 接收实时片段；Codex Turn 请求详细公开思考内容，思考时显示当前公开摘要的 shimmer，结束后从时间线移除，支持按原生 Session 去重的 Token 用量及仅路径和状态的文件记录（无 diff）。团队支持工具详情、图片/PDF 路径引用、解散、移出当前团队及本地目录定义删除。通过 `@成员` 选择接收人，无须新任务表单。Teams 提供对话与持久化 Kibo 看板切换，看板自动追踪当前团队的会话目标、委派、执行、阻塞与正式报告，并保留独立的人工记录。创建团队只需名称，任务、项目路径与分支在对话中说明。内部执行目录由服务准备，独立新应用无需先提供项目路径；已有项目根据任务及已有上下文直接准备，无须重复确认或原样粘贴路径；无关成员执行不阻止追加项目，验证方式按任务选择，原生答复不强制调用 submit_result，Teams 不再按默认 24 轮或 10 分钟截断；支持隔离执行、继续已有本地分支或明确复用原目录。消息按文字、工具和成员动作的真实时间交错展示，@ 接收人直接显示在消息正文；消息用途由工具填写，接收人通过正文行内 @ 表达，不另加用途标签。支持成员原生会话续接、执行中 steer 补充消息与报告、投递与答复状态分离、关联问答及版本化正式报告按需读取；所有成员共用协作约定，内部进度不发群聊，工具回执区分通知计划与实际投递；重复完成通知合并，客户端自动续轮独立折叠，并保留带来源的共享决定与摘要。资料存储由 Rillo 管理，后台备份可用于恢复团队，备份失败不阻断协作；迁移后先暂停核对旧执行，项目代码和客户端原生日志单独迁移。Codex 实际委派、实施、审阅和交付已跑通；Claude 仅开放讨论与审阅，真实模型侧验收尚未完成。导航顺序为 Sessions、Schedule、Teams。团队原生会话在 Sessions 按团队名分组，显示成员头像与别名；左侧团队菜单支持“复制房间”，沿用成员及配置创建新的空白团队；同时提供解散和删除，删除后历史会话仍可查阅。详见[架构与接口](docs/agent-loop.md)及[验证记录](docs/job/agent-loop/03-phases.md)。功能尚未发布。
+**Teams / Agent Loop**：在团队中说明任务，由 Leader 按依赖委派成员、接收结果、安排验证并交付。支持从本地全局定义、ECC 和 Agency Agents 在线目录导入完整角色，市场可切换来源并手动刷新，市场角色先保存到本地，成员可配置别名、离线搭配头像、客户端、经验证的模型及推理强度。显式 @ 直接派发，独立工作按资源和可配置并发执行；结果交回实际请求者，必要时由 Leader 协调。Teams 通过 SSE 接收实时片段；Codex Turn 请求详细公开思考内容，思考时显示当前公开摘要的 shimmer，结束后从时间线移除，支持按原生 Session 去重的 Token 用量及仅路径和状态的文件记录（无 diff）。团队支持工具详情、图片/PDF 路径引用、解散、移出当前团队及本地目录定义删除。通过 `@成员` 选择接收人，无须新任务表单。Teams 提供对话与持久化 Kibo 看板切换，看板自动追踪当前团队的会话目标、委派、执行、阻塞与正式报告，并保留独立的人工记录。创建团队只需名称，任务、项目路径与分支在对话中说明。内部执行目录由服务准备，独立新应用无需先提供项目路径；已有项目根据任务及已有上下文直接准备，无须重复确认或原样粘贴路径；无关成员执行不阻止追加项目，验证方式按任务选择，原生答复不强制调用 submit_result，Teams 不再按默认 24 轮或 10 分钟截断；支持隔离执行、继续已有本地分支或明确复用原目录。消息按文字、工具和成员动作的真实时间交错展示，@ 接收人直接显示在消息正文；消息用途由工具填写，接收人通过正文行内 @ 表达，不另加用途标签。支持成员原生会话续接、执行中 steer 补充消息与报告、投递与答复状态分离、关联问答及版本化正式报告按需读取；所有成员共用协作约定，内部进度不发群聊，工具回执区分通知计划与实际投递；重复完成通知合并，客户端自动续轮独立折叠，并保留带来源的共享决定与摘要。资料存储由 Rillo 管理，后台备份可用于恢复团队，备份失败不阻断协作；迁移后先暂停核对旧执行，项目代码和客户端原生日志单独迁移。Codex 实际委派、实施、审阅和交付已跑通；Claude 仅开放讨论与审阅，真实模型侧验收尚未完成。导航顺序为 Sessions、Actions、Teams。团队原生会话在 Sessions 按团队名分组，显示成员头像与别名；左侧团队菜单支持“复制房间”，沿用成员及配置创建新的空白团队；同时提供解散和删除，删除后历史会话仍可查阅。详见[架构与接口](docs/agent-loop.md)及[验证记录](docs/job/agent-loop/03-phases.md)。
 
-Teams 成员跨职责延续同一任务中的原生会话，委派可明确产物与验收要求，完全相同的未完成指派复用原执行。共享记忆按当前工作筛选，恢复时从已有记录重建有来源的工作进度。Teams 的 Codex 执行使用完整访问，支持任务内更新项目绑定；分支/worktree 改名后按 Git 标识刷新路径，保留成员会话和文件。用户明确的只读要求仍作为任务约束，Claude 当前仅支持讨论与审阅。Scheduled 与旧固定阶段任务的权限设置保持不变。
+Teams 成员跨职责延续同一任务中的原生会话，委派可明确产物与验收要求，完全相同的未完成指派复用原执行。共享记忆按当前工作筛选，恢复时从已有记录重建有来源的工作进度。Teams 的 Codex 执行使用完整访问，支持任务内更新项目绑定；分支/worktree 改名后按 Git 标识刷新路径，保留成员会话和文件。用户明确的只读要求仍作为任务约束，Claude 当前仅支持讨论与审阅。Actions 与旧固定阶段任务的权限设置保持不变。
 
-Rillo 0.16.1 使用 `rillo` 命令、插件标识和发布资产名称，GitHub 仓库为 `joisun/rillo`。旧版本的配置、定时任务和执行记录由安装脚本迁移，详见[更名与安装迁移](docs/migrations/rillo-rename.md)。
+Rillo 0.17.0 使用 `rillo` 命令、插件标识和发布资产名称，GitHub 仓库为 `joisun/rillo`。旧版本的配置、定时任务和执行记录由安装脚本迁移，详见[更名与安装迁移](docs/migrations/rillo-rename.md)。
 
 
 Teams 左侧“Agent 管理”统一管理本地与 Marketplace 定义，仍在 view=teams 范围。支持 Agency Agents、ECC 及自定义 GitHub 来源、真实 Markdown 详情、托管安装、版本与本地修改检查、逐行更新审核及备份卸载。成员区 + 改为先搜索本地角色，再配置名字、头像、客户端、模型和 effort。安装角色可沿用 Teams 执行；独立 Session 创建尚未接入，界面明确禁用。详见 [Agent Marketplace](docs/agent-marketplace.md)。
@@ -44,7 +44,7 @@ rillo status
 普通安装不需要 clone repository、`npm install` 或 `npm ci`。更谨慎的固定版本安装方式：
 
 ```bash
-version=v0.16.1
+version=v0.17.0
 curl -fsSLO "https://raw.githubusercontent.com/joisun/rillo/${version}/install.sh"
 less install.sh
 bash install.sh --version "$version"
@@ -78,13 +78,13 @@ ssh -N -L 43127:127.0.0.1:43127 user@server
 
 随后在该电脑打开 `http://127.0.0.1:43127/?view=sessions`。Linux 上的 `rillo open` 输出访问地址，不启动服务器上的桌面应用。
 
-会话树、正文、搜索、关系与 Scheduled 均通过 Web 使用。点击对话标题右侧的复制按钮取得 Session ID，然后在服务器上的对应 workspace 与相同 `CODEX_HOME` 下执行：
+会话树、正文、搜索、关系与 Actions 均通过 Web 使用。点击对话标题右侧的复制按钮取得 Session ID，然后在服务器上的对应 workspace 与相同 `CODEX_HOME` 下执行：
 
 ```bash
 codex resume <session-id>
 ```
 
-Linux 不提供启动终端、tmux 或系统应用打开产出文件的功能；Session ID 复制保留，相关桌面操作不在页面提供。服务卸载保留配置、Schedule、运行记录与日志。
+Linux 不提供启动终端、tmux 或系统应用打开产出文件的功能；Session ID 复制保留，相关桌面操作不在页面提供。服务卸载保留配置、Actions、运行记录与日志。
 
 ## Connect an agent
 
@@ -127,7 +127,7 @@ CLI-owned sessions ◀──adapter── daemon ──HTTP──▶ Dashboard
 MCP session_link ──HTTP──────────▶ │──▶ session-links.sqlite
 
 Automation
-Schedule.md ──watch──▶ daemon Scheduler ──▶ Runtime Registry
+Action.md ──watch──▶ daemon Scheduler ──▶ Runtime Registry
                           │                       │
                           │                       └──▶ codex app-server
                           │                                  │
@@ -136,15 +136,15 @@ Schedule.md ──watch──▶ daemon Scheduler ──▶ Runtime Registry
                                       └── SSE ──▶ Dashboard
 ```
 
-macOS 使用 `launchd`，Linux 使用 `systemd --user`，两者都只负责让同一个 `daemon` 常驻。每个 Schedule 不再创建 LaunchAgent，也没有独立 runner、Unix socket、claim、heartbeat 或 completion spool。
+macOS 使用 `launchd`，Linux 使用 `systemd --user`，两者都只负责让同一个 `daemon` 常驻。每个 Action 不再创建 LaunchAgent，也没有独立 runner、Unix socket、claim、heartbeat 或 completion spool。
 
 ### Session ownership
 
 会话标题、正文、时间、workspace 和原生关系由 CLI 维护，按需读取，不复制成 Task。外部协作关系单独保存在 `session-links.sqlite`；旧 Tasks 数据库、生成文件与 spool 保留原样，服务启动不再读取、迁移或重放它们。
 
-### Scheduled Run model
+### Actions Run model
 
-手动 `Run now` 与到期触发都进入同一个 `RunService.create()`：
+手动 `Run now`、到期触发与外部调用都进入同一个 `RunService.create()`：
 
 ```text
 queued → running → succeeded | failed | timed_out | canceled | interrupted
@@ -172,7 +172,7 @@ queued → running → succeeded | failed | timed_out | canceled | interrupted
 
 打开一个正在运行的 Codex Run，Run Review 会显示 Live Session：assistant message delta 与安全的 activity 摘要按发生顺序更新。输入追加指令后，Dashboard 只提交 Run ID、`expected_turn_revision` 和最多 16 KiB 的 text；`daemon` 使用私有 `turnId` 调用 `turn/steer`。Stop 同样只提交 Run ID 与 revision，并映射到 `turn/interrupt`。
 
-Live Session 断线后自动重连，也可点击“重新连接”；连接恢复会补读任务状态，避免错过结束事件。最近 500 条实时消息保留在窗口内，发送期间继续输入的文字不会被清空。Scheduled 列表、执行历史和详情会随服务端事件更新，连接恢复后会同步补读。
+Live Session 断线后自动重连，也可点击“重新连接”；连接恢复会补读任务状态，避免错过结束事件。最近 500 条实时消息保留在窗口内，发送期间继续输入的文字不会被清空。Actions 列表、执行历史和详情会随服务端事件更新，连接恢复后会同步补读。
 
 Live Session 只干预当前 active Turn，不在 Dashboard 内创建第二轮对话。Run 结束后，页面会重新读取 authoritative terminal Run，并通过 Codex 原生分页接口从本机 Codex-owned session 临时取得 user/assistant messages（旧 CLI 回退为有容量上限的 `thread/read`）；Rillo 不复制或持久化这份 transcript。已结束 Run 可点击 Session ID 在 Terminal 中恢复并继续对话；Session ID 在创建时立即保存，超时、取消、连接异常或服务重启后仍可恢复已创建的会话。历史对话读取失败时可点击“重新读取”。
 
@@ -208,10 +208,10 @@ Live Session 只干预当前 active Turn，不在 Dashboard 内创建第二轮�
 | 工具 | 用途 |
 | --- | --- |
 | `runtime_list` | 查询已配置的 agent runtime 及可用性 |
-| `schedule_list`、`schedule_get` | 列出定时任务，读取完整定义、Prompt 和 `etag` |
-| `schedule_create`、`schedule_update`、`schedule_delete` | 创建、按字段修改、将定义移入 `.trash`，保留执行记录 |
-| `schedule_pause`、`schedule_resume` | 暂停或启用后续调度，不停止已经开始的执行 |
-| `schedule_run`、`schedule_runs`、`run_read` | 立即执行、查询最近执行记录、查看状态和可选对话 |
+| `action_list`、`action_get` | 列出定时任务，读取完整定义、Prompt 和 `etag` |
+| `action_create`、`action_update`、`action_delete` | 创建、按字段修改、将定义移入 `.trash`，保留执行记录 |
+| `action_pause`、`action_resume` | 整体停用或启用 Action；只暂停定时使用 action_update 修改 schedule_enabled |
+| `action_run`、`action_runs`、`run_read` | 立即执行、查询最近执行记录、查看状态和可选对话 |
 | `session_sources` | 查询会话 provider 与准确的 `store_id` |
 | `session_list`、`session_search` | 按 workspace、branch 分页查询，搜索用户和助手正文 |
 | `session_read`、`session_messages` | 读取会话元数据、分页正文，可在单个会话中搜索或按时间定位 |
@@ -221,13 +221,13 @@ Live Session 只干预当前 active Turn，不在 Dashboard 内创建第二轮�
 | `session_send`、`session_interrupt`、`session_delivery` | 排队、执行中追加、打断、打断后发送及查询投递回执 |
 | `session_compact` | 压缩空闲会话的上下文，保留会话 ID 与历史记录 |
 
-修改、删除、启停需传入 `schedule_get` 返回的最新 `etag`，字段名为 `expected_etag`。发生 `SCHEDULE_VERSION_CONFLICT` 后重新读取并核对修改，工具不会自动覆盖。`schedule_create` 创建启用状态的任务，默认只读 sandbox、禁用 skills 和 integrations；`cadence` 支持 once、interval、hourly、daily、weekly、monthly，interval 的 minutes 为 1–1440 的整数，周期 cadence 可设置 work_hours（weekdays 与多个 start/end windows），周期时间使用服务所在机器的时区，weekly 的 weekdays 为周一 1 至周日 7。workspace 必须是服务器上存在的绝对路径。
+修改、删除、启停需传入 `action_get` 返回的最新 `etag`，字段名为 `expected_etag`。发生 `SCHEDULE_VERSION_CONFLICT` 后重新读取并核对修改，工具不会自动覆盖。`action_create` 创建启用状态的任务，默认只读 sandbox、禁用 skills 和 integrations；`cadence` 可省略或为 null，仅手动/外部执行；有定时时支持 once、interval、hourly、daily、weekly、monthly，interval 的 minutes 为 1–1440 的整数，周期 cadence 可设置 work_hours（weekdays 与多个 start/end windows），周期时间使用服务所在机器的时区，weekly 的 weekdays 为周一 1 至周日 7。workspace 必须是服务器上存在的绝对路径。
 
 ### 定时任务的会话方式与上下文压缩
 
 网页编辑器依次展示任务内容、执行时间、会话与上下文。生效时段和高级设置直接展开；补充说明通过字段旁的 info 图标查看。
 
-创建和编辑计划、Markdown 定义及 MCP `schedule_create/update` 使用相同字段：
+创建和编辑计划、Markdown 定义及 MCP `action_create/update` 使用相同字段：
 
 | 字段 | 行为 |
 | --- | --- |
@@ -264,7 +264,7 @@ HTTP：`POST /api/v1/session-control/compact`；MCP：`session_compact`。输入
 }
 ```
 
-`schedule_run` 必须传入 `idempotency_key`，重试同一次执行时复用该值。创建任务本身不支持幂等重试，响应丢失后先查询任务，避免重复创建。`schedule_runs` 默认返回最近 20 条，最多 100 条，`truncated` 表示还有更多记录。会话查询与搜索返回 `next_cursor`，有游标的空搜索页不代表查无结果；继续使用相同筛选与下一页游标。`session_messages` 的 `query` 与时间定位 `at` 不能同时使用。
+`action_run` 必须传入 `idempotency_key`，重试同一次执行时复用该值。创建任务本身不支持幂等重试，响应丢失后先查询任务，避免重复创建。`action_runs` 默认返回最近 20 条，最多 100 条，`truncated` 表示还有更多记录。会话查询与搜索返回 `next_cursor`，有游标的空搜索页不代表查无结果；继续使用相同筛选与下一页游标。`session_messages` 的 `query` 与时间定位 `at` 不能同时使用。
 
 `session_messages` 还支持 `mode`：
 
@@ -306,19 +306,21 @@ head、tail、all 返回的每批消息均按时间正序排列，不包括工�
 
 重复登记同一关系不会重复写入；自关联、反向或间接循环、给已有父级的子会话指定另一个父级都会被拒绝。需要纠正时显式解除旧登记，再登记新关系。原生 subagent/fork 关系只读。来源不支持读取或身份尚未确认时应报告未登记，继续终端工作；不能猜 ID、改写 transcript 或建立补传队列。
 
-Sessions与Scheduled共用零外边距、无外框的根布局，切换时不改变头部高度和内容起点。Sessions / Scheduled、Workspace / Branch 使用中性色圆角分段按钮；会话区域不再提供 List / Tree 切换。桌面侧栏宽350px，初次进入时 sheet 收起，会话树使用剩余空间；Sheet以640px宽度悬浮在右侧，不改变会话树宽度；关闭后保留选中会话和阅读位置。sheet 为非模态面板，打开后仍可操作会话树；1100px及以下隐藏侧栏并提供目录选择器，680px及以下Sheet自适应视图宽度。普通阅读默认滚到最近内容，自动补读更早历史时保留消息位置。正文12px，头部保留标题与终端继续、复制、关闭等操作；关系管理放在浮层中。会话标题单行省略，目录显示完整路径，过长时从开头省略并可悬停查看全文。每行的终端继续按钮始终可见，点击不改变预览。
+Sessions与Actions共用零外边距、无外框的根布局，切换时不改变头部高度和内容起点。Sessions / Actions、Workspace / Branch 使用中性色圆角分段按钮；会话区域不再提供 List / Tree 切换。桌面侧栏宽350px，初次进入时 sheet 收起，会话树使用剩余空间；Sheet以640px宽度悬浮在右侧，不改变会话树宽度；关闭后保留选中会话和阅读位置。sheet 为非模态面板，打开后仍可操作会话树；1100px及以下隐藏侧栏并提供目录选择器，680px及以下Sheet自适应视图宽度。普通阅读默认滚到最近内容，自动补读更早历史时保留消息位置。正文12px，头部保留标题与终端继续、复制、关闭等操作；关系管理放在浮层中。会话标题单行省略，目录显示完整路径，过长时从开头省略并可悬停查看全文。每行的终端继续按钮始终可见，点击不改变预览。
 
 正文搜索优先直接读取Codex的JSONL文件，不建全文索引。Dashboard 顶部全局搜索不传 workspace/branch 限制；API/MCP 显式传入时仍可按指定范围搜索。服务先从原生接口取得符合workspace、branch和来源限制的会话，再用ripgrep搜索用户消息与助手回答；工具输出、reasoning和图片数据不参与匹配，也不以preview代替正文。每个文件只提取首处命中的短节选，不复制或持久化正文。首次请求最多搜索最近16条候选会话并立即返回；页面保留已命中结果，自动分批搜索较早会话，每批最多200条，不需要滚动触发。空批次也继续搜索，完成前不会显示“没有找到匹配的会话”。优先使用Codex自带的rg，也会查找系统PATH及常见工具安装目录；缺少rg或遇到非普通JSONL记录时，继续使用Codex原生正文搜索。命中定位仍使用原生实验接口，已在Codex CLI 0.164.0验证；旧版本缺少能力时明确提示更新，不降级为只搜索preview。改词会取消旧搜索并停止其进程；搜索总时限60秒，失败仅影响搜索浮层，不中断列表和对话。
 
 macOS 点击 **在终端继续**，使用右上角设置中的恢复终端。Linux 保留复制 Session ID，自行在服务器终端恢复。恢复目录和 Session ID 由服务重新读取；浏览器不能指定命令。Claude Code 会话浏览尚未接入，现有 Claude Recorder adapter 不等同于 Sessions provider。
 
-## Scheduled Tasks
+## Actions
 
-Schedule definition 是 source of truth；SQLite 只记录 Run facts。默认目录为 `~/.config/rillo/schedules`。
+外部接口、secret/data 协议、可选定时、迁移和部署配置详见 [Actions 接入说明](docs/actions.md)。
+
+Action definition 是 source of truth；SQLite 只记录 Run facts。默认目录为 `~/.config/rillo/actions`。
 
 ```markdown
 ---
-type: rillo/schedule
+type: rillo/action
 id: 8b4a8b25-3d1e-4e43-8f5f-9cbef95b9275
 title: Daily repository review
 enabled: true
@@ -346,9 +348,9 @@ Review the repository health and summarize actionable risks.
 - 每项也可设为 `inherit`，沿用本机 Codex 配置；
 - Web Search 与 Codex core tools 不属于 `integrations`，不会被该开关关闭；文件和网络权限仍由 `sandbox` 独立控制。
 
-Dashboard 新建的 Codex Schedule 默认使用 `disabled / disabled`，以获得最小、可预测的自动化上下文。已有 Markdown 未声明 `capabilities` 时保持兼容，按 `inherit / inherit` 读取。每个 Run 会把 policy 写入 immutable execution snapshot；执行期间不会改写全局 Codex 配置，也不需要重启 `daemon`。
+Dashboard 新建的 Codex Action 默认使用 `disabled / disabled`，以获得最小、可预测的自动化上下文。已有 Markdown 未声明 `capabilities` 时保持兼容，按 `inherit / inherit` 读取。每个 Run 会把 policy 写入 immutable execution snapshot；执行期间不会改写全局 Codex 配置，也不需要重启 `daemon`。
 
-支持 `once`、`interval`、`hourly`、`daily`、`weekly` 与 `monthly` cadence。Dashboard 的 Create/Edit/Pause/Resume 会 atomic rewrite Markdown，并用 SHA-256 `etag` 做 compare-and-set；Delete 把 definition 移到 `.trash/`。行级一次性 Run action 在执行期间会切换为 Stop；它与只控制周期调度的 Schedule pause/resume 是两套独立操作。
+支持 `once`、`interval`、`hourly`、`daily`、`weekly` 与 `monthly` cadence。Dashboard 的 Create/Edit/Pause/Resume 会 atomic rewrite Markdown，并用 SHA-256 `etag` 做 compare-and-set；Delete 把 definition 移到 `.trash/`。行级一次性 Run action 在执行期间会切换为 Stop；它与只控制周期调度的 Action pause/resume 是两套独立操作。
 
 ### 分钟间隔与生效时段
 
@@ -376,7 +378,7 @@ schedule:
 
 Front matter 可选填 `session_id`，作为关联会话的元数据。值会去除首尾空白，须为 1–128 字符的字符串；省略或填 `null` 表示未设置。编辑、暂停或恢复计划时会保留该字段。每次 Run 仍创建新会话，实际运行产生的 Session ID 由 runtime 返回。
 
-Codex Schedule 支持 `fast_mode: true`（开启 Fast mode）、`false`（明确使用普通速度）；省略或 `null` 表示跟随 Codex 默认配置。Dashboard 的 Fast mode 选项与此对应。配置随 Run 快照保存，修改 Schedule 不会改变已创建的 Run。该选项仅适用于 Codex，实际可用性及用量规则由所选模型和账号决定。
+Codex Action 支持 `fast_mode: true`（开启 Fast mode）、`false`（明确使用普通速度）；省略或 `null` 表示跟随 Codex 默认配置。Dashboard 的 Fast mode 选项与此对应。配置随 Run 快照保存，修改 Action 不会改变已创建的 Run。该选项仅适用于 Codex，实际可用性及用量规则由所选模型和账号决定。
 
 Codex 的 `workspace-write` 只表示文件写入权限，不等于允许联网。联网采集任务可显式设置 `network_access: true`；`false` 禁止网络，省略/null 继承 Codex 默认。该字段只控制 workspace-write 下的 shell 网络访问，独立于 Fast mode、Web Search 和 MCP 设置；后台审批策略为 `never`，不会弹出额外授权。Dashboard 的“沙箱网络访问”与此对应，选择随 Run 快照保存，不修改全局 Codex 配置。完整采集、编稿、构建与浏览器检查应设置足够的 `timeout`（例如 `2h`），超时仍会终止运行。
 
@@ -428,7 +430,7 @@ GET  /api/v1/runtimes/:id/models
 ├── session-links.sqlite                # explicit collaboration links only
 ├── scheduler.sqlite                    # unified Run ledger
 ├── schedules/
-│   ├── *.md                            # Schedule source of truth
+│   ├── *.md                            # Action source of truth
 │   ├── .trash/                         # recoverable delete/migration backup
 │   └── logs/                           # bounded per-Run stdout/stderr
 └── logs/rillo.ndjson           # privacy-bounded service log
@@ -438,7 +440,7 @@ GET  /api/v1/runtimes/:id/models
 └── daemon.stderr.log
 ```
 
-会话关系数据库是 `~/.config/rillo/session-links.sqlite`；Scheduled Run ledger 是 `~/.config/rillo/scheduler.sqlite`。历史 `tasks.sqlite` 与生成文件继续保留，但不再作为运行时数据源。
+会话关系数据库是 `~/.config/rillo/session-links.sqlite`；Actions Run ledger 是 `~/.config/rillo/actionr.sqlite`。历史 `tasks.sqlite` 与生成文件继续保留，但不再作为运行时数据源。
 
 默认配置：
 
@@ -509,7 +511,7 @@ tail -n 100 ~/.config/rillo/logs/rillo.ndjson
 - Model 使用 fallback：手动运行解析到的 `codex debug models`；fallback 不会阻止保存或 Run。
 - Run 失败：在 Run Review 查看 stable error code、退出码、provider 错误详情与 stdout/stderr。模型在地区不可用时显示 `RUNTIME_MODEL_UNAVAILABLE` 和 provider 返回的原文；已有 Session ID 可点击后在 Terminal 继续对话。
 - 历史对话不可用：确认对应 `thread_id` 仍存在于本机 Codex session inventory；Rillo 不保存第二份 transcript，因此 session 被 Codex 清理后只显示 Run `final_message`。
-- Schedule definition 不可用：按页面给出的 source path 修复 YAML、duplicate UUID、unknown field、cadence 或 symlink 问题；watcher 会自动重试。
+- Action definition 不可用：按页面给出的 source path 修复 YAML、duplicate UUID、unknown field、cadence 或 symlink 问题；watcher 会自动重试。
 - 插件仍显示旧 Task 工具：更新插件后新开 agent conversation。当前不再自动记录 Task 或要求 hooks trust。
 - Resume 不可用：Run 必须有本机 session transcript 与有效 Workspace，并且对应 terminal / CLI 仍可用。
 
@@ -625,7 +627,7 @@ REST 入口为 `/api/v1/session-control/sources`、`capabilities`、`send`、`in
 - `daemon` 默认只监听 `127.0.0.1`；监听 `0.0.0.0` 时，能连接该端口的客户端均可访问。页面、API、SSE 和开发入口不执行客户端 IP、Host 或 Origin 白名单校验；Dashboard API 不增加跨域 CORS 响应头，浏览器自身的跨域规则仍适用。
 - HTTP API 不使用 auth token，也不提供 TLS。网络监听范围由配置及操作系统网络策略决定。
 - Runtime invocation 使用明确 executable、argv array、可信 Workspace 和 `shell: false`。
-- 除 Scheduled Run 既有的 bounded final_message 外，SQLite 与 Rillo logs 不保存 prompt、reasoning、assistant message、tool output、token 或 transcript 正文；历史对话只从 CLI-owned session 按需读取并在页面内存中展示。
+- 除 Actions Run 既有的 bounded final_message 外，SQLite 与 Rillo logs 不保存 prompt、reasoning、assistant message、tool output、token 或 transcript 正文；历史对话只从 CLI-owned session 按需读取并在页面内存中展示。
 - 不再安装记录 hooks；外部关系登记不可用时不阻塞终端工作，不建立补传队列。
 - Installer 在执行 runtime 前验证 artifact checksum，并拒绝 archive path traversal。
 - Session Resume 接受原生会话引用，Run Resume 只接受 Run ID；服务重新读取原生数据或 ledger，不接受 browser 提交的 Workspace 或任意 command。

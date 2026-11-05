@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import { RilloError } from './errors.mjs'
 
-export const SERVER_INSTRUCTIONS = `Query native sessions and manage scheduled automation through these tools. Use runtime_list before choosing a schedule agent. Read schedule_get before changing a schedule and pass its latest etag as expected_etag; on SCHEDULE_VERSION_CONFLICT read again and reconsider the change, never silently overwrite. schedule_create creates an enabled task; cadence uses the service machine timezone. interval cadence accepts minutes from 1 to 1440. Optional work_hours on recurring cadence restricts automatic starts to selected ISO weekdays and non-overlapping HH:mm windows (start inclusive, end exclusive; end may be 24:00). Each interval window starts its own interval sequence; closed or previous windows are not replayed. Existing executions continue and schedule_run ignores work hours. Reuse the same idempotency_key when retrying schedule_run. Session search covers user and assistant text, not just previews. Follow next_cursor even when a search page has no matches; do not claim that a partial page is the complete result. Use session_sources to obtain the exact provider and store_id before registering relations. SessionRef is {provider, store_id, session_id}; for Codex session_id is thread.id. After a delegated child session exists, register its actual identity with session_link. Never guess a session ID from an execution, agent key, PID, worktree, or title. Use session_unlink only to remove an explicitly registered relation; native subagent/fork relations are read-only. For messaging, discover session_control_sources and session_control_capabilities first; reuse the same request_id for the same target, text and mode. queue schedules input, steer supplements a turn, and interrupt stops the expected turn before sending; steer and interrupt require the observed expected_turn_id. accepted does not mean completed. On unknown, query session_delivery; never switch IDs or transports to resend blindly. No Task, heartbeat, attribution, checkpoint or automatic summary recording is needed. Never edit local databases directly.`
+export const SERVER_INSTRUCTIONS = `Query native sessions and manage Actions through action_* tools. Actions upgrade Schedule; legacy schedule_* tools use the same implementation. cadence is optional; timer/manual calls use data=null. enabled controls all new executions; schedule_enabled controls only timers; external_enabled controls the separate HTTP trigger. External calls accept only {secret,data}; secret is persisted locally and omitted from MCP responses. Use runtime_list before choosing a schedule agent. Read action_get before changing a schedule and pass its latest etag as expected_etag; on SCHEDULE_VERSION_CONFLICT read again and reconsider the change, never silently overwrite. action_create creates an enabled task; cadence uses the service machine timezone. interval cadence accepts minutes from 1 to 1440. Optional work_hours on recurring cadence restricts automatic starts to selected ISO weekdays and non-overlapping HH:mm windows (start inclusive, end exclusive; end may be 24:00). Each interval window starts its own interval sequence; closed or previous windows are not replayed. Existing executions continue and action_run ignores work hours. Reuse the same idempotency_key when retrying action_run. Session search covers user and assistant text, not just previews. Follow next_cursor even when a search page has no matches; do not claim that a partial page is the complete result. Use session_sources to obtain the exact provider and store_id before registering relations. SessionRef is {provider, store_id, session_id}; for Codex session_id is thread.id. After a delegated child session exists, register its actual identity with session_link. Never guess a session ID from an execution, agent key, PID, worktree, or title. Use session_unlink only to remove an explicitly registered relation; native subagent/fork relations are read-only. For messaging, discover session_control_sources and session_control_capabilities first; reuse the same request_id for the same target, text and mode. queue schedules input, steer supplements a turn, and interrupt stops the expected turn before sending; steer and interrupt require the observed expected_turn_id. accepted does not mean completed. On unknown, query session_delivery; never switch IDs or transports to resend blindly. No Task, heartbeat, attribution, checkpoint or automatic summary recording is needed. Never edit local databases directly.`
 
 const sessionRef = z.object({
   provider: z.string().min(1),
@@ -49,7 +49,11 @@ const scheduleFields = {
   title: z.string().trim().min(1).max(200),
   prompt: z.string().trim().min(1).max(20000),
   workspace: z.string().min(1).max(4096).describe('Existing absolute directory on the service machine.'),
-  cadence,
+  cadence: cadence.nullable().optional(),
+  enabled: z.boolean().optional(),
+  schedule_enabled: z.boolean().optional(),
+  external_enabled: z.boolean().optional(),
+  external_secret: z.string().min(1).max(1024).optional(),
   agent: z.string().min(1).max(64).optional(),
   sandbox_mode: z.enum(['read-only', 'workspace-write', 'danger-full-access']).optional(),
   model: z.string().max(256).nullable().optional(),
@@ -57,8 +61,8 @@ const scheduleFields = {
   fast_mode: z.boolean().nullable().optional(),
   network_access: z.boolean().nullable().optional(),
   timeout_seconds: z.number().int().min(60).max(86400).optional(),
-  thread_mode: z.enum(['new', 'reuse', 'auto']).describe('new: independent session each run (default). reuse: resume this schedule’s previous compatible session, creating one on the first run. auto: resume by default; successful agent output ends with <!-- rillo:next-session=new --> or <!-- rillo:next-session=reuse --> to choose the next run.').optional(),
-  max_inherit_runs: z.number().int().min(1).max(10000).describe('Maximum scheduled executions that resume the same native session. Defaults to 20; the initial new-session run is not counted. Applies to reuse and auto; the next execution starts a new session after the cap.').optional(),
+  thread_mode: z.enum(['new', 'reuse', 'auto']).describe('new: independent session each run (default). reuse: resume this Action’s previous compatible session, creating one on the first run. auto: resume by default; successful agent output ends with <!-- rillo:next-session=new --> or <!-- rillo:next-session=reuse --> to choose the next run.').optional(),
+  max_inherit_runs: z.number().int().min(1).max(10000).describe('Maximum Action executions that resume the same native session. Defaults to 20; the initial new-session run is not counted. Applies to reuse and auto; the next execution starts a new session after the cap.').optional(),
   auto_compact_token_limit: z.number().int().min(1000).max(10000000).nullable().describe('Codex automatic context-compaction token threshold. null/unset inherits the current local configuration on each run; it is not a turn limit.').optional(),
   capabilities: z.object({
     skills: z.enum(['inherit', 'disabled']).optional(),
@@ -70,7 +74,9 @@ const outputSchema = z.object({}).catchall(z.unknown())
 function handler(operation) {
   return async (input) => {
     try {
-      const structuredContent = await operation(input)
+      const result = await operation(input)
+      const structuredContent = result?.job ? { ...result, job: { ...result.job } } : result
+      if (structuredContent?.job) delete structuredContent.job.external_secret
       return { content: [{ type: 'text', text: JSON.stringify(structuredContent) }], structuredContent, ...(['unknown', 'rejected'].includes(structuredContent?.delivery?.status) ? { isError: true } : {}) }
     } catch (error) {
       const known = error instanceof RilloError
@@ -123,13 +129,13 @@ export function createRilloServer({ service }) {
     ['session_delivery', 'Read the persisted delivery receipt for request_id. accepted means accepted by the named native or terminal transport, not that generation completed. unknown is not safe to resend.', { request_id: messageRequest.request_id }, 'sessionDelivery', readOnly],
     ['runtime_list', 'List installed agent runtimes and their availability before creating a schedule.', {}, 'runtimes', readOnly],
     ['schedule_list', 'List scheduled tasks, current etags, execution summaries and invalid Markdown definitions.', {}, 'listSchedules', readOnly],
-    ['schedule_get', 'Read a scheduled task including its prompt and latest etag before an edit, delete, pause or resume.', scheduleId, 'getSchedule', readOnly],
+    ['schedule_get', 'Read a scheduled task including its prompt and latest etag before an edit, delete, pause or resume; secrets are omitted from MCP output.', scheduleId, 'getSchedule', readOnly],
     ['schedule_create', 'Create an enabled scheduled task backed by Markdown. Does not execute it immediately. Default sandbox is read-only; skills and integrations are disabled unless specified.', scheduleFields, 'createSchedule', { ...write, idempotentHint: false }],
     ['schedule_update', 'Patch only supplied fields of a scheduled task using its latest etag. Rejects concurrent changes.', { ...scheduleVersion, patch: z.object(scheduleFields).partial().strict().refine(value => Object.keys(value).length > 0, 'Provide at least one field to update.') }, 'updateSchedule', write],
     ['schedule_delete', 'Move a scheduled task definition to .trash using its latest etag. Preserves previous execution records.', scheduleVersion, 'deleteSchedule', { ...write, destructiveHint: true }],
-    ['schedule_pause', 'Disable future scheduled executions using the latest etag. Does not stop an already running execution.', scheduleVersion, 'pauseSchedule', write],
-    ['schedule_resume', 'Enable future scheduled executions using the latest etag.', scheduleVersion, 'resumeSchedule', write],
-    ['schedule_run', 'Start one execution now, including for a paused task. Reuse the same idempotency_key when retrying to prevent duplicate execution.', { ...scheduleId, idempotency_key: z.string().min(1).max(128) }, 'runSchedule', { ...write, openWorldHint: true }],
+    ['schedule_pause', 'Disable all new Action executions using the latest etag. Does not stop an already running execution.', scheduleVersion, 'pauseSchedule', write],
+    ['schedule_resume', 'Enable new Action executions using the latest etag.', scheduleVersion, 'resumeSchedule', write],
+    ['schedule_run', 'Start one execution now, when enabled. Reuse the same idempotency_key when retrying to prevent duplicate execution.', { ...scheduleId, idempotency_key: z.string().min(1).max(128) }, 'runSchedule', { ...write, openWorldHint: true }],
     ['schedule_runs', 'Read recent execution records for a scheduled task. Returns truncated=true when more records exist.', { ...scheduleId, limit: page.limit }, 'scheduleRuns', readOnly],
     ['run_read', 'Read execution status and result. Optionally include the recorded conversation.', { run_id: z.string().min(1).max(256), include_conversation: z.boolean().optional() }, 'readRun', readOnly],
     ['session_list', 'List native sessions by provider, workspace or branch. Follow next_cursor for more results; includes parent and fork relations.', filters, 'listSessions', readOnly],
@@ -139,6 +145,14 @@ export function createRilloServer({ service }) {
     ['session_children', 'List delegated and native subagent child sessions. Follow next_cursor; fork relations are separate.', { ...sessionRef.shape, ...page }, 'sessionChildren', readOnly],
     ['session_relations', 'Read native subagent, fork and explicitly registered delegation relations for a session.', sessionRef.shape, 'sessionRelations', readOnly],
   ]
+  for (const [name, description, inputSchema, operation, annotations] of tools.filter(([name]) => name.startsWith('schedule_'))) {
+    const { schedule_id, ...rest } = inputSchema
+    const schema = schedule_id ? { action_id: schedule_id, ...rest } : rest
+    server.registerTool(name.replace('schedule_', 'action_'), {
+      description: description.replace(/scheduled task/gi, 'Action').replace(/schedule_get/g, 'action_get').replace('when enabled', 'when the Action is enabled'),
+      inputSchema: schema, outputSchema, annotations,
+    }, handler(({ action_id, ...input }) => service[operation](action_id ? { ...input, schedule_id: action_id } : input)))
+  }
   for (const [name, description, inputSchema, operation, annotations] of tools) {
     server.registerTool(name, { description, inputSchema, outputSchema, annotations }, handler(input => service[operation](input)))
   }

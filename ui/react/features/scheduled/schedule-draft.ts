@@ -5,7 +5,7 @@ import type {
   ScheduleRecord,
 } from '@/lib/api/types'
 
-const CADENCE_KINDS = new Set(['once', 'interval', 'hourly', 'daily', 'weekly', 'monthly'])
+const CADENCE_KINDS = new Set(['none', 'once', 'interval', 'hourly', 'daily', 'weekly', 'monthly'])
 const SANDBOX_MODES = new Set(['read-only', 'workspace-write', 'danger-full-access'])
 const MODEL_SLUG = /^[a-z0-9][a-z0-9._-]{0,127}$/
 const REASONING_LEVEL = /^[a-z][a-z0-9_-]{0,15}$/
@@ -13,9 +13,14 @@ const OPENCODE_MODEL = /^(?=.{1,256}$)[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9~][A
 const OPENCODE_VARIANT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 const AGENT_ID = /^[a-z][a-z0-9-]{0,63}$/
 
-export type CadenceKind = ScheduleCadence['kind']
+export type CadenceKind = ScheduleCadence['kind'] | 'none'
 
 export interface ScheduleDraft {
+  enabled: boolean
+  scheduleEnabled: boolean
+  externalEnabled: boolean
+  externalSecret: string
+  triggerUrl: string
   title: string
   prompt: string
   workspace: string
@@ -106,7 +111,8 @@ function onceInstant(value: unknown) {
 
 export function defaultScheduleDraft(): ScheduleDraft {
   return {
-    title: '', prompt: '', workspace: '', agent: 'codex', cadenceKind: 'daily',
+    enabled: true, scheduleEnabled: true, externalEnabled: false, externalSecret: '', triggerUrl: '',
+    title: '', prompt: '', workspace: '', agent: 'codex', cadenceKind: 'none',
     thread_mode: 'new', compactMode: 'inherit', autoCompactTokenLimit: '',
     maxInheritRuns: '20',
     intervalMinutes: '10', preserveUnrestrictedHours: false, workWeekdays: [1, 2, 3, 4, 5],
@@ -139,6 +145,11 @@ export function scheduleToDraft(source: Partial<ScheduleRecord> = {}): ScheduleD
   const workHours = 'work_hours' in cadence ? cadence.work_hours : undefined
   return {
     ...defaultScheduleDraft(),
+    enabled: source.enabled ?? true,
+    scheduleEnabled: source.schedule_enabled ?? true,
+    externalEnabled: source.external_enabled ?? false,
+    externalSecret: source.external_secret ?? '',
+    triggerUrl: source.trigger_url ?? '',
     title: text(source.title),
     prompt: text(source.prompt),
     workspace: text(source.workspace),
@@ -147,7 +158,7 @@ export function scheduleToDraft(source: Partial<ScheduleRecord> = {}): ScheduleD
     compactMode: source.auto_compact_token_limit == null ? 'inherit' : 'custom',
     autoCompactTokenLimit: source.auto_compact_token_limit == null ? '' : String(source.auto_compact_token_limit),
     maxInheritRuns: String(source.max_inherit_runs ?? 20),
-    cadenceKind,
+    cadenceKind: source.cadence === null ? 'none' : cadenceKind,
     intervalMinutes: cadence.kind === 'interval' ? String(cadence.minutes) : '10',
     preserveUnrestrictedHours: !workHours,
     workWeekdays: workHours ? [...workHours.weekdays] : [1, 2, 3, 4, 5, 6, 7],
@@ -219,8 +230,9 @@ export function draftToScheduleInput(
     throw new TypeError('OpenCode 当前仅支持继承 Skills 和 integrations')
   }
 
-  let cadence: ScheduleCadence
-  if (draft.cadenceKind === 'once') {
+  let cadence: ScheduleCadence | null
+  if (draft.cadenceKind === 'none') { cadence = null }
+  else if (draft.cadenceKind === 'once') {
     cadence = { kind: 'once', at: onceInstant(draft.onceAt), timezone_mode: 'system' }
   } else if (draft.cadenceKind === 'interval') {
     cadence = { kind: 'interval', minutes: integer(draft.intervalMinutes, '间隔分钟', 1, 1440), timezone_mode: 'system' }
@@ -245,7 +257,7 @@ export function draftToScheduleInput(
     }
   }
 
-  if (cadence.kind !== 'once' && !draft.preserveUnrestrictedHours) {
+  if (cadence && cadence.kind !== 'once' && !draft.preserveUnrestrictedHours) {
     const weekdays = normalizedWeekdays(draft.workWeekdays)
     if (!weekdays.length) throw new TypeError('生效时段至少选择一天')
     const minute = (value: string, end = false) => {
@@ -288,6 +300,10 @@ export function draftToScheduleInput(
   }
 
   return {
+    enabled: draft.enabled,
+    schedule_enabled: draft.scheduleEnabled,
+    external_enabled: draft.externalEnabled,
+    external_secret: draft.externalSecret || null,
     title: boundedText(draft.title, 'Title', 200),
     prompt: boundedText(draft.prompt, 'Prompt', 20_000),
     workspace: boundedText(draft.workspace, 'Workspace', 4_096),

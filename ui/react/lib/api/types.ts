@@ -190,9 +190,13 @@ export interface ScheduleRecord {
   id: string
   title: string
   prompt?: string
+  schedule_enabled?: boolean
+  external_enabled?: boolean
+  external_secret?: string | null
+  trigger_url?: string | null
   workspace: string
   agent: string
-  cadence: ScheduleCadence
+  cadence: ScheduleCadence | null
   timezone_mode: string
   thread_mode: 'new' | 'reuse' | 'auto'
   auto_compact_token_limit?: number | null
@@ -292,6 +296,8 @@ export interface RunFileChange {
 }
 
 export interface RunRecord {
+  action_id?: string
+  data?: unknown
   id: string
   job_id: string
   definition_etag: string
@@ -381,6 +387,10 @@ export interface RunConversationResponse {
 }
 
 export interface ScheduleMutationInput {
+  enabled?: boolean
+  schedule_enabled?: boolean
+  external_enabled?: boolean
+  external_secret?: string | null
   title: string
   prompt: string
   workspace: string
@@ -388,7 +398,7 @@ export interface ScheduleMutationInput {
   thread_mode?: ScheduleRecord['thread_mode']
   auto_compact_token_limit?: number | null
   max_inherit_runs?: number
-  cadence: ScheduleCadence
+  cadence: ScheduleCadence | null
   sandbox_mode: ScheduleRecord['sandbox_mode']
   model: string | null
   reasoning_effort: string | null

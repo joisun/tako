@@ -10,7 +10,7 @@ import {
   RUN_SCHEMA_VERSION,
 } from '../scheduler/scheduler-schema.mjs'
 
-const ORIGINS = new Set(['manual', 'scheduled', 'catchup'])
+const ORIGINS = new Set(['manual', 'scheduled', 'catchup', 'external'])
 const OPEN_STATUSES = new Set(['queued', 'running'])
 const TERMINAL_STATUSES = new Set([
   'succeeded',
@@ -53,6 +53,8 @@ export function createRunStore({
     throw error
   }
 
+  const summaryColumns = db.prepare('PRAGMA table_info(scheduled_runs)').all()
+    .map(({ name }) => name).filter(name => name !== 'input_json').join(', ')
   const selectById = db.prepare('SELECT * FROM scheduled_runs WHERE id = ?')
   const selectByIdempotency = db.prepare(
     'SELECT * FROM scheduled_runs WHERE idempotency_key = ?',
@@ -108,46 +110,26 @@ export function createRunStore({
           'This Schedule occurrence already has a Run',
         )
       }
-      if (selectActive.get(value.schedule.id)) {
+      if (['scheduled', 'catchup'].includes(value.origin) && selectActive.get(value.schedule.id)) {
         throw runtimeError('RUN_ALREADY_ACTIVE', 'Schedule already has an active Run')
       }
 
+      if (db.prepare("SELECT count(*) AS count FROM scheduled_runs WHERE status = 'queued'").get().count >= 1000) {
+        throw runtimeError('RUN_QUEUE_FULL', 'Run queue is full')
+      }
       const timestamp = nowIso(clock)
       const id = requiredString(createId(), 'run_id')
       const snapshot = { ...value.schedule }
-      snapshot.session_mode_reason = 'always_new'
-      snapshot.inherit_run_number = 0
-      if (['reuse', 'auto'].includes(snapshot.thread_mode)) {
-        const previous = db.prepare(`
-          SELECT * FROM scheduled_runs
-          WHERE schedule_id = ? AND runtime_id = ? AND session_id IS NOT NULL
-            AND session_id != '' AND json_extract(snapshot_json, '$.workspace') = ?
-          ORDER BY created_at DESC, rowid DESC LIMIT 1
-        `).get(snapshot.id, value.runtime_id, snapshot.workspace)
-        const inherited = previous ? db.prepare(`
-          SELECT count(*) AS count FROM scheduled_runs
-          WHERE schedule_id = ? AND runtime_id = ? AND session_id = ?
-            AND json_extract(snapshot_json, '$.resume_session_id') = ?
-        `).get(snapshot.id, value.runtime_id, previous.session_id, previous.session_id).count : 0
-        const limitReached = inherited >= (snapshot.max_inherit_runs ?? 20)
-        const useNew = limitReached
-          || (snapshot.thread_mode === 'auto' && nextSessionMode(previous) === 'new')
-        snapshot.resume_session_id = useNew ? null : previous?.session_id ?? snapshot.session_id ?? null
-        snapshot.session_mode_reason = limitReached ? 'inherit_limit' : useNew ? 'agent_choice'
-          : snapshot.resume_session_id ? 'reuse' : 'first_run'
-        snapshot.inherit_run_number = snapshot.resume_session_id ? inherited + 1 : 0
-      }
-      snapshot.session_mode = snapshot.resume_session_id ? 'reuse' : 'new'
       db.prepare(`
         INSERT INTO scheduled_runs (
           id, schedule_id, definition_etag, runtime_id, origin,
           occurrence_key, idempotency_key, scheduled_for, status,
-          snapshot_json, runtime_version, executable_digest, pid,
+          snapshot_json, input_json, runtime_version, executable_digest, pid,
           session_id, created_at, started_at, finished_at, exit_code,
           error_code, final_message, usage_json, file_changes_json,
           stdout_log_path, stderr_log_path, reviewed_at, updated_at
         ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, NULL, NULL, NULL, NULL,
+          ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, NULL, NULL, NULL, NULL,
           ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?
         )
       `).run(
@@ -160,11 +142,50 @@ export function createRunStore({
         value.idempotency_key,
         value.scheduled_for,
         JSON.stringify(snapshot),
+        JSON.stringify(value.data),
         timestamp,
         timestamp,
       )
       return publicRun(requireRun(id), { includeSnapshot: true })
     })
+  }
+
+  function prepareQueued(id) {
+    return transaction(() => {
+      const row = requireRun(id)
+      if (row.status !== 'queued') throw runtimeError('RUN_STATE_CONFLICT', 'Run is not queued')
+      const snapshot = JSON.parse(row.snapshot_json)
+      snapshot.session_mode_reason = 'always_new'
+      snapshot.inherit_run_number = 0
+      if (['reuse', 'auto'].includes(snapshot.thread_mode)) {
+        const previous = db.prepare(`
+          SELECT * FROM scheduled_runs
+          WHERE schedule_id = ? AND runtime_id = ? AND session_id IS NOT NULL
+            AND session_id != '' AND json_extract(snapshot_json, '$.workspace') = ?
+          ORDER BY created_at DESC, rowid DESC LIMIT 1
+        `).get(snapshot.id, row.runtime_id, snapshot.workspace)
+        const inherited = previous ? db.prepare(`
+          SELECT count(*) AS count FROM scheduled_runs
+          WHERE schedule_id = ? AND runtime_id = ? AND session_id = ?
+            AND json_extract(snapshot_json, '$.resume_session_id') = ?
+        `).get(snapshot.id, row.runtime_id, previous.session_id, previous.session_id).count : 0
+        const limitReached = inherited >= (snapshot.max_inherit_runs ?? 20)
+        const useNew = limitReached
+          || (snapshot.thread_mode === 'auto' && nextSessionMode(previous) === 'new')
+        snapshot.resume_session_id = useNew ? null : previous?.session_id ?? snapshot.session_id ?? null
+        snapshot.session_mode_reason = limitReached ? 'inherit_limit' : useNew ? 'agent_choice'
+          : snapshot.resume_session_id ? 'reuse' : 'first_run'
+        snapshot.inherit_run_number = snapshot.resume_session_id ? inherited + 1 : 0
+      }
+      snapshot.session_mode = snapshot.resume_session_id ? 'reuse' : 'new'
+      db.prepare('UPDATE scheduled_runs SET snapshot_json = ? WHERE id = ?').run(JSON.stringify(snapshot), id)
+      return publicRun(requireRun(id), { includeSnapshot: true })
+    })
+  }
+
+  function recordSpawn(id, input) {
+    db.prepare('UPDATE scheduled_runs SET pid = ?, runtime_version = ?, executable_digest = ? WHERE id = ? AND status = ?')
+      .run(input.pid ?? null, input.runtime_version ?? null, input.executable_digest ?? null, id, 'running')
   }
 
   function markRunning(id, input = {}) {
@@ -264,7 +285,7 @@ export function createRunStore({
         UPDATE scheduled_runs
         SET status = 'interrupted', pid = NULL, finished_at = ?,
             error_code = 'RILLO_RESTARTED', updated_at = ?
-        WHERE status IN ('queued', 'running')
+        WHERE status = 'running'
       `).run(timestamp, timestamp).changes
     })
   }
@@ -292,7 +313,7 @@ export function createRunStore({
     }
     values.push(limit)
     return db.prepare(`
-      SELECT * FROM scheduled_runs
+      SELECT ${summaryColumns} FROM scheduled_runs
       ${clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
@@ -324,6 +345,9 @@ export function createRunStore({
   return Object.freeze({
     create,
     markRunning,
+    prepareQueued,
+    recordSpawn,
+    queued: () => db.prepare("SELECT id FROM scheduled_runs WHERE status = 'queued' ORDER BY rowid").all().map(({ id }) => get(id)),
     recordSession,
     complete,
     cancelQueued,
@@ -362,6 +386,9 @@ function normalizeCreation(input) {
   if (!schedule || typeof schedule !== 'object' || Array.isArray(schedule)) {
     throw runtimeError('RUN_INPUT_INVALID', 'schedule must be an object')
   }
+  delete schedule.external_secret
+  delete schedule.external_enabled
+  const data = input.data === undefined ? null : JSON.parse(JSON.stringify(input.data))
   requiredString(schedule.id, 'schedule.id')
   requiredString(schedule.etag, 'schedule.etag')
   requiredString(schedule.prompt, 'schedule.prompt')
@@ -375,14 +402,15 @@ function normalizeCreation(input) {
   const occurrenceKey = nullableString(input.occurrence_key, 'occurrence_key')
   const scheduledFor = nullableInstant(input.scheduled_for, 'scheduled_for')
   const idempotencyKey = nullableString(input.idempotency_key, 'idempotency_key')
-  if (input.origin === 'manual' && occurrenceKey !== null) {
+  if (['manual', 'external'].includes(input.origin) && occurrenceKey !== null) {
     throw runtimeError('RUN_INPUT_INVALID', 'manual Runs cannot have an occurrence_key')
   }
-  if (input.origin !== 'manual' && occurrenceKey === null) {
+  if (['scheduled', 'catchup'].includes(input.origin) && occurrenceKey === null) {
     throw runtimeError('RUN_INPUT_INVALID', 'scheduled Runs require an occurrence_key')
   }
   return {
     schedule,
+    data,
     runtime_id: input.runtime_id,
     origin: input.origin,
     occurrence_key: occurrenceKey,
@@ -392,8 +420,10 @@ function normalizeCreation(input) {
 }
 
 function publicRun(row, { includeSnapshot = false } = {}) {
-  const result = { ...row }
+  const result = { ...row, action_id: row.schedule_id }
   delete result.snapshot_json
+  if (Object.hasOwn(row, 'input_json')) result.data = JSON.parse(row.input_json)
+  delete result.input_json
   const snapshot = JSON.parse(row.snapshot_json)
   if (includeSnapshot) result.snapshot = snapshot
   result.thread_mode = snapshot.thread_mode ?? 'new'

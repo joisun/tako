@@ -1,7 +1,7 @@
 import { SchedulerError } from './scheduler-errors.mjs'
 
 export const SCHEDULER_SCHEMA_VERSION = 3
-export const RUN_SCHEMA_VERSION = 4
+export const RUN_SCHEMA_VERSION = 5
 
 export function createRunSchema(db) {
   if (!db || typeof db.exec !== 'function' || typeof db.prepare !== 'function') {
@@ -13,7 +13,7 @@ export function createRunSchema(db) {
       schedule_id TEXT NOT NULL,
       definition_etag TEXT NOT NULL,
       runtime_id TEXT NOT NULL,
-      origin TEXT NOT NULL CHECK(origin IN ('manual','scheduled','catchup')),
+      origin TEXT NOT NULL CHECK(origin IN ('manual','scheduled','catchup','external')),
       occurrence_key TEXT,
       idempotency_key TEXT,
       scheduled_for TEXT,
@@ -21,6 +21,7 @@ export function createRunSchema(db) {
         'queued','running','succeeded','failed','timed_out','canceled','interrupted'
       )),
       snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json)),
+      input_json TEXT NOT NULL DEFAULT 'null' CHECK(json_valid(input_json)),
       runtime_version TEXT,
       executable_digest TEXT,
       pid INTEGER,
@@ -51,7 +52,7 @@ export function createRunSchema(db) {
       WHERE idempotency_key IS NOT NULL;
     CREATE UNIQUE INDEX scheduled_runs_one_active
       ON scheduled_runs(schedule_id)
-      WHERE status IN ('queued', 'running');
+      WHERE status = 'running';
     CREATE INDEX scheduled_runs_history
       ON scheduled_runs(schedule_id, created_at DESC, id DESC);
     CREATE INDEX scheduled_runs_review_queue

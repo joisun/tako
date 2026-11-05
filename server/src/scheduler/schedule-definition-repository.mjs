@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import {
   chmod, lstat, mkdir, open, readdir, realpath, rename, rm, stat,
@@ -11,7 +11,7 @@ import { SchedulerError } from './scheduler-errors.mjs'
 const MAX_DEFINITION_BYTES = 256 * 1024
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const PATCH_FIELDS = new Set([
-  'title', 'prompt', 'workspace', 'agent', 'cadence', 'capabilities', 'sandbox_mode',
+  'enabled', 'schedule_enabled', 'external_enabled', 'external_secret', 'title', 'prompt', 'workspace', 'agent', 'cadence', 'capabilities', 'sandbox_mode',
   'model', 'reasoning_effort', 'fast_mode', 'network_access', 'timeout_seconds',
   'thread_mode', 'auto_compact_token_limit', 'max_inherit_runs',
 ])
@@ -206,7 +206,7 @@ export function createScheduleDefinitionRepository({
     await ensureScanned()
     const scheduleId = input?.id === undefined ? randomUUID() : id(input.id)
     if (jobs.has(scheduleId)) fail('SCHEDULE_ID_CONFLICT', `Schedule ${scheduleId} already exists`, { id: scheduleId })
-    const value = { ...input, id: scheduleId, enabled: input?.enabled ?? true }
+    const value = { ...input, id: scheduleId, enabled: input?.enabled ?? true, external_secret: input?.external_secret ?? randomBytes(32).toString('base64url') }
     const source = serializeScheduleDefinition(value, { clock })
     const fileName = `${slug(value.title)}--${scheduleId.slice(0, 8)}.md`
     const path = join(root, fileName)
@@ -227,7 +227,9 @@ export function createScheduleDefinitionRepository({
     for (const key of Object.keys(patch)) {
       if (!PATCH_FIELDS.has(key)) fail('SCHEDULE_INPUT_INVALID', `unsupported Schedule patch field: ${key}`, { field: key })
     }
-    const source = serializeScheduleDefinition({ ...existing, ...patch }, { clock })
+    const next = { ...existing, ...patch }
+    if (next.external_enabled && next.external_secret == null && existing.external_secret == null) next.external_secret = randomBytes(32).toString('base64url')
+    const source = serializeScheduleDefinition(next, { clock })
     await atomicWrite(existing.source_path, source, { expectedEtag })
     const metadata = await stat(existing.source_path)
     const definition = parseScheduleDefinition(source, { sourcePath: existing.source_path, clock })

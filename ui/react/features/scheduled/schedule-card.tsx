@@ -67,7 +67,8 @@ export function ScheduleCard({
             {schedule.title || 'Untitled schedule'}
           </span>
           <Pill className="schedule-row__cadence">{cadenceSummary(schedule.cadence)}</Pill>
-          {!schedule.enabled ? <span>已暂停</span> : null}
+          {!schedule.enabled ? <span>已停用</span> : schedule.schedule_enabled === false ? <span>定时暂停</span> : null}
+          {schedule.external_enabled ? <Pill>HTTP</Pill> : null}
         </div>
         <code>{schedule.workspace || 'Workspace 未知'}</code>
       </button>
@@ -97,7 +98,7 @@ export function ScheduleCard({
 
       <div className="schedule-row__actions" aria-label={`${schedule.title} 操作`}>
         <Button
-          aria-label="编辑 Schedule"
+          aria-label="编辑 Action"
           disabled={!onEdit || busyAction !== null}
           isIconOnly
           size="sm"
@@ -110,7 +111,7 @@ export function ScheduleCard({
           className="schedule-row__run-action"
           data-running={runActive || undefined}
           aria-label={runActive ? (runStoppable ? '停止当前 Run' : 'Run 正在调度') : '立即运行'}
-          disabled={(runActive && !runStoppable) || busyAction !== null}
+          disabled={(!runActive && !schedule.enabled) || (runActive && !runStoppable) || busyAction !== null}
           isIconOnly
           isPending={busyAction === 'run' || busyAction === 'stop'}
           size="sm"
@@ -120,7 +121,7 @@ export function ScheduleCard({
           {runActive ? <Square aria-hidden="true" /> : <Play aria-hidden="true" />}
         </Button>
         <Button
-          aria-label={schedule.enabled ? '暂停 Schedule' : '启用 Schedule'}
+          aria-label={schedule.enabled ? '停用 Action' : '启用 Action'}
           disabled={busyAction !== null}
           isIconOnly
           isPending={busyAction === 'pause' || busyAction === 'resume'}

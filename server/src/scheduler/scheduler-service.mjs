@@ -6,7 +6,7 @@ import { SchedulerError } from './scheduler-errors.mjs'
 import { THREAD_MODES, validAutoCompactLimit, validInheritanceLimit } from '../session-policy.mjs'
 
 const JOB_FIELDS = new Set([
-  'title', 'prompt', 'workspace', 'agent', 'cadence', 'sandbox_mode', 'model',
+  'enabled', 'schedule_enabled', 'external_enabled', 'external_secret', 'title', 'prompt', 'workspace', 'agent', 'cadence', 'sandbox_mode', 'model',
   'reasoning_effort', 'fast_mode', 'network_access', 'timeout_seconds', 'capabilities',
   'thread_mode', 'auto_compact_token_limit', 'max_inherit_runs',
 ])
@@ -31,6 +31,7 @@ export function createDefinitionScheduleService({
   if (!runtimeRegistry || typeof runtimeRegistry.get !== 'function') {
     throw new TypeError('runtimeRegistry.get is required')
   }
+  let triggerBaseUrl = null
   let definitionQueue = Promise.resolve()
 
   function enqueue(operation) {
@@ -46,9 +47,12 @@ export function createDefinitionScheduleService({
     return agent
   }
 
-  async function normalizedInput(input, { patch = false, existingAgent = 'codex' } = {}) {
+  async function normalizedInput(input, { patch = false, existingAgent = 'codex', existingCadence = null } = {}) {
     allowOnly(input, JOB_FIELDS, patch ? 'Schedule patch' : 'Schedule')
     const output = { ...input }
+    for (const field of ['enabled', 'schedule_enabled', 'external_enabled']) {
+      if (own(output, field) && typeof output[field] !== 'boolean') fail('SCHEDULE_INPUT_INVALID', `${field} must be boolean`, { field })
+    }
     const openCode = (input.agent ?? existingAgent) === 'opencode'
     if (!patch || own(output, 'max_inherit_runs')) {
       output.max_inherit_runs ??= 20
@@ -70,7 +74,7 @@ export function createDefinitionScheduleService({
     if (!patch || own(output, 'agent')) output.agent = registeredAgent(output.agent)
     if (!patch || own(output, 'cadence')) {
       try {
-        output.cadence = validateCadence(output.cadence, { now: nowDate(clock) })
+        output.cadence = output.cadence == null ? null : validateCadence(output.cadence, { now: nowDate(clock), allowPastOnce: patch && output.cadence?.kind === 'once' && output.cadence.at === existingCadence?.at })
       } catch (error) {
         if (!(error instanceof TypeError || error instanceof RangeError)) throw error
         fail('SCHEDULE_INPUT_INVALID', error.message, { field: 'cadence' })
@@ -107,6 +111,7 @@ export function createDefinitionScheduleService({
       : null
     return {
       ...definition,
+      trigger_url: triggerBaseUrl ? `${triggerBaseUrl}/actions/${definition.id}/trigger` : null,
       cadence_json: JSON.stringify(definition.cadence),
       enabled: definition.enabled ? 1 : 0,
       deleted_at: null,
@@ -133,7 +138,7 @@ export function createDefinitionScheduleService({
     return { job: await view(await definitions.update(
       scheduleId,
       expectedEtag(etag),
-      await normalizedInput(patch, { patch: true, existingAgent: existing.agent }),
+      await normalizedInput(patch, { patch: true, existingAgent: existing.agent, existingCadence: existing.cadence }),
     )) }
   }
 
@@ -159,6 +164,7 @@ export function createDefinitionScheduleService({
   }
 
   return Object.freeze({
+    setTriggerBaseUrl(value) { triggerBaseUrl = value },
     async listJobs() {
       return {
         jobs: await Promise.all((await definitions.list()).map(view)),
@@ -177,7 +183,7 @@ export function createDefinitionScheduleService({
 }
 
 function nextRunAt(definition, clock) {
-  if (!definition.enabled) return null
+  if (!definition.enabled || definition.schedule_enabled === false || !definition.cadence) return null
   const next = nextOccurrence(definition.cadence, nowDate(clock))
   return next?.toISOString() ?? null
 }

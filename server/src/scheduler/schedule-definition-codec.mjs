@@ -7,17 +7,17 @@ import { SchedulerError } from './scheduler-errors.mjs'
 import { isCodexModelSlug, isCodexReasoningLevel } from './codex-model-selection.mjs'
 import { THREAD_MODES, validAutoCompactLimit, validInheritanceLimit } from '../session-policy.mjs'
 
-const DEFINITION_TYPE = 'rillo/schedule'
+const DEFINITION_TYPE = 'rillo/action'
 // Read existing user Markdown without rewriting it during installation. New writes use Rillo.
-const LEGACY_DEFINITION_TYPES = new Set(['tasks-recorder/schedule', 'task-recorder/schedule', 'tasks_recorder/schedule', 'task_recorder/schedule'])
+const LEGACY_DEFINITION_TYPES = new Set(['rillo/schedule', 'tasks-recorder/schedule', 'task-recorder/schedule', 'tasks_recorder/schedule', 'task_recorder/schedule'])
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/
 const DURATION = /^(\d+)(s|m|h)$/
 const AGENT = /^[a-z][a-z0-9-]{0,63}$/
 const FRONT_MATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/
-const MARKER = /^type:\s*["']?(?:rillo|tasks?[-_]recorder)\/schedule["']?\s*(?:#.*)?$/m
+const MARKER = /^type:\s*["']?(?:rillo|tasks?[-_]recorder)\/(?:schedule|action)["']?\s*(?:#.*)?$/m
 const FIELDS = new Set([
-  'type', 'id', 'title', 'enabled', 'workspace', 'agent', 'schedule', 'capabilities',
+  'type', 'id', 'title', 'enabled', 'schedule_enabled', 'external_enabled', 'external_secret', 'workspace', 'agent', 'schedule', 'capabilities',
   'sandbox', 'model', 'reasoning', 'fast_mode', 'network_access', 'timeout', 'session_id',
   'thread_mode', 'auto_compact_token_limit', 'max_inherit_runs',
 ])
@@ -208,7 +208,7 @@ export function parseScheduleDefinition(source, {
   if (!match || !MARKER.test(match[1])) return null
   const document = parseDocument(match[1], { prettyErrors: false, uniqueKeys: true })
   if (document.errors.length > 0) {
-    fail('SCHEDULE_DEFINITION_YAML_INVALID', `Schedule front matter YAML is invalid: ${document.errors[0].message}`, { source_path: sourcePath })
+    fail('SCHEDULE_DEFINITION_YAML_INVALID', 'Action front matter YAML is invalid', { source_path: sourcePath })
   }
   const frontMatter = object(document.toJS({ maxAliasCount: 0 }), 'front matter')
   exactFields(frontMatter, FIELDS, 'front matter')
@@ -236,14 +236,17 @@ export function parseScheduleDefinition(source, {
   if (prompt.length === 0 || prompt.length > 20000) {
     fail('SCHEDULE_DEFINITION_INVALID', 'Markdown body Prompt must contain 1 to 20000 characters', { field: 'prompt' })
   }
-  const enabled = frontMatter.enabled ?? true
+  const legacy = frontMatter.type !== DEFINITION_TYPE
+  const enabled = legacy ? true : frontMatter.enabled ?? true
+  const triggers = triggerSettings({ ...frontMatter, schedule_enabled: frontMatter.schedule_enabled ?? (legacy ? frontMatter.enabled ?? true : true) })
   const result = {
     id,
     title: string(frontMatter.title, 'title', 200),
     enabled,
+    ...triggers,
     workspace: string(frontMatter.workspace, 'workspace', 4096),
     agent: agentId(frontMatter.agent),
-    cadence: cadence(frontMatter.schedule, clock, { allowPastOnce: true }),
+    cadence: frontMatter.schedule == null ? null : cadence(frontMatter.schedule, clock, { allowPastOnce: true }),
     sandbox_mode: sandbox,
     model: modelSelection(frontMatter.model, agentId(frontMatter.agent)),
     reasoning_effort: reasoningSelection(frontMatter.reasoning, agentId(frontMatter.agent)),
@@ -269,9 +272,10 @@ export function serializeScheduleDefinition(job, { clock = () => new Date() } = 
     id: string(value.id, 'id', 128),
     title: string(value.title, 'title', 200),
     enabled,
+    ...triggerSettings(value),
     workspace: string(value.workspace, 'workspace', 4096),
     agent: agentId(value.agent),
-    schedule: humanCadence(validateCadence(value.cadence, { now: clock(), allowPastOnce: true })),
+    schedule: value.cadence == null ? null : humanCadence(validateCadence(value.cadence, { now: clock(), allowPastOnce: true })),
     capabilities: capabilities(value.capabilities),
     sandbox: value.sandbox_mode ?? 'read-only',
   }
@@ -326,4 +330,20 @@ function validateOpenCodeSettings(agent, sandbox, policy) {
   if (policy.skills !== 'inherit' || policy.integrations !== 'inherit') {
     fail('SCHEDULE_DEFINITION_INVALID', 'OpenCode currently requires inherited skills and integrations', { field: 'capabilities' })
   }
+}
+
+function triggerSettings(value) {
+  for (const field of ['schedule_enabled', 'external_enabled']) {
+    if (value[field] !== undefined && typeof value[field] !== 'boolean') {
+      fail('SCHEDULE_DEFINITION_INVALID', `${field} must be boolean`, { field })
+    }
+  }
+  const external_secret = value.external_secret ?? null
+  if (external_secret !== null && (typeof external_secret !== 'string' || !external_secret.trim() || external_secret.length > 1024)) {
+    fail('SCHEDULE_DEFINITION_INVALID', 'external_secret must contain 1–1024 characters', { field: 'external_secret' })
+  }
+  if (value.external_enabled === true && external_secret === null) {
+    fail('SCHEDULE_DEFINITION_INVALID', 'external calling requires a secret', { field: 'external_secret' })
+  }
+  return { schedule_enabled: value.schedule_enabled ?? true, external_enabled: value.external_enabled ?? false, external_secret }
 }

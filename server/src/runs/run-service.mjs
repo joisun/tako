@@ -35,20 +35,30 @@ export function createRunService({
 
   async function create(input) {
     if (shuttingDown) throw serviceError('RUN_SERVICE_STOPPING', 'RunService is stopping')
+    if (input.schedule?.enabled === false || input.schedule?.enabled === 0) throw serviceError('ACTION_DISABLED', 'Action is disabled')
     const runtimeId = input.schedule?.agent ?? 'codex'
     const run = runStore.create({ ...input, runtime_id: runtimeId })
-    if (!active.has(run.id) && ['queued', 'running'].includes(run.status)) {
-      const controller = new AbortController()
-      const execution = { controller, promise: null, session: null, turnRevision: null }
-      active.set(run.id, execution)
-      execution.promise = Promise.resolve()
-        .then(() => launch(run.id, controller.signal))
-        .catch(() => undefined)
-        .finally(() => active.delete(run.id))
-      publishStatus(run.id, 'queued')
-    }
+    scheduleLaunch(run)
     changed(run.id)
     return { run: publicRun(run) }
+  }
+
+  const scheduleTails = new Map()
+  function scheduleLaunch(run) {
+    if (active.has(run.id) || run.status !== 'queued') return
+    const controller = new AbortController()
+    const execution = { controller, promise: null, session: null, turnRevision: null }
+    const previous = scheduleTails.get(run.schedule_id) ?? Promise.resolve()
+    active.set(run.id, execution)
+    execution.promise = previous.catch(() => {}).then(() => {
+      if (shuttingDown) return
+      return launch(run.id, controller.signal)
+    }).catch(() => {}).finally(() => {
+      active.delete(run.id)
+      if (scheduleTails.get(run.schedule_id) === execution.promise) scheduleTails.delete(run.schedule_id)
+    })
+    scheduleTails.set(run.schedule_id, execution.promise)
+    publishStatus(run.id, 'queued')
   }
 
   async function launch(runId, signal) {
@@ -56,11 +66,11 @@ export function createRunService({
     let lease = null
     let pid = null
     try {
-      const queued = runStore.get(runId)
+      let queued = runStore.get(runId)
       if (queued.status !== 'queued') return
       if (resources) lease = await resources.wait({ owner: 'schedule', runId,
         workspace: queued.snapshot.workspace, signal })
-      if (signal.aborted) return cancelQueuedIfOpen(runStore, runId)
+      if (signal.aborted) return shuttingDown ? undefined : cancelQueuedIfOpen(runStore, runId)
       const workspaceBefore = await safeWorkspaceSnapshot(queued.snapshot.workspace)
 
       logs = await logStore.open({
@@ -76,9 +86,11 @@ export function createRunService({
         sequences.set(runId, Math.max(sequences.get(runId) ?? 0, event.sequence))
         eventHub.publish(event)
       }
+      queued = runStore.prepareQueued?.(runId) ?? queued
+      runStore.markRunning(runId)
       const resultFromAgent = await executeAgent({
         runId, runtimeId: queued.runtime_id, invocationSpec: queued.snapshot,
-        spec: { ...queued.snapshot, prompt: scheduleExecutionPrompt(queued.snapshot) },
+        spec: { ...queued.snapshot, prompt: scheduleExecutionPrompt(queued.snapshot, queued.data, queued.origin) },
         signal, logs,
         nextSequence() {
           sequence = Math.max(sequence, sequences.get(runId) ?? 0)
@@ -87,7 +99,7 @@ export function createRunService({
         onSpawn(value) {
           pid = value.pid
           lease?.spawned(pid)
-          runStore.markRunning(runId, value)
+          runStore.recordSpawn?.(runId, value)
           publishStatus(runId, 'running')
           changed(runId)
         },
@@ -134,6 +146,7 @@ export function createRunService({
     } catch (error) {
       try {
         const current = runStore.get(runId)
+        if (shuttingDown && current.status === 'queued') return
         if (['queued', 'running'].includes(current.status)) {
           const failed = runStore.complete(runId, {
             status: signal.aborted ? 'canceled' : 'failed',
@@ -168,6 +181,7 @@ export function createRunService({
   function recover() {
     const interrupted = runStore.interruptOpen()
     if (interrupted > 0) onChange({ kind: 'runs', recovery: true })
+    for (const run of runStore.queued?.() ?? []) scheduleLaunch(run)
     return interrupted
   }
 

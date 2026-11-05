@@ -2,6 +2,7 @@ import { latestDueOccurrence } from './cadence.mjs'
 
 const EXPECTED_CONFLICTS = new Set([
   'RUN_ALREADY_ACTIVE',
+  'RUN_QUEUE_FULL',
   'RUN_OCCURRENCE_EXISTS',
 ])
 
@@ -58,7 +59,7 @@ export function createSchedulerClock({
     const observedAt = validDate(clock(), 'clock')
     const schedules = await definitions.list()
     for (const schedule of schedules) {
-      if (schedule?.enabled !== true) continue
+      if (schedule?.enabled !== true || schedule.schedule_enabled === false || !schedule.cadence) continue
       const latest = runService.latestOccurrence(schedule.id)
       const after = latest?.scheduled_for
         ? validDate(latest.scheduled_for, 'scheduled_for')

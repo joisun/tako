@@ -14,14 +14,14 @@ export function DashboardApp() {
   const api = useDashboardApi()
   const connectionState = useDashboardConnection()
   const [view, setView] = useState(readDashboardView)
-  const schedules = useQuery({ queryKey: queryKeys.schedules, queryFn: () => api.schedules(), enabled: view === 'scheduled' })
+  const schedules = useQuery({ queryKey: queryKeys.schedules, queryFn: () => api.schedules(), enabled: view === 'actions' })
   useEffect(() => persistDashboardView(view), [view])
 
   return (
-    <AppShell connectionState={connectionState} countLabel={view === 'sessions' ? '本机会话' : view === 'teams' ? 'Teams' : `${schedules.data?.jobs.length ?? '—'} 个计划`} onViewChange={setView} view={view}>
+    <AppShell connectionState={connectionState} countLabel={view === 'sessions' ? '本机会话' : view === 'teams' ? 'Teams' : `${schedules.data?.jobs.length ?? '—'} 个 Action`} onViewChange={setView} view={view}>
       <div className="sessions-host" hidden={view !== 'sessions'}><SessionsView api={api} /></div>
       {view === 'teams' ? <TeamsView api={api} agentManagement={<MarketplaceView api={api}/>} /> : null}
-      {view === 'scheduled' ? <ScheduledView api={api} data={schedules.data ?? null} isPending={schedules.isPending} error={schedules.error} /> : null}
+      {view === 'actions' ? <ScheduledView api={api} data={schedules.data ?? null} isPending={schedules.isPending} error={schedules.error} /> : null}
     </AppShell>
   )
 }

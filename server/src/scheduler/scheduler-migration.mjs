@@ -176,6 +176,23 @@ export function migrateSchedulerV4({
       db.exec('COMMIT')
       return { migrated: true, reason: 'initialized_v4', runs: 0 }
     }
+    if (version === 4) {
+      db.exec(`
+        ALTER TABLE scheduled_runs RENAME TO scheduled_runs_v4;
+        DROP INDEX scheduled_runs_occurrence;
+        DROP INDEX scheduled_runs_idempotency;
+        DROP INDEX scheduled_runs_one_active;
+        DROP INDEX scheduled_runs_history;
+        DROP INDEX scheduled_runs_review_queue;
+      `)
+      createRunSchema(db)
+      const columns = db.prepare('PRAGMA table_info(scheduled_runs_v4)').all().map(({ name }) => name).join(', ')
+      db.exec(`INSERT INTO scheduled_runs (${columns}) SELECT ${columns} FROM scheduled_runs_v4; DROP TABLE scheduled_runs_v4;`)
+      // v4 did not mark a Run running until spawn; a queued record could already be launching.
+      db.prepare("UPDATE scheduled_runs SET status = 'interrupted', finished_at = ?, updated_at = ?, error_code = 'RILLO_UPGRADED' WHERE status = 'queued'").run(timestamp, timestamp)
+      db.exec('COMMIT')
+      return { migrated: true, reason: 'upgraded_v5' , runs: db.prepare('SELECT count(*) AS count FROM scheduled_runs').get().count }
+    }
     if (version !== SCHEDULER_SCHEMA_VERSION) {
       fail(
         'SCHEDULE_SCHEMA_VERSION_UNSUPPORTED',
@@ -312,7 +329,7 @@ export async function migrateSchedulerV1({
   let legacyJobs
   try {
     version = inspection.prepare('PRAGMA user_version').get().user_version
-    if (version === RUN_SCHEMA_VERSION) return { migrated: false, reason: 'already_v4', definitions: 0, runs: 0, dispatches: 0 }
+    if (version === RUN_SCHEMA_VERSION || version === 4) return { migrated: false, reason: 'already_v4', definitions: 0, runs: 0, dispatches: 0 }
     if (version === SCHEDULER_SCHEMA_VERSION) return { migrated: false, reason: 'already_v3', definitions: 0, runs: 0, dispatches: 0 }
     if (version === 0) return { migrated: false, reason: 'empty', definitions: 0, runs: 0, dispatches: 0 }
     if (version === 2) return migrateV2Ledger(databasePath)

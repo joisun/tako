@@ -1,3 +1,4 @@
+import { createActionTriggerServer } from './action-trigger-server.mjs'
 import { createAgentMarketplace } from './agent-marketplace/service.mjs'
 import { createTeamPartTiming } from './team-part-timing.mjs'
 import { createAgentCatalog } from './agent-catalog.mjs'
@@ -234,6 +235,7 @@ export async function startDaemon({
   }
   let closed = false
   let api = null
+  let actionTriggers = null
   async function closeScheduler() {
     if (schedulerClosed) return
     schedulerClosed = true
@@ -478,6 +480,12 @@ export async function startDaemon({
       schedulerClock,
       packageVersion: config.packageVersion ?? 'source',
     })
+    if (schedulerDefinitions && runService) {
+      actionTriggers = createActionTriggerServer({ definitions: schedulerDefinitions, runService,
+        host: config.actionTriggerHost, port: config.actionTriggerPort ?? 0, publicUrl: config.actionTriggerPublicUrl })
+      const triggerAddress = await actionTriggers.listen()
+      schedulerService.setTriggerBaseUrl?.(triggerAddress.url)
+    }
     const address = await api.listen()
     await collaboration?.start(`http://127.0.0.1:${address.port}`)
     return {
@@ -491,7 +499,7 @@ export async function startDaemon({
         sessionBrowser?.close?.()
         hub.close()
         try {
-          await api?.close()
+          try { await actionTriggers?.close() } finally { await api?.close() }
         } finally {
           try { await closeScheduler() } finally { links?.close(); pins?.close() }
         }
@@ -501,6 +509,7 @@ export async function startDaemon({
     await messaging?.close?.()
     sessionBrowser?.close?.()
     hub.close()
+    try { await actionTriggers?.close() } catch {}
     try { await api?.close() } catch {}
     try { await closeScheduler() } finally { links?.close(); pins?.close() }
     throw error

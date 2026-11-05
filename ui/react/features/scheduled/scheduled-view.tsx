@@ -80,28 +80,28 @@ export function ScheduledView({
   if (data?.capability.supported === false) {
     content = (
       <div className="scheduled-state" role="status">
-        <strong>当前环境不支持 Scheduled Tasks</strong>
+        <strong>当前环境不支持 Actions</strong>
         <span>{data.capability.backend ? `Backend · ${data.capability.backend}` : 'Scheduler capability 暂不可用'}</span>
       </div>
     )
   } else if (isPending) {
-    content = <div className="scheduled-state" role="status" aria-busy="true">正在读取 Scheduled Tasks…</div>
+    content = <div className="scheduled-state" role="status" aria-busy="true">正在读取 Actions…</div>
   } else if (error) {
     content = (
       <div className="scheduled-state is-error" role="alert">
-        <strong>Scheduled Tasks 暂不可用</strong>
+        <strong>Actions 暂不可用</strong>
         <span>{error.message}</span>
       </div>
     )
   } else if (jobs.length === 0) {
     content = (
       <div className="scheduled-state">
-        <strong>还没有 Scheduled Task</strong>
-        <span>创建一个本机 Agent 工作计划。</span>
+        <strong>还没有 Action</strong>
+        <span>创建一个本机 Agent Action。</span>
       </div>
     )
   } else if (visible.length === 0) {
-    content = <div className="scheduled-state">没有匹配的 Scheduled Task</div>
+    content = <div className="scheduled-state">没有匹配的 Action</div>
   } else {
     content = (
       <ol className="schedule-list">
@@ -133,8 +133,8 @@ export function ScheduledView({
       <section className="scheduled-workspace" aria-labelledby="scheduled-title">
       <header className="scheduled-header">
         <div>
-          <h1 id="scheduled-title">Scheduled</h1>
-          <p>{jobs.length} 个计划 · {activeCount} 个启用{unreadCount ? ` · ${unreadCount} 条未读` : ''}</p>
+          <h1 id="scheduled-title">Actions</h1>
+          <p>{jobs.length} 个 Action · {activeCount} 个启用{unreadCount ? ` · ${unreadCount} 条未读` : ''}</p>
         </div>
         <Button disabled={controlsDisabled} size="sm" onClick={() => {
           setEditorSchedule(null)
@@ -142,13 +142,13 @@ export function ScheduledView({
           onCreate?.()
         }}>
           <Plus aria-hidden="true" />
-          新建计划
+          新建 Action
         </Button>
       </header>
 
       <div className="scheduled-toolbar">
         <SearchField
-          aria-label="搜索 Scheduled Tasks"
+          aria-label="搜索 Actions"
           className="scheduled-toolbar__search"
           disabled={controlsDisabled}
           placeholder="搜索标题、Workspace 或 cadence"
@@ -157,7 +157,7 @@ export function ScheduledView({
           onChange={setQuery}
         />
         <Select
-          aria-label="Scheduled 状态"
+          aria-label="Actions 状态"
           className="scheduled-toolbar__filter"
           disabled={controlsDisabled}
           value={status}

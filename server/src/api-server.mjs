@@ -38,6 +38,8 @@ function httpError(code, message, statusCode) {
 
 function statusFor(error) {
   if (error.statusCode) return error.statusCode
+  if (error.code === 'RUN_QUEUE_FULL') return 429
+  if (error.code === 'ACTION_DISABLED') return 409
   if (error.code === 'CODEX_MODEL_CATALOG_UNAVAILABLE') return 503
   if (error.code === 'MODEL_CATALOG_UNAVAILABLE' || error.code === 'RUNTIME_UNAVAILABLE') return 503
   if (error.code === 'RUNTIME_PROTOCOL_UNAVAILABLE') return 503
@@ -142,6 +144,10 @@ function scheduleJob(row, { detail = false, runSummary = null } = {}) {
     workspace: row.workspace,
     agent: row.agent ?? 'codex',
     cadence,
+    schedule_enabled: row.schedule_enabled ?? true,
+    external_enabled: row.external_enabled ?? false,
+    trigger_url: row.trigger_url ?? null,
+    ...(detail ? { external_secret: row.external_secret ?? null } : {}),
     timezone_mode: row.timezone_mode,
     thread_mode: row.thread_mode,
     auto_compact_token_limit: row.auto_compact_token_limit ?? null,
@@ -296,11 +302,13 @@ function scheduledRun(row) {
   return {
     id: row.id,
     job_id: row.schedule_id ?? row.job_id,
+    action_id: row.schedule_id ?? row.job_id,
     definition_etag: row.definition_etag,
     runtime_id: row.runtime_id ?? 'codex',
     interactive: row.interactive === true,
     turn_revision: Number.isSafeInteger(row.turn_revision) ? row.turn_revision : null,
     trigger: row.origin ?? row.trigger,
+    ...(Object.hasOwn(row, 'data') ? { data: row.data } : {}),
     status: row.status,
     thread_id: row.session_id ?? row.thread_id ?? null,
     thread_mode: row.thread_mode ?? 'new',
@@ -396,7 +404,7 @@ export function createApiServer({
     try {
       const requestOrigin = new URL(`http://${request.headers.host ?? expectedHost}`).origin
       const url = new URL(request.url, requestOrigin)
-      const { pathname } = url
+      const pathname = url.pathname.replace(/^\/api\/v1\/actions(?=\/|$)/, '/api/v1/schedules')
       if (await handleMarketplaceRequest({request,response,url,marketplace})) return
       if (await handleCollaborationRequest({ request, response, url, collaboration })) return
       const previewResource = pathname.match(/^\/run-files\/([a-f0-9]{48})\/(.*)$/)
@@ -605,7 +613,7 @@ export function createApiServer({
       }
       if (request.method === 'GET' && pathname === '/api/v1/runs' && runService) {
         const query = {}
-        const scheduleId = url.searchParams.get('schedule_id')
+        const scheduleId = url.searchParams.get('action_id') ?? url.searchParams.get('schedule_id')
         const status = url.searchParams.get('status')
         if (scheduleId !== null) query.schedule_id = scheduleId
         if (status !== null) query.status = status
@@ -615,12 +623,12 @@ export function createApiServer({
       if (request.method === 'POST' && pathname === '/api/v1/runs' && runService) {
         requireJson(request)
         const input = exactBody(await readJson(request), new Set([
-          'schedule_id', 'origin', 'idempotency_key',
+          'action_id', 'schedule_id', 'origin', 'idempotency_key',
         ]), 'Run')
         if (input.origin !== 'manual') {
           throw httpError('RUN_INPUT_INVALID', 'browser Runs must use manual origin', 400)
         }
-        const loaded = await schedulerService?.getJob(safeSegment(input.schedule_id))
+        const loaded = await schedulerService?.getJob(safeSegment(input.action_id ?? input.schedule_id))
         if (!loaded?.job) {
           throw httpError('SCHEDULE_NOT_FOUND', 'Schedule does not exist', 404)
         }
@@ -821,7 +829,7 @@ export function createApiServer({
       if (request.method === 'POST' && pathname === '/api/v1/schedules' && schedulerService) {
         requireJson(request)
         const input = exactBody(await readJson(request), new Set([
-          'title', 'prompt', 'workspace', 'agent', 'cadence', 'sandbox_mode', 'model',
+          'enabled', 'schedule_enabled', 'external_enabled', 'external_secret', 'title', 'prompt', 'workspace', 'agent', 'cadence', 'sandbox_mode', 'model',
           'reasoning_effort', 'fast_mode', 'network_access', 'timeout_seconds', 'capabilities',
           'thread_mode', 'auto_compact_token_limit', 'max_inherit_runs',
         ]), 'Schedule')

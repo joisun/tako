@@ -137,16 +137,16 @@ export function createSessionClient({ baseUrl, fetchImpl = globalThis.fetch, tim
     compactSession: input => compatibleRequest('/api/v1/session-control/compact', { method: 'POST', body: input }),
     sessionDelivery: ({ request_id }) => compatibleRequest(`/api/v1/session-control/deliveries/${encodeURIComponent(request_id)}`),
     runtimes: () => compatibleRequest('/api/v1/runtimes'),
-    listSchedules: () => compatibleRequest('/api/v1/schedules'),
-    getSchedule: ({ schedule_id }) => compatibleRequest(`/api/v1/schedules/${encodeURIComponent(schedule_id)}`),
-    createSchedule: (input) => compatibleRequest('/api/v1/schedules', { method: 'POST', body: input }),
-    updateSchedule: ({ schedule_id, ...body }) => compatibleRequest(`/api/v1/schedules/${encodeURIComponent(schedule_id)}`, { method: 'PATCH', body }),
-    deleteSchedule: ({ schedule_id, ...body }) => compatibleRequest(`/api/v1/schedules/${encodeURIComponent(schedule_id)}`, { method: 'DELETE', body }),
-    pauseSchedule: ({ schedule_id, ...body }) => compatibleRequest(`/api/v1/schedules/${encodeURIComponent(schedule_id)}/pause`, { method: 'POST', body }),
-    resumeSchedule: ({ schedule_id, ...body }) => compatibleRequest(`/api/v1/schedules/${encodeURIComponent(schedule_id)}/resume`, { method: 'POST', body }),
-    runSchedule: ({ schedule_id, ...body }) => compatibleRequest(`/api/v1/schedules/${encodeURIComponent(schedule_id)}/run`, { method: 'POST', body }),
+    listSchedules: () => compatibleRequest('/api/v1/actions'),
+    getSchedule: ({ schedule_id }) => compatibleRequest(`/api/v1/actions/${encodeURIComponent(schedule_id)}`),
+    createSchedule: (input) => compatibleRequest('/api/v1/actions', { method: 'POST', body: input }),
+    updateSchedule: ({ schedule_id, ...body }) => compatibleRequest(`/api/v1/actions/${encodeURIComponent(schedule_id)}`, { method: 'PATCH', body }),
+    deleteSchedule: ({ schedule_id, ...body }) => compatibleRequest(`/api/v1/actions/${encodeURIComponent(schedule_id)}`, { method: 'DELETE', body }),
+    pauseSchedule: ({ schedule_id, ...body }) => compatibleRequest(`/api/v1/actions/${encodeURIComponent(schedule_id)}/pause`, { method: 'POST', body }),
+    resumeSchedule: ({ schedule_id, ...body }) => compatibleRequest(`/api/v1/actions/${encodeURIComponent(schedule_id)}/resume`, { method: 'POST', body }),
+    runSchedule: ({ schedule_id, ...body }) => compatibleRequest(`/api/v1/actions/${encodeURIComponent(schedule_id)}/run`, { method: 'POST', body }),
     async scheduleRuns({ schedule_id, limit = 20 }) {
-      const result = await compatibleRequest(`/api/v1/schedules/${encodeURIComponent(schedule_id)}/runs`)
+      const result = await compatibleRequest(`/api/v1/actions/${encodeURIComponent(schedule_id)}/runs`)
       return { ...result, runs: result.runs.slice(0, limit), truncated: result.runs.length > limit }
     },
     async readRun({ run_id, include_conversation = false }) {

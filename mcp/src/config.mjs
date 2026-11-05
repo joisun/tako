@@ -244,6 +244,17 @@ export async function resolveAppConfig({
     }
     serverPublicUrl = publicUrl.origin
   }
+  const actionTriggerHost = env.RILLO_ACTION_TRIGGER_HOST ?? fileConfig.action_trigger_host ?? '127.0.0.1'
+  if (!['127.0.0.1', '0.0.0.0', '::1', '::'].includes(actionTriggerHost)) throw new RilloError('CONFIG_INVALID', 'action_trigger_host is invalid')
+  const actionTriggerPort = positiveInteger(env.RILLO_ACTION_TRIGGER_PORT ?? fileConfig.action_trigger_port, 'action_trigger_port', 43128)
+  if (actionTriggerPort > 65535 || actionTriggerPort === serverPort) throw new RilloError('CONFIG_INVALID', 'action_trigger_port must be a separate port from 1 to 65535')
+  let actionTriggerPublicUrl = env.RILLO_ACTION_TRIGGER_PUBLIC_URL ?? fileConfig.action_trigger_public_url ?? null
+  if (actionTriggerPublicUrl !== null) {
+    let url
+    try { url = new URL(actionTriggerPublicUrl) } catch { throw new RilloError('CONFIG_INVALID', 'action_trigger_public_url is invalid') }
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new RilloError('CONFIG_INVALID', 'action_trigger_public_url must be an HTTP(S) origin')
+    actionTriggerPublicUrl = url.origin
+  }
   return {
     projectRoot: normalizedProjectRoot,
     dataDirectory,
@@ -265,6 +276,7 @@ export async function resolveAppConfig({
     schedulerLogMaxFiles,
     schedulerLogMaxAgeMs,
     codexPath,
+    actionTriggerHost, actionTriggerPort, actionTriggerPublicUrl,
     serverHost: configuredHost,
     serverPort,
     serverBaseUrl: serverUrl.origin,

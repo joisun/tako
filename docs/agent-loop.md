@@ -1,10 +1,10 @@
 # Agent Loop 团队协作
 
-状态：当前源码实现，尚未发布。已有安装版不会自动更新。[验证记录](job/agent-loop/03-phases.md)区分原始固定阶段原型与当前消息驱动流程。
+状态：Rillo 0.17.0 的 Teams / Agent Loop。已有安装版需要手动更新。[验证记录](job/agent-loop/03-phases.md)区分原始固定阶段原型与当前消息驱动流程。
 
 ## 团队、成员与消息
 
-Teams 与 Sessions、Scheduled 并列。创建团队只填写名称，存储与内部执行目录均由 Rillo 管理。用户直接在消息框说明目标，服务建立内部任务；独立新应用或其他产物可在托管执行目录直接创建，操作已有项目时再指定项目路径和分支，无须新建任务表单。新团队默认有 Codex Leader，可从成员中更换。
+Teams 与 Sessions、Actions 并列。创建团队只填写名称，存储与内部执行目录均由 Rillo 管理。用户直接在消息框说明目标，服务建立内部任务；独立新应用或其他产物可在托管执行目录直接创建，操作已有项目时再指定项目路径和分支，无须新建任务表单。新团队默认有 Codex Leader，可从成员中更换。
 
 用户未指定收件人时唤醒 Leader；显式 `@成员` 直接派发给选中的稳定成员 ID，不先转交 Leader。多个明确收件人可各自执行，不广播唤醒其他成员。成员通过 `send_message` 互相委派、求助或回复。未填写 mentions 的 reply 默认回复本次委派来源；执行结果返回实际请求者；仅需要协调时通知 Leader，不因普通完成确认唤醒。Leader 在成员工作结束后汇总、安排后续工作或交付。普通回复不自动形成新的委派回调，避免无任务的互相确认循环。等待用户时不保持模型轮询。Leader 请求 wait 时，如仍有排队或运行中的成员，Task 保持 active，成员凭据和结果回传继续有效；成员结果交回实际请求者处理后，确实只剩用户输入时才进入 waiting。用户显式暂停、取消或修订仍立即撤销旧执行凭据。每个指派只设一个负责成员与明确产出，不重复派发其他成员的职责；`submit_result` 已自动回传，无须额外发送完成通知或确认。reply 消息立即落盘显示，在发送者退出后交接；与该次完成通知合并为一次唤醒。先恢复待处理的成员工作链，再让 Leader 汇总，避免双方抢着处理同一结果。
 
@@ -46,7 +46,7 @@ Kibo 的完整文档工具栏、表格和代码高亮不属于消息框需求，
 
 ## 团队界面与看板
 
-Teams 使用局部深灰主题，不改变 Sessions 和 Scheduled。1440px 时左栏 200px、右栏 248px，团队页头 54px，正文 14px。小于 950px 时成员进入抽屉，小于 600px 时导航进入抽屉。用户消息在右侧显示完整气泡，Agent 消息在左侧开放排版。角色姓名为主要身份，CLI 是次要标签，所有关联使用成员 ID。
+Teams 使用局部深灰主题，不改变 Sessions 和 Actions。1440px 时左栏 200px、右栏 248px，团队页头 54px，正文 14px。小于 950px 时成员进入抽屉，小于 600px 时导航进入抽屉。用户消息在右侧显示完整气泡，Agent 消息在左侧开放排版。角色姓名为主要身份，CLI 是次要标签，所有关联使用成员 ID。
 
 顶部“对话 / 看板”切换当前团队的中间区域，左侧仅保留团队列表，不提供重复的看板入口。看板采用 Kibo UI Kanban 的 KanbanProvider、KanbanBoard、KanbanHeader、KanbanCards 和 KanbanCard，依赖 dnd-kit 及 tunnel-rat。保留上游 MIT 许可证，并修正不可变数据更新、空列拖放、取消与排序行为。卡片在 1100px 以下为两列，600px 以下为单列，人工卡片另有原生状态选择器供键盘和触屏使用。
 
@@ -95,11 +95,11 @@ flowchart TD
   Inbox --> DB[(scheduler.sqlite)]
   Member --> Driver[agent-execution]
   Leader --> Driver
-  Scheduled[原有 Scheduled] --> Driver
+  Actions[原有 Actions] --> Driver
   Driver --> Native[Codex app-server / Claude CLI]
 ```
 
-`execution-database.mjs` 提供同一个 SQLite 连接，daemon 最终关闭连接。Scheduled 和 Teams 分别拥有记录及生命周期，共用 `agent-execution.mjs`、底层 supervisor 和真实目录占用协调。协作服务不包装 RunService，也不把 Task ID 当成 Schedule ID。
+`execution-database.mjs` 提供同一个 SQLite 连接，daemon 最终关闭连接。Actions 和 Teams 分别拥有记录及生命周期，共用 `agent-execution.mjs`、底层 supervisor 和真实目录占用协调。协作服务不包装 RunService，也不把 Task ID 当成 Schedule ID。
 
 | 表 | 内容 |
 |---|---|
@@ -112,11 +112,11 @@ flowchart TD
 | `loop_memories` | 带消息或 Run 来源的决定与摘要；决定仅由 Leader 记录 |
 | `loop_memory_sync` | 与业务变更同事务增加的资料版本及成功导出版本 |
 | `loop_events` | 委派、进度、版本化正式报告、证据读取、执行计时和交付事件 |
-| `execution_resources` | Scheduled 与 Teams 共同的真实目录占用 |
+| `execution_resources` | Actions 与 Teams 共同的真实目录占用 |
 
 消息、inbox 和派发记录在同一事务内保存。完成结果和下一次派发也在同一事务内保存。每个任务中的同一成员最多有一个未结束 Run，Leader 等待成员结果时合并通知。继续 conversation 任务时，未启动的 queued 指派保留原 ID、依赖和消息关联，并同步到新的执行代次，避免旧代次使领取永久失败；已启动或未知进程仍先核实退出，不自动重放。重复 request key 不重复投递，正文或接收成员变化则报冲突。Teams 聊天协作不再使用默认 24 次执行或每次 600 秒的硬截断，旧 conversation 记录中的这两个值也不再阻断续接。用户暂停、取消及实际客户端故障仍按真实状态处理；去重、无动作续接限制和资源占用继续防止重复派发。旧固定阶段任务与 Schedule 的显式预算及超时保持原行为。
 
-`loop_schema` 当前为 7。从版本 1–6 增量迁移；版本 7 增加消息关联与 inbox 的投递、处理状态，版本 6 引入独立全局定义删除日志表，其余迁移添加成员头像、历史身份快照、消息文件引用和运行内容。历史 Run 和已消费 inbox 不再依赖仍存在的成员行，真删除成员后仍能读取和迁移历史；迁移保留全部记录。Scheduled 的 `PRAGMA user_version=4` 不变。旧固定阶段任务保留原有执行语义和接口，新的聊天使用 `workflow: conversation`。
+`loop_schema` 当前为 7。从版本 1–6 增量迁移；版本 7 增加消息关联与 inbox 的投递、处理状态，版本 6 引入独立全局定义删除日志表，其余迁移添加成员头像、历史身份快照、消息文件引用和运行内容。历史 Run 和已消费 inbox 不再依赖仍存在的成员行，真删除成员后仍能读取和迁移历史；迁移保留全部记录。Actions Run 的 `PRAGMA user_version=5`；与 loop_schema 独立。旧固定阶段任务保留原有执行语义和接口，新的聊天使用 `workflow: conversation`。
 
 原生会话仍由客户端保存，Run 引用 Session ID。Teams 的同一成员在同一 Task 版本、客户端及任务目录续接自己的会话，讨论、实施和验证切换不另建会话；明确修订任务或更换客户端后重新开始；其他成员不会继承该成员的私人上下文。成功投递游标只在 provider 接受 turn 或执行成功后推进，不以新建 Run 代替投递回执。限流、网络或认证失败不会改成新会话重试；续接失败进入等待并保留错误，当前不自动删除或重建原生会话。成员间委派不是原生 fork 或父子关系，不篡改原生关系。
 
@@ -134,7 +134,7 @@ SQLite 是团队消息、任务、决定、摘要与执行状态的持久存储�
 
 ## 执行权限和恢复
 
-Codex 使用每个 Run 独立的 app-server，Skills 和 integrations 继承客户端已有配置，不强制关闭网络；不修改全局配置。用户已明确授权的动作无需重复确认，Teams 的 Codex 在 thread/start、thread/resume 使用 danger-full-access，并在每次 turn/start 显式传入 dangerFullAccess 与 never，避免历史原生会话继续沿用旧沙箱。此设置不写入全局客户端配置；旧固定阶段任务及 Scheduled 的 sandbox 设置不变。系统账户权限及运行时实际工具能力仍生效。新任务先分配数据目录下 `rooms/workspaces/<request-hash>`，CLI 始终在这个稳定内部目录启动，不依赖 Git 或用户配置的项目。此目录可保存任务产物及独立新应用源码，不要求 Git、项目绑定或用户先指定路径；修改已有代码项目时通过 prepare_projects 准备，追加资源不会改变内部目录或成员的续接位置。Leader 仅在现有项目目标不明时询问路径，期间可继续独立设计和评估。适合的无依赖工作可并行，目录写锁仍限制并发写入。
+Codex 使用每个 Run 独立的 app-server，Skills 和 integrations 继承客户端已有配置，不强制关闭网络；不修改全局配置。用户已明确授权的动作无需重复确认，Teams 的 Codex 在 thread/start、thread/resume 使用 danger-full-access，并在每次 turn/start 显式传入 dangerFullAccess 与 never，避免历史原生会话继续沿用旧沙箱。此设置不写入全局客户端配置；旧固定阶段任务及 Actions 的 sandbox 设置不变。系统账户权限及运行时实际工具能力仍生效。新任务先分配数据目录下 `rooms/workspaces/<request-hash>`，CLI 始终在这个稳定内部目录启动，不依赖 Git 或用户配置的项目。此目录可保存任务产物及独立新应用源码，不要求 Git、项目绑定或用户先指定路径；修改已有代码项目时通过 prepare_projects 准备，追加资源不会改变内部目录或成员的续接位置。Leader 仅在现有项目目标不明时询问路径，期间可继续独立设计和评估。适合的无依赖工作可并行，目录写锁仍限制并发写入。
 
 | execution_mode | 行为 |
 |---|---|
@@ -150,7 +150,7 @@ Claude Code 通过 stream-json CLI 执行，只开放 Read、Glob、Grep，关�
 
 领取派发记录后先持久化 `starting`，再启动原生进程。重启时已领取的 Run 转为 `unknown`，不会自动重放。未领取队列可继续。暂停、取消和修改目标撤销 Run 凭据；旧结果必须匹配 revision 与 generation 才能推进。
 
-目录占用按真实路径及父子目录判重。Teams 依据 resource_scope 选择目录与访问方式，Leader 统筹默认只观察内部执行目录，不因身份取得全部项目写占用；观察性审查允许其他会话编辑，实际写入之间仍互斥。调度先检查资源再领取运行名额，工作默认并发 2，另保留默认 1 个协调名额，配置见下文。同一成员在同一 Task 中最多一个未结束执行。PID 不明或仍存在时不按超时释放，未知执行先核对旧进程，不自动重放。Scheduled 与旧固定阶段任务保持原有目录占用语义。该协调只覆盖 Rillo 启动的工作，不控制用户手动启动的外部写入者。
+目录占用按真实路径及父子目录判重。Teams 依据 resource_scope 选择目录与访问方式，Leader 统筹默认只观察内部执行目录，不因身份取得全部项目写占用；观察性审查允许其他会话编辑，实际写入之间仍互斥。调度先检查资源再领取运行名额，工作默认并发 2，另保留默认 1 个协调名额，配置见下文。同一成员在同一 Task 中最多一个未结束执行。PID 不明或仍存在时不按超时释放，未知执行先核对旧进程，不自动重放。Actions 与旧固定阶段任务保持原有目录占用语义。该协调只覆盖 Rillo 启动的工作，不控制用户手动启动的外部写入者。
 
 ## Run 专用 MCP
 
@@ -179,7 +179,7 @@ Claude Code 通过 stream-json CLI 执行，只开放 Read、Glob、Grep，关�
 
 Codex 使用对此服务器的内联 MCP 配置。Claude 的配置使用环境变量展开，argv 包含变量名，不包含凭据值。Codex、Claude 的认证、默认模型和执行权限配置保持不变。市场保存只创建明确选择的 Agent 定义文件，可能落在 dotfiles 维护的共享 Agent 目录，不执行 dotfiles 同步。
 
-Teams 在同一 Task、revision、成员与运行客户端内，讨论、实施和验证复用最近的原生会话。职责改变只更新当前指派，不另起会话，也不重发已经投递的消息与结果；定义改变时补充新定义。明确修订任务或更换运行客户端后开启新会话，未知执行仍先对账。旧固定阶段任务保持按阶段续接，不改变 Scheduled 的会话策略。
+Teams 在同一 Task、revision、成员与运行客户端内，讨论、实施和验证复用最近的原生会话。职责改变只更新当前指派，不另起会话，也不重发已经投递的消息与结果；定义改变时补充新定义。明确修订任务或更换运行客户端后开启新会话，未知执行仍先对账。旧固定阶段任务保持按阶段续接，不改变 Actions 的会话策略。
 
 工作进度从现有 Run、inbox 与 report_progress 事件重建，不另建状态库。新原生会话、失败或中断后的续接，以及暂停后恢复时提供有界 work_progress；正常续接不重复注入，可主动 read_context(section=progress) 查询。进度区分成功执行、未成功执行、待派发委派与最近进度报告，保留原始状态、错误、来源 Run/inbox 和产物引用。取消执行仍保持取消，不自动重跑；执行成功不代表验证通过或整个任务已交付。进度正文合计最多 12,000 字符，每组最多 8 条执行或委派，附完整数量与截断标记；完整结果按 source_run_id 读取。普通成员默认只看自己、自己委派和当前依赖的进度，Leader 查看当前任务版本，其他团队不混入。完整历史继续随团队资料备份，恢复不把旧进程当作已经退出。
 
@@ -221,7 +221,7 @@ Teams 在同一 Task、revision、成员与运行客户端内，讨论、实施�
 | `POST /api/v1/loop-runs/:id/tools/:action` | 六个 Run 工具，须携带本 Run 的 Bearer 凭据 |
 | `GET/POST /api/v1/execution-resources[/reconcile]` | 查询占用或确认未知占用退出 |
 
-团队快照当前包含最近 100 项任务和 200 条消息，任务详情包含最近 200 条事件。浏览器仍只检索当前已载入消息；Run 工具已支持完整历史分页。跨团队搜索、Scheduled 触发团队、OpenCode 成员和统一 context 用量尚未实现。
+团队快照当前包含最近 100 项任务和 200 条消息，任务详情包含最近 200 条事件。浏览器仍只检索当前已载入消息；Run 工具已支持完整历史分页。跨团队搜索、Actions 触发团队、OpenCode 成员和统一 context 用量尚未实现。
 
 参考 [Multica Squads](https://github.com/multica-ai/multica/blob/2083970b51c03c0773188636c24a96acd09ad4c3/apps/docs/content/docs/squads.mdx) 的 Leader 消息驱动协作机制，以及 [GetLastTaskSession](https://github.com/multica-ai/multica/blob/2083970b51c03c0773188636c24a96acd09ad4c3/server/pkg/db/queries/agent.sql#L1016) 对同一 Agent/Issue 的会话及实际输入快照的续接。Rillo 按同一任务版本、成员和客户端续接，职责切换不另建会话，团队资料持久化由自身实现提供。服务端实现为 Rillo 自身增量模块。原始设计及其后续修订保存在[实施记录](job/agent-loop/03-phases.md)。
 
@@ -275,7 +275,7 @@ PDF 使用 unpdf / PDF.js 在受限 Worker 中提取文本，最多 200 页、12
 
 ## Teams 命名与会话组件
 
-产品导航为 Sessions、Schedule、Teams。新页面使用 view=teams、team=<ID>、team_view=conversation|kanban；旧 view=rooms、room、room_view 链接会读取并规范为新 URL。新接口使用 /api/v1/teams 和 /api/v1/teams-runtime。旧 /api/v1/rooms 接口作为已有客户端与资料的兼容入口继续读取，不另建一套服务；数据库 loop_rooms、room_id、rillo-room-v1 导出格式和已安装的数据目录保持原状，避免仅为界面更名搬动用户数据。
+产品导航为 Sessions、Actions、Teams。新页面使用 view=teams、team=<ID>、team_view=conversation|kanban；旧 view=rooms、room、room_view 链接会读取并规范为新 URL。新接口使用 /api/v1/teams 和 /api/v1/teams-runtime。旧 /api/v1/rooms 接口作为已有客户端与资料的兼容入口继续读取，不另建一套服务；数据库 loop_rooms、room_id、rillo-room-v1 导出格式和已安装的数据目录保持原状，避免仅为界面更名搬动用户数据。
 
 Teams 对话使用 shadcn MessageScrollerProvider / Viewport / Content / Item / Button，进入团队定位最新消息，自动跟随新增内容并保留用户向上浏览的位置。PromptInput / Body / Header / Footer / Tools / Submit 负责输入容器、服务器路径附件和提交状态；编辑内容仍使用现有 Tiptap 稳定 ID Mention，不添加浏览器上传或第二套聊天传输。
 
@@ -314,7 +314,7 @@ Sessions 把不同内部执行目录里的同一团队会话放到同一可折�
 
 ## 全局 Agent 管理与成员添加
 
-Teams 左侧“Agent 管理”面向所有团队，URL 为 view=teams&team_view=agents；顶层仍为 Sessions、Schedule、Teams。管理页包含本地 Agent、市场发现、托管安装、更新与来源，详见 [Marketplace 架构与契约](agent-marketplace.md)。成员区 + 只搜索本地角色，选中后另开名字、头像、客户端、模型和 effort 配置弹窗，再确认加入。选择器不加载市场网络、不导入或删除定义；失败保留填写内容，返回选择器保留搜索词。
+Teams 左侧“Agent 管理”面向所有团队，URL 为 view=teams&team_view=agents；顶层仍为 Sessions、Actions、Teams。管理页包含本地 Agent、市场发现、托管安装、更新与来源，详见 [Marketplace 架构与契约](agent-marketplace.md)。成员区 + 只搜索本地角色，选中后另开名字、头像、客户端、模型和 effort 配置弹窗，再确认加入。选择器不加载市场网络、不导入或删除定义；失败保留填写内容，返回选择器保留搜索词。
 
 托管定义经组合层注入现有本地目录，使用 managed: ID；加入时保存具体版本和完整指令快照。团队执行、权限、并行与恢复沿用现有机制。更新托管文件不修改已有成员；独立 Session 创建入口当前明确禁用，不能把其他执行对象冒充 Session。原有全局定义及导入 HTTP 契约保留，但日常市场安装使用 Rillo 托管目录，不意外写入全局配置。
 
@@ -338,7 +338,7 @@ loop_inbox 的 delivery_json 记录 pending、sending、delivered、unknown，pr
 
 RILLO_TEAM_WORK_CONCURRENCY 控制工作并发，默认 2。RILLO_TEAM_COORDINATION_CONCURRENCY 保留协调容量，默认 1，两者范围均为 1–32。用户要求、问题和统筹具有起始优先级，等待每 30 秒增加优先级。候选每批最多 32 条并轮转分页，前一批的目录等待不阻塞后续就绪工作。先检查资源占用再占运行名额，等待目录的工作仍保持 queued。同一任务成员的未结束 Run 和原生会话互斥规则保留。
 
-resource_scope 用 access=none、read、write 和 projects=[项目编号] 声明实际资源。Leader 默认统筹不占全部项目。显式长审查或写入使用工作容量。Teams 的 read 以观察方式允许其他会话修改文件；写入仍互斥。未知进程的占用仍须核对，Scheduled 和旧固定阶段任务的原有读写规则不变。资源声明不是权限授予，用户只读约束与客户端权限继续有效。
+resource_scope 用 access=none、read、write 和 projects=[项目编号] 声明实际资源。Leader 默认统筹不占全部项目。显式长审查或写入使用工作容量。Teams 的 read 以观察方式允许其他会话修改文件；写入仍互斥。未知进程的占用仍须核对，Actions 和旧固定阶段任务的原有读写规则不变。资源声明不是权限授予，用户只读约束与客户端权限继续有效。
 
 界面分别显示已安排等待执行、启动、处理和完成。排队、目录等待、客户端准备、原生确认输入后至首次模型输出的等待及处理时间来自持久化事件，未记录的数据不编造。未返回模型内容时没有虚构思考。Token 按 provider、store、native Session 的累计最大值去重，不把多次 Run 的同一累计值相加，不推测费用。
 

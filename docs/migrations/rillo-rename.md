@@ -31,7 +31,7 @@ rillo status
 | 位置 | 原因 |
 | --- | --- |
 | `server/migrate.mjs` 与迁移测试 | 识别 `tasks-recorder`、`task-recorder` 和下划线目录变体，备份并恢复旧 CLI、数据和服务。 |
-| `schedule-definition-codec.mjs` 与兼容测试 | 接受已有 `tasks-recorder/schedule` 等旧 type，避免用户现有任务被忽略。新建及显式编辑只写 `rillo/schedule`。 |
+| `schedule-definition-codec.mjs` 与兼容测试 | 接受已有 `tasks-recorder/schedule` 等旧 type，避免用户现有任务被忽略。现有 Schedule 标记继续可读；Actions 升级后新建及显式编辑写 `rillo/action`，详见 [Actions](../actions.md)。 |
 | `legacy-launchd-cleanup.mjs` | 识别并停止更名前独立的 per-Schedule LaunchAgent，防止重复调度。 |
 | `legacy-preferences.ts` 与测试 | 将浏览器本地偏好复制到新 key；写入失败不删除旧值。 |
 | 本文与更名任务日志 | 说明旧安装的发现、事务回滚、授权范围与真实远端状态。 |

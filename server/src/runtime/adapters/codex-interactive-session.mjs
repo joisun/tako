@@ -98,7 +98,7 @@ function createSession({
     if (method === 'item/agentMessage/delta') {
       if (params?.threadId !== threadId || params?.turnId !== turnId
         || typeof params?.itemId !== 'string' || typeof params?.delta !== 'string') return
-      finalMessage = appendBounded(finalMessage, params.delta, FINAL_MESSAGE_BYTES)
+      if (!automaticContinuation) finalMessage = appendBounded(finalMessage, params.delta, FINAL_MESSAGE_BYTES)
       safeEmit(emit, {
         type: 'assistant_delta',
         payload: {

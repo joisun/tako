@@ -8,13 +8,13 @@
 CLI-owned sessions ◀──adapter── daemon ──HTTP──▶ Dashboard
                                   │
 Agent session_link ──HTTP────────▶│──▶ session-links.sqlite
-Schedule Markdown ──watch───────▶│──▶ scheduler.sqlite
+Action Markdown ──watch───────▶│──▶ scheduler.sqlite
 Teams ──HTTP───────────────────▶│──▶ loop_* / execution_resources（同一库）
                                   │
                                   └──▶ Runtime Registry ──▶ local agent CLI
 ```
 
-macOS `launchd` 与 Linux `systemd --user` 均只管理一个 `daemon` 常驻服务。`daemon` 是唯一 SQLite writer、唯一 HTTP/SSE server、唯一 scheduler 和唯一 Run supervisor。
+macOS `launchd` 与 Linux `systemd --user` 均只管理一个 `daemon` 常驻服务。`daemon` 是唯一 SQLite writer、管理与独立触发端口的唯一 HTTP/SSE 服务、唯一 scheduler 和唯一 Run supervisor。
 
 ## Host service lifecycle
 
@@ -26,23 +26,23 @@ installer 按 Darwin/Linux 选择不同命名的自包含 archive，校验平台
 
 Release分为macOS构建、Ubuntu安装验证和发布三个job。Ubuntu下载macOS产生的原始archive、installer及SHA256SUMS，在临时HOME中实际安装并直接启动随机端口的daemon，检查版本、Dashboard及SSE，不调用systemd安装。publish依赖Linux验证成功。运行入口server/daemon.mjs读取相邻package.json并注入config.packageVersion，作为/api/v1/meta的service_version；已安装runtime不应返回source。
 
-Linux 按 Web 服务使用，不启动浏览器、桌面终端或 tmux；`rillo open` 仅返回配置的公开访问地址，未配置时返回本机地址。默认可通过 SSH loopback 转发访问，也可显式配置原生网络访问。terminalLauncher.supported=false 时 providers 的 resume=false，settings 返回 local_actions_supported=false。Sessions 不显示终端启动按钮，Scheduled 保留 Session ID 复制并禁用服务器本机文件打开操作，终端选择设置不出现；桌面操作 API 仍返回 typed unsupported。macOS 操作保持原有实现。状态读取通过已有 Codex Unix socket；没有共享服务器时只标记状态不可用，不启动任何 daemon 或使用进程反查。
+Linux 按 Web 服务使用，不启动浏览器、桌面终端或 tmux；`rillo open` 仅返回配置的公开访问地址，未配置时返回本机地址。默认可通过 SSH loopback 转发访问，也可显式配置原生网络访问。terminalLauncher.supported=false 时 providers 的 resume=false，settings 返回 local_actions_supported=false。Sessions 不显示终端启动按钮，Actions 保留 Session ID 复制并禁用服务器本机文件打开操作，终端选择设置不出现；桌面操作 API 仍返回 typed unsupported。macOS 操作保持原有实现。状态读取通过已有 Codex Unix socket；没有共享服务器时只标记状态不可用，不启动任何 daemon 或使用进程反查。
 
 server_listen_host只接受127.0.0.1或0.0.0.0，省略时沿用server_host，默认仍只监听本机。0.0.0.0不要求server_public_url或客户端白名单；旧server_allowed_clients字段不再参与配置解析或访问检查。serverBaseUrl与RILLO_SERVER_URL保持loopback，供CLI/MCP及controller健康检查使用。可选serverPublicUrl只用于CLI展示和打开访问地址。createApiServer直接提供页面、API和SSE，不按客户端IP、Host或Origin拦截；请求URL及文件预览跳转地址根据当前请求的Host生成。开发gateway同样不做Host和Origin拦截，仍仅监听loopback并代理到本机daemon。JSON类型、字段、消息大小及文件路径校验保持有效，Dashboard API不增加CORS响应头。
 
 ## Non-negotiable invariants
 
-1. **One daemon**：不得为单个 Schedule 创建 LaunchAgent、长期 runner 或第二个 control plane。
-2. **One execution path**：manual 与 scheduled trigger 都调用 `RunService.create()`。
+1. **One daemon**：不得为单个 Action 创建 LaunchAgent、长期 runner 或第二个 control plane。
+2. **One execution path**：manual、scheduled 与 external trigger 都调用 `RunService.create()`。
 3. **Durable before spawn**：Run 必须先以 `queued` 写入 SQLite，提交后才能解析或启动 runtime。
 4. **One Runtime Environment**：daemon 创建一个运行时环境实例，runtime status、model discovery、真实 Run 与 child PATH 都从这里获得 executable context。
-5. **File-native definitions**：Schedule Markdown 是 definition source of truth；SQLite 不复制一份可编辑 definition。
+5. **File-native definitions**：Action Markdown 是 definition source of truth；SQLite 不复制一份可编辑 definition。
 6. **Daemon-owned facts**：只有 `daemon` 写 Run state、session、file changes 与 log references。
 7. **No browser commands**：browser 只发送 semantic ID 和 typed fields，不能提交 executable、argv 或 shell text；恢复会话所用 Workspace 必须由 daemon 读取。
-8. **Failure isolation**：runtime 缺失、model probe 失败或 Scheduler 故障不能让 Sessions 下线；Session provider 失败也不能中断已配置的 Scheduled Run。
+8. **Failure isolation**：runtime 缺失、model probe 失败或 Scheduler 故障不能让 Sessions 下线；Session provider 失败也不能中断已配置的 Actions Run。
 9. **Bounded operations**：probe、output、logs、events、shutdown 与 cancellation 都必须有明确上限。
-10. **Privacy by construction**：Recorder 不持久化 prompt、reasoning、tool payload、streaming assistant delta 或 transcript content；Scheduled ledger 只保留既有 terminal final message。
-11. **Per-Run context policy**：Schedule 的 Skills/integrations policy 必须进入 immutable Run snapshot，并只通过该 Run 的 runtime argv/protocol 生效；不得修改全局 CLI config 或共享 profile。
+10. **Privacy by construction**：Recorder 不持久化 prompt、reasoning、tool payload、streaming assistant delta 或 transcript content；Actions ledger 保留任务快照、本轮 data 和既有 terminal final message；不保存触发鉴权 secret。
+11. **Per-Run context policy**：Action 的 Skills/integrations policy 必须进入 immutable Run snapshot，并只通过该 Run 的 runtime argv/protocol 生效；不得修改全局 CLI config 或共享 profile。
 12. **Native session ownership**：原生会话、正文、时间与原生关系由 CLI 维护。只持久化外部协作关系，不维护第二份 Task 投影或 transcript。
 13. **Retired data preservation**：正常启动不导入 Task store/service，不打开、迁移、checkpoint 或修改历史 tasks.sqlite、spool 和生成文件。
 
@@ -68,7 +68,7 @@ Registry 保存 immutable runtime definitions，不动态加载用户代码。�
 
 Shared infrastructure 负责 executable candidate ordering、canonicalization、version probe、cache、child PATH repair、process supervision、timeout/cancel、Run persistence 和 SSE。只有已 canonicalize 为 executable file 的候选才消耗 bounded probe budget；不存在的 PATH entry 不得遮蔽后面的健康 CLI。Runtime Environment 动态枚举 process PATH、Homebrew、fnm/nvm/mise 等已安装 toolchain，并同时为 resolver 与 child process 生成一致路径。成功解析可 bounded cache；失败解析立即失效，以允许 CLI 安装或环境恢复后的下一次请求自愈。Adapter 不得导入 HTTP、SQLite、cadence 或 UI 模块。
 
-Run store 的 one-active-per-Schedule 约束是 UI action availability 的事实来源：空闲时行级 action 提供一次性 Run now；已有 `running` Run 时同一位置切换为 Stop，并与负责周期调度的 Schedule pause/resume action 使用不同图标和语义。`queued`、`claimed` 等尚不能安全停止的阶段会禁用 Run now；409 只保留为并发安全网，不能成为正常交互反馈。
+Run store 允许同 Action 多条持久 queued，唯一索引只约束 running。RunService 按入队顺序串行，同一 Action 不并发启动；外部调用不合并或丢弃输入。行级 Run 在执行期间切换为 Stop，整体停用与 schedule_enabled/external_enabled 独立；停用入口不取消已经接收的 Run。
 
 当前注册 `codex` 和 `opencode`。增加 runtime 的最小范围应是：
 
@@ -82,9 +82,15 @@ Run store 的 one-active-per-Schedule 约束是 UI action availability 的事实
 
 Registry list 只验证 executable availability，不探测登录态。登录态是易变的 provider execution state；真实 Run 才是权威证据。Model discovery 是独立、bounded、可 fallback 的 capability。
 
+## Actions 定义与调用
+
+Actions 升级 Schedule。新定义写 rillo/action；旧 rillo/schedule 读取不改写，enabled 映射为定时开关，默认关闭外部调用；编辑后保留 ID、路径和正文写为新格式。schedule 可为 null，enabled/schedule_enabled/external_enabled 独立。secret 安全生成并明文写 external_secret，仅管理详情可读，不进入快照、提示词、运行输入或日志。定义继续通过原有 watcher、原子写入与 etag 维护。
+
+同 daemon 默认在 127.0.0.1:43128 独立监听 POST /actions/:id/trigger，仅接受 {secret,data}。先检查体积、格式与密钥，再持久创建 Run，202 只代表已接收。输入 JSON 独立保存，不覆盖运行配置。外部端口不挂载管理、会话或文件路由；沿用现有访问方式，不新增 Host/Origin 拦截。配置、错误码、API/MCP 与外部工具分工详见 [Actions](actions.md)。
+
 ## Run lifecycle
 
-Run 创建事务在 snapshot 中确定 `session_mode`、`session_mode_reason`、`resume_session_id` 和 `inherit_run_number`，列表也返回这些摘要字段。默认 new；reuse/auto 只匹配同 schedule、runtime 和 workspace 的最近原生会话，无匹配时首次新建。`max_inherit_runs` 默认20，首次新建不计入，只统计实际记录了相同原生 session ID 的继承执行；达到上限后换新会话。计数、选择和单任务只能有一个 active Run 的约束共用事务，服务重启后从原 Run 恢复，不新增会话数据表。
+Run 创建事务保存不含 external_secret 的任务快照和独立 input_json。启动前根据前一轮实际结果确定 session_mode、session_mode_reason、resume_session_id 和 inherit_run_number；这样队列中的连续请求可继承刚结束的一轮。默认 new；reuse/auto 匹配同 Action、runtime 和 workspace 的最近原生会话。max_inherit_runs 默认 20，首次新建不计入；统计实际记录了同原生 Session 的继承执行，达到上限后换新会话。
 
 auto 的成功 final_message 末尾标记 `<!-- rillo:next-session=new|reuse -->` 决定下一轮；失败或缺失默认 reuse，上限优先。RunService 注入协议但不修改 Markdown 正文。Codex 选择 thread/start 或 thread/resume，OpenCode 选择新建 session 或获取原 session；恢复失败不降级新建。Codex 的自定义 `auto_compact_token_limit` 仅通过原生线程 config 覆盖，null 不覆盖。Runtime settings 通过新 stdio 连接 config/read 动态读取有效本地值，不沿用 model catalog 缓存，未设置与读取失败分开返回。
 
@@ -100,16 +106,16 @@ queued
   └── canceled
 ```
 
-- `queued` 包含 executable resolution 与 spawn preparation；不存在另一套 dispatch state。
-- service restart 把遗留 open Run 收口为 `interrupted`，不自动假设 CLI 仍可安全接管。
-- cancel 与 shutdown 必须能打断 resolution 和 child process，不能无限等待第三方 CLI。
+- `queued` 表示尚未开始调用 Runtime，可等待同 Action 或目录占用。调用 Runtime 前先持久化 running，防止结果不明时被当成未启动请求重放。
+- service restart 继续 v5 未启动队列；遗留 running 收口为 interrupted，不自动重跑。v4 queued 缺少明确启动边界，升级时保守收口为 interrupted。
+- cancel 可取消指定排队/运行，shutdown 保留未启动队列并终止本服务的执行，不能无限等待第三方 CLI。
 - session ID、final message 与 usage 只能来自 normalized runtime events。file changes 优先消费 runtime evidence，并与 `RunService` 执行前后的 bounded Workspace snapshot 合并；snapshot 只在内存保留 metadata，忽略 `.git` / `node_modules`，超出 100,000 files 时 fail open，不阻塞 Run。
 - SQLite 只保存最多 128 条已经 containment 检查的 Workspace-relative change paths，不保存 Workspace snapshot 或文件内容。
 - log file path 由 daemon 构造；API 不读取 Run ledger 之外的任意 path。
 
 ## Active Live Session
 
-Codex 的 active Run 使用 one-process-per-Run `codex app-server --listen stdio://`。这不是第二个 daemon：Scheduled的process lifecycle、timeout、cancel、terminal persistence与Run status仍由`RunService`管理。共同执行驱动位于`agent-execution.mjs`；Teams使用独立Run记录，不借用Schedule唯一约束。
+Codex 的 active Run 使用 one-process-per-Run `codex app-server --listen stdio://`。这不是第二个 daemon：Actions的process lifecycle、timeout、cancel、terminal persistence与Run status仍由`RunService`管理。共同执行驱动位于`agent-execution.mjs`；Teams使用独立Run记录，不借用Schedule唯一约束。
 
 ```text
 Dashboard ──GET Run SSE──────────────▶ daemon Run Event Hub
@@ -156,7 +162,7 @@ Dashboard ──GET /runs/:id/conversation──▶ RunService
 
 ## Session browser
 
-`server/src/session-browser.mjs` 注册会话 adapter，独立于 Run ledger。当前仅注册 `runtime/adapters/codex-sessions.mjs`，未来 Claude Code 通过自己的 adapter 读取原生数据，无须模拟 Codex JSON-RPC。会话 provider 与 Scheduled runtime registry 的能力分别维护，关系工具支持某个 agent 不代表其原生 Sessions 数据读取已经实现。
+`server/src/session-browser.mjs` 注册会话 adapter，独立于 Run ledger。当前仅注册 `runtime/adapters/codex-sessions.mjs`，未来 Claude Code 通过自己的 adapter 读取原生数据，无须模拟 Codex JSON-RPC。会话 provider 与 Actions runtime registry 的能力分别维护，关系工具支持某个 agent 不代表其原生 Sessions 数据读取已经实现。
 
 Adapter 提供 `id/name/runtimeId/storeId/capabilities`、可信 `resumeOptions`、`list`、`workspaces`、`readSession`、`messages`、可选 `children/timeline/activity/branches` 和 `close`。跨来源引用由 `provider + store_id + session_id` 组成；store_id 由服务器配置的数据目录生成，客户端不能传入任意数据根。Codex 使用具体 thread.id，不使用 fork 共享的 root sessionId。resumeOptions.codexHome 显式设置恢复命令的 CODEX_HOME，避免终端环境切换到另一个数据源；launcher 只接受绝对路径并 shell-quote。列表统一返回 title、preview、workspace、branch、时间、state、可选 snippet、is_subagent、native_parent、forked_from 和 next_cursor；Codex 的 is_subagent 依据 parentThreadId 或 source.subAgent 标记，native_parent 优先使用 parentThreadId，再读取 source.subAgent.thread_spawn.parent_thread_id；无父级的 review 等 subagent 仍保留来源类型。搜索能力必须显式声明。数据源是真相来源，不将 transcript、搜索命中或目录清单写入 SQLite。
 
@@ -206,7 +212,7 @@ React Run detail 使用 `POST /api/v1/runs/:id/files/open`，JSON body 只允许
 
 file opener 要求 path 精确匹配该 Run 的非删除文件记录，相对路径以 snapshot.workspace 解析；路径规范化及 realpath 后均须处于该 workspace 内，且目标必须为普通文件。macOS 通过 argv array、`shell: false` 调用 `/usr/bin/open`，参数为编码后的本地 file URL，使用系统默认应用。未记录、已删除、缺失、越界、非普通文件、非 macOS 或 opener 失败均返回可展示的 typed error；不回写 Run，也不执行 shell 拼接命令。
 
-## Schedule clock
+## Action 定时调度
 
 `scheduler-clock` 在 `daemon` 内根据 wall clock 和 durable occurrence key 计算到期任务。filesystem watcher 负责低延迟 definition change，周期 rescan 提供最终一致性。sleep/wake 可产生 bounded catch-up，但同一个 occurrence key 不能创建两次 Run。
 
@@ -216,7 +222,7 @@ Definitions directory 切换是一个受控迁移：验证目标、迁移/合并
 
 Production `daemon` 读取 `ui/dist/react.html`，脚本与样式内嵌。品牌图使用 `ui/assets/rillo.png`（豪猪宝宝“刺刺”原图），由同源 `/rillo.png` 路由提供，供导航与 favicon 共用，favicon 由页面入口设置；生产服务缓存一小时，页面图像 URL 携带品牌版本参数以避免换图后仍显示旧缓存，开发服务不缓存。构建 adapter 时将同一文件复制到插件 assets，发布包携带这些图片。`ui/dist/index.html` 继续随 release 打包，仅用于回滚和迁移对照，不参与默认路由；source preview 与 installed runtime 因此使用同一 React entry 和同一 API contract。
 
-顶层导航只有 Sessions 与 Scheduled；Sessions仅保留Tree。SessionsView持有childPages与按完整引用读取的ancestor元数据，通过collectSessionFamily仅遍历当前根列表可达的子页和父链；切换workspace/branch不会混入其他范围的旧子页或祖先，同一完整引用只展示一次。父会话未在当前页时，由SessionAncestorSource通过共用读取队列补读，加载期间显示读取主会话，失败后明确提示父会话暂不可读取。projectSessionTree只允许真实主会话作为一级节点：有原生父级、登记父级或is_subagent标记的会话不能因父级缺失、冲突或循环而升为一级。会话树连接线贯穿同级节点间距及展开的子树，横向连接各子项；末个同级节点在线条接入标题时收尾，不向其子树延伸祖先竖干。连接线只反映已展示的真实层级，不可点击。选中已读取子会话时按祖先路径自动展开，用户手动折叠不会因状态轮询重新展开。collectSessionRelations合并原生metadata与登记边并按端点去重；indexSessionRelations分别索引parents/children和forkSources/forks，fork永不参与父子树构造，正常fork仍作为独立主会话。标题行合并Subagent/协作标签、子会话及派生Fork数量与来源入口，数量只代表已发现的直接关系。Fork来源显示forked from标题或短ID；Codex created_at可确认时追加at时间，表示新fork会话创建时间，不用复制历史的首条消息或updated_at推算。原生时间来源见[rollout recorder](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/recorder.rs)与[thread summary](https://github.com/openai/codex/blob/main/codex-rs/app-server/src/request_processors/thread_summary.rs)。关系浮层使用Base UI Popover，点击按完整provider/store/session引用读取；Escape关闭并恢复焦点。详情关系面板合并当前已发现的边，支持从来源查看派生Fork。
+顶层导航依次为 Sessions、Actions、Teams；Sessions仅保留Tree。SessionsView持有childPages与按完整引用读取的ancestor元数据，通过collectSessionFamily仅遍历当前根列表可达的子页和父链；切换workspace/branch不会混入其他范围的旧子页或祖先，同一完整引用只展示一次。父会话未在当前页时，由SessionAncestorSource通过共用读取队列补读，加载期间显示读取主会话，失败后明确提示父会话暂不可读取。projectSessionTree只允许真实主会话作为一级节点：有原生父级、登记父级或is_subagent标记的会话不能因父级缺失、冲突或循环而升为一级。会话树连接线贯穿同级节点间距及展开的子树，横向连接各子项；末个同级节点在线条接入标题时收尾，不向其子树延伸祖先竖干。连接线只反映已展示的真实层级，不可点击。选中已读取子会话时按祖先路径自动展开，用户手动折叠不会因状态轮询重新展开。collectSessionRelations合并原生metadata与登记边并按端点去重；indexSessionRelations分别索引parents/children和forkSources/forks，fork永不参与父子树构造，正常fork仍作为独立主会话。标题行合并Subagent/协作标签、子会话及派生Fork数量与来源入口，数量只代表已发现的直接关系。Fork来源显示forked from标题或短ID；Codex created_at可确认时追加at时间，表示新fork会话创建时间，不用复制历史的首条消息或updated_at推算。原生时间来源见[rollout recorder](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/recorder.rs)与[thread summary](https://github.com/openai/codex/blob/main/codex-rs/app-server/src/request_processors/thread_summary.rs)。关系浮层使用Base UI Popover，点击按完整provider/store/session引用读取；Escape关闭并恢复焦点。详情关系面板合并当前已发现的边，支持从来源查看派生Fork。
 
 Cards与List均已退出产品入口。Sessions主布局只含350px侧栏和会话树两栏，列表项仅有title与subtitle，不再提供横向热力条；subtitle从左至右为branch、workspace，共用text-secondary语义色。会话读取复用Base UI Dialog的container portal、keepMounted和modal=false，以右侧悬浮Sheet覆盖页面，不占grid列，不改变列表宽度。Sheet桌面宽640px、窄屏自适应；条目标题按钮的点击区域覆盖整个item，展开、Pin、关系和终端操作保持独立。选中项仅用背景与边框区分，不绘制左侧标记。Sheet具备边框、圆角与投影，打开时聚焦Sheet本身，关闭不恢复标题焦点。右上角X按钮、外侧空白点击或Escape均可关闭；页面外侧仍可操作。关闭保留正文DOM、已读消息和滚动位置，并停止选中时间轴的继续分页；重新打开恢复原阅读位置。窄屏Sheet占据视图并保留右侧minimap。Rillo 2.0使用统一深色语义变量、本地Geist字体及Motion交互；不改变Session业务规则。
 
@@ -225,7 +231,7 @@ Cards与List均已退出产品入口。Sessions主布局只含350px侧栏和会�
 
 悬停从pointer事件直接安排requestAnimationFrame，连续移动时每帧取最新目标，同一消息ID/时间不重复定位；精确ID避免同时间消息互相覆盖。尚未读取的秒只显示时间，不显示虚假的0条或阴影说明；可见会话继续自动补页，读到悬停区域后自动定位。pointer capture支持触屏/拖出行，上下方向键切相邻消息、Home/End跳首尾。正文按当前已加载消息的ID与时间直接定位，不改变查询键；只有目标不在当前页时才读取。慢读取期间保留最新目标，完成后先检查返回页能否满足新目标，再决定是否继续查询，不因每次鼠标移动取消在途读取，也不把旧请求的匹配标记用到新位置。不增加跨窗口正文缓存，gcTime仍为0。滚动使用约100ms的可转向缓出动画；手动输入及更早分页锚点维护取消动画，reduced-motion直接定位。手动滚动暂停内部跟随，下一次热力条操作发出followRequest自动恢复，不提供恢复按钮。
 
-垂直minimap位置保持稳定，hover不滚动会话树；最近消息重新请求原生head。正文定位仅在conversation容器中用动画帧插值更新scrollTop，原生scrollTo使用instant避免叠加浏览器动画；减少动态效果时直接到目标，手动阅读立即停止自动滚动。正文scroll事件经requestAnimationFrame读取视口中线对应消息，回传原生消息ID和时间。非悬停时，横向游标、时间提示与三角统一使用readingAt，键盘焦点和旧selectedAt不能覆盖正文位置；悬停/拖动临时显示预览位置，离开或结束后恢复实际阅读位置。回传不能发起seek或重读请求，避免双向循环。普通阅读首次滚到最近消息，向前分页仍用原可见消息DOM位置校正。历史Markdown为static，Scheduled行为不变。窄屏通过sheet在会话树与全宽阅读之间切换。
+垂直minimap位置保持稳定，hover不滚动会话树；最近消息重新请求原生head。正文定位仅在conversation容器中用动画帧插值更新scrollTop，原生scrollTo使用instant避免叠加浏览器动画；减少动态效果时直接到目标，手动阅读立即停止自动滚动。正文scroll事件经requestAnimationFrame读取视口中线对应消息，回传原生消息ID和时间。非悬停时，横向游标、时间提示与三角统一使用readingAt，键盘焦点和旧selectedAt不能覆盖正文位置；悬停/拖动临时显示预览位置，离开或结束后恢复实际阅读位置。回传不能发起seek或重读请求，避免双向循环。普通阅读首次滚到最近消息，向前分页仍用原可见消息DOM位置校正。历史Markdown为static，Actions行为不变。窄屏通过sheet在会话树与全宽阅读之间切换。
 
 UI验收需覆盖真实会话数量、标题长度和时间分布；截图可匿名化文字，但不能只靠少量规整fixture判断产品效果。首次悬停、清空后重开、连续浏览、加载更早历史须检查鼠标下方布局与阅读位置是否保持稳定。
 
@@ -233,7 +239,7 @@ UI验收需覆盖真实会话数量、标题长度和时间分布；截图可匿
 
 Scheduler schema v4 是当前 unified Run ledger。v1–v3 tables 只保留在 migration code 中用于升级已有数据库，不得重新成为 active execution path。
 
-历史 Task schema 与生成资产只供历史对照；当前不提供 Task import/migrate，不打开旧库，也不启动旧文件重建。Session links schema v1 独立于 Scheduled schema。
+历史 Task schema 与生成资产只供历史对照；当前不提供 Task import/migrate，不打开旧库，也不启动旧文件重建。Session links schema v1 独立于 Actions schema。
 
 安装或卸载时可以清理由 Rillo 明确拥有的旧 per-Schedule LaunchAgents；cleanup 必须验证 owner、mode、symlink 和 canonical program path，无法确认的文件 fail closed。
 
@@ -259,7 +265,7 @@ git diff --check
 
 ### Schedule Fast mode
 
-Schedule Markdown 与 CRUD API 的可选 `fast_mode` 为 boolean 或 null，仅 Codex 支持显式 boolean。省略/null 继承运行时默认，true 开启，false 使用普通速度；旧 definition 无需迁移。Run 沿用完整不可变 snapshot 保存选择。Codex interactive adapter 将显式值映射为 `turn/start.serviceTier` 的 `fast` / `default`；CLI invocation 对应 `-c service_tier="fast"` / `"default"`，继承时不传覆盖值。不要用降低 reasoning effort 实现 Fast mode，也不要修改用户的全局 Codex 配置。
+Action Markdown 与 CRUD API 的可选 `fast_mode` 为 boolean 或 null，仅 Codex 支持显式 boolean。省略/null 继承运行时默认，true 开启，false 使用普通速度；旧 definition 无需迁移。Run 沿用完整不可变 snapshot 保存选择。Codex interactive adapter 将显式值映射为 `turn/start.serviceTier` 的 `fast` / `default`；CLI invocation 对应 `-c service_tier="fast"` / `"default"`，继承时不传覆盖值。不要用降低 reasoning effort 实现 Fast mode，也不要修改用户的全局 Codex 配置。
 
 ### Codex 临时失败恢复
 
@@ -333,18 +339,18 @@ Geist Sans/Mono 的拉丁字集 WOFF2 随 esbuild 以 data URL 内嵌，中文�
 
 ## Agent Loop 团队协作
 
-源码合同见[Agent Loop 架构与接口](agent-loop.md)。同一 daemon 在 scheduler.sqlite 中添加独立版本的 loop_* 表及 execution_resources，Scheduled 表和公开接口不变。daemon 持有共享 SQLite 连接并最终关闭，RunStore 不关闭外部注入的连接。RunService 与协作运行时共用 agent-execution 和底层 supervisor，不互相包装。
+源码合同见[Agent Loop 架构与接口](agent-loop.md)。同一 daemon 在 scheduler.sqlite 中添加独立版本的 loop_* 表及 execution_resources，Actions 使用既有 scheduled_runs 表，新增独立外部触发接口，旧 schedules 管理路径保持兼容。daemon 持有共享 SQLite 连接并最终关闭，RunStore 不关闭外部注入的连接。RunService 与协作运行时共用 agent-execution 和底层 supervisor，不互相包装。
 
-团队以用户消息建立内部任务，Leader 按依赖委派成员并根据回报继续工作。 Teams 工具、协作执行详情及历史过程展示采用 shadcn/ui Base UI Trace 组合，参数与结果按需展开；reasoning、tool、正文继续按真实事件顺序展示。Teams 消息、滚动和输入已使用官方 shadcn Message/Bubble、Message Scroller 和 Input Group，代码块使用 Code Block，摘要流式效果使用纯 CSS shimmer；剩余定义、来源及附件业务适配继续复用；不引入 AI SDK 执行或第二套组件运行时。消息、持久 inbox、outbox 及后续派发使用事务。Agent 定义来自本地全局目录、ECC 或 Agency Agents 在线目录；市场来源由服务端返回，目录按来源独立缓存并可手动刷新，定义和导入记录固定到具体 commit。市场导入原子写入真实共享 Agent 目录后才允许加入团队，成员执行配置与定义快照分别保存。Teams 看板保留 loop_boards、loop_work_items 和 revision 保存人工记录；board/conversation-work.mjs 从已有 Task、inbox、Run、消息及版本化报告生成只读会话卡片，无额外数据表或模型调用。卡片关联原工作，成员续接不按 Run 重复建卡；普通消息和提问不另建卡片，相关问答进入工作详情。状态区分排队、目录等待、执行、阻塞、报告交付与验收结论。人工排序接口仅接收人工 ID，会话卡片不允许伪造状态；Task 事件和全局失效通知刷新看板，人工 revision 不承担执行版本。协作 loop_schema 为 7，Scheduled user_version 保持 4。六个 Run 专用 MCP 工具为 read_context、remember、send_message、submit_result、request_action、report_progress。成员续接自己的原生会话，按成功投递游标读取新增输入；完整历史通过有界分页工具读取，关键决定及摘要保留来源。SQLite 保存共享事实、执行索引和未导出版本；服务管理的资料目录异步备份完整团队与文件快照，失败不阻断协作。团队只需名称；服务为新任务分配稳定内部目录，独立新应用可直接在内部目录实现，已有项目和分支由 Leader 根据任务及已有上下文通过 prepare_projects 为当前任务准备，不校验路径字符串是否出现在某一条用户消息中，也不要求重复确认；恢复不重放旧执行。旧固定阶段记录继续按原流程执行，新聊天使用 conversation 工作流。
+团队以用户消息建立内部任务，Leader 按依赖委派成员并根据回报继续工作。 Teams 工具、协作执行详情及历史过程展示采用 shadcn/ui Base UI Trace 组合，参数与结果按需展开；reasoning、tool、正文继续按真实事件顺序展示。Teams 消息、滚动和输入已使用官方 shadcn Message/Bubble、Message Scroller 和 Input Group，代码块使用 Code Block，摘要流式效果使用纯 CSS shimmer；剩余定义、来源及附件业务适配继续复用；不引入 AI SDK 执行或第二套组件运行时。消息、持久 inbox、outbox 及后续派发使用事务。Agent 定义来自本地全局目录、ECC 或 Agency Agents 在线目录；市场来源由服务端返回，目录按来源独立缓存并可手动刷新，定义和导入记录固定到具体 commit。市场导入原子写入真实共享 Agent 目录后才允许加入团队，成员执行配置与定义快照分别保存。Teams 看板保留 loop_boards、loop_work_items 和 revision 保存人工记录；board/conversation-work.mjs 从已有 Task、inbox、Run、消息及版本化报告生成只读会话卡片，无额外数据表或模型调用。卡片关联原工作，成员续接不按 Run 重复建卡；普通消息和提问不另建卡片，相关问答进入工作详情。状态区分排队、目录等待、执行、阻塞、报告交付与验收结论。人工排序接口仅接收人工 ID，会话卡片不允许伪造状态；Task 事件和全局失效通知刷新看板，人工 revision 不承担执行版本。协作 loop_schema 为 7，Actions Run user_version 为 5。六个 Run 专用 MCP 工具为 read_context、remember、send_message、submit_result、request_action、report_progress。成员续接自己的原生会话，按成功投递游标读取新增输入；完整历史通过有界分页工具读取，关键决定及摘要保留来源。SQLite 保存共享事实、执行索引和未导出版本；服务管理的资料目录异步备份完整团队与文件快照，失败不阻断协作。团队只需名称；服务为新任务分配稳定内部目录，独立新应用可直接在内部目录实现，已有项目和分支由 Leader 根据任务及已有上下文通过 prepare_projects 为当前任务准备，不校验路径字符串是否出现在某一条用户消息中，也不要求重复确认；恢复不重放旧执行。旧固定阶段记录继续按原流程执行，新聊天使用 conversation 工作流。
 
-新任务的 CLI 始终使用服务管理的内部目录。项目执行可选择隔离新分支、继续已有本地分支或明确复用原目录，记录实际目录、分支、起点及 dirty 状态；按实际 resource_scope 原子取得所需目录占用，目录等待不占运行名额。Teams 的 Codex 在新建、恢复线程和每轮执行中使用完整访问，不再按角色限制到工作目录白名单；不修改客户端全局配置、Scheduled 或旧固定阶段任务。项目绑定可在同一任务显式更新，并保存稳定 Git 管理目录与相对路径；执行前后刷新改名或移动后的分支和 worktree，保留项目顺序与原生会话。Leader 按任务检查真实实现与验证证据，不强制独立验证 Run；未结束成员仍需完成或明确处理。暂停或改目标撤销 Run 凭据，重启不重放已领取的执行。PID 未知或旧进程仍存活时，不释放目录占用。当前 Codex 消息驱动交付已实测，Claude 讨论与审阅适配仍缺少模型侧成功证据，不开放 Claude 实施。
+新任务的 CLI 始终使用服务管理的内部目录。项目执行可选择隔离新分支、继续已有本地分支或明确复用原目录，记录实际目录、分支、起点及 dirty 状态；按实际 resource_scope 原子取得所需目录占用，目录等待不占运行名额。Teams 的 Codex 在新建、恢复线程和每轮执行中使用完整访问，不再按角色限制到工作目录白名单；不修改客户端全局配置、Actions 或旧固定阶段任务。项目绑定可在同一任务显式更新，并保存稳定 Git 管理目录与相对路径；执行前后刷新改名或移动后的分支和 worktree，保留项目顺序与原生会话。Leader 按任务检查真实实现与验证证据，不强制独立验证 Run；未结束成员仍需完成或明确处理。暂停或改目标撤销 Run 凭据，重启不重放已领取的执行。PID 未知或旧进程仍存活时，不释放目录占用。当前 Codex 消息驱动交付已实测，Claude 讨论与审阅适配仍缺少模型侧成功证据，不开放 Claude 实施。
 
-这是当前未发布源码的合同，既有 Release 与安装版不会随之更新。验证范围见[实施验证记录](job/agent-loop/03-phases.md)。
+这是 Rillo 0.17.0 的实现约定，既有安装版需要手动更新。验证范围见[实施验证记录](job/agent-loop/03-phases.md)。
 
 
 Teams 成员的 name/avatar 是团队身份，execution_config 保存模型与实际支持的 effort。用户显式 @ 直接派发，无收件人时由 Leader 承接；成员结果交回实际请求者，只有需要协调才通知 Leader。Teams 观察性审查允许并行编辑，实施按声明项目使用排他占用，Leader 统筹不因身份独占项目；depends_on 依赖完成后才派发。公开摘要、工具输入输出及状态保存在 Run.parts，图片/PDF 为服务端路径引用，详见 [Teams](agent-loop.md#成员身份运行内容与生命周期)。loop_schema=7 增加消息关联、投递与处理状态，保留版本 6 的历史成员快照和独立全局定义删除日志。团队成员菜单只移出当前团队；本地 Agent 目录才删除全局定义文件，所有团队成员继续使用定义快照。删除文件先确认 digest，暂存后按 staging/committed 日志恢复或清理；旧成员删除日志继续恢复。解散先停止本团队执行，保留历史，不改变其他团队。
 
-Teams 对话采用官方 shadcn Base UI 的 Message、Bubble、Message Scroller、Input Group、Code Block、Trace 与 shimmer；Reasoning、Tool、Task 和自动续轮组合复用 Trace，InlineCitation 保留真实来源适配；当前任务通过专属 SSE 接收规范化片段更新，初始和重连使用持久化快照校准，连接建立后停止任务级整份重查；约 180ms 的片段持久化批处理保留。Codex 公开 reasoning 请求 detailed 并保留分段，Token 与文件路径/状态同步，文件 diff 和原始推理不进入此链路。Tiptap Mention 继续使用稳定成员 ID。Agent 组件展示定义快照与配置，不接管运行时。导航顺序为 Sessions、Schedule、Teams；当前页面与接口使用 teams，旧 rooms 链接和接口保留已有数据兼容入口。团队解散/删除入口位于左侧列表；删除隐藏列表记录并保留原生会话及历史。
+Teams 对话采用官方 shadcn Base UI 的 Message、Bubble、Message Scroller、Input Group、Code Block、Trace 与 shimmer；Reasoning、Tool、Task 和自动续轮组合复用 Trace，InlineCitation 保留真实来源适配；当前任务通过专属 SSE 接收规范化片段更新，初始和重连使用持久化快照校准，连接建立后停止任务级整份重查；约 180ms 的片段持久化批处理保留。Codex 公开 reasoning 请求 detailed 并保留分段，Token 与文件路径/状态同步，文件 diff 和原始推理不进入此链路。Tiptap Mention 继续使用稳定成员 ID。Agent 组件展示定义快照与配置，不接管运行时。导航顺序为 Sessions、Actions、Teams；当前页面与接口使用 teams，旧 rooms 链接和接口保留已有数据兼容入口。团队解散/删除入口位于左侧列表；删除隐藏列表记录并保留原生会话及历史。
 
 Sessions 通过 daemon 注入的 projectSessions 补充团队身份，不跨服务调用协作运行时。新执行按 provider/store/session 精确关联；旧记录额外核对 workspace。列表按团队分组，标题采用用户任务名，成员头像与别名来自当前成员或 Run 快照；原生父子与 fork 关系不变。具体数据约定见 [Sessions 中的团队关联](agent-loop.md#sessions-中的团队关联)。
 

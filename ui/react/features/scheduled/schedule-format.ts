@@ -64,7 +64,8 @@ export function runDuration(
 
 export function triggerLabel(trigger: string | null | undefined) {
   if (trigger === 'manual') return '手动'
-  if (trigger === 'scheduled') return '计划'
+  if (trigger === 'external') return '外部调用'
+  if (trigger === 'scheduled') return '定时'
   if (trigger === 'catchup') return '补跑'
   return trigger || '未知'
 }
@@ -95,7 +96,8 @@ function baseCadenceSummary(cadence: ScheduleCadence) {
   }
 }
 
-export function cadenceSummary(cadence: ScheduleCadence) {
+export function cadenceSummary(cadence: ScheduleCadence | null) {
+  if (!cadence) return '无定时'
   const summary = baseCadenceSummary(cadence)
   const hours = 'work_hours' in cadence ? cadence.work_hours : undefined
   if (!hours) return summary

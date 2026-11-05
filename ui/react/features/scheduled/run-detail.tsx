@@ -180,6 +180,11 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
       ) : null}
 
       <section className="run-detail__section">
+        <div className="run-detail__section-heading"><h3>本轮输入 data</h3><span>{triggerLabel(run.trigger)}</span></div>
+        <pre className="select-text whitespace-pre-wrap break-all">{JSON.stringify(run.data ?? null, null, 2)}</pre>
+      </section>
+
+      <section className="run-detail__section">
         <div className="run-detail__section-heading"><h3>产出文件</h3><span>{run.file_changes.length}</span></div>
         {run.file_changes.length ? (
           <ul className="run-detail__files">
