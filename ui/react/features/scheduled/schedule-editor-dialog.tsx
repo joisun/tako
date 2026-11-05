@@ -17,7 +17,7 @@ import { FieldLabel } from '@/components/ui/field'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardApiError, type DashboardApi } from '@/lib/api/dashboard-api'
-import type { RuntimeStatus, RuntimeSettingsResponse, ScheduleRecord } from '@/lib/api/types'
+import type { RuntimeStatus, ScheduleRecord } from '@/lib/api/types'
 import {
   changeDraftAgent,
   defaultScheduleDraft,
@@ -81,46 +81,10 @@ export function ScheduleEditorDialog({
   const [catalog, setCatalog] = useState<ModelOption[]>([])
   const [catalogState, setCatalogState] = useState<CatalogState>('loading')
   const [deleteArmed, setDeleteArmed] = useState(false)
-  const [localSettings, setLocalSettings] = useState<RuntimeSettingsResponse | null>(null)
-  const [settingsError, setSettingsError] = useState(false)
   const [hadSecret, setHadSecret] = useState(false)
   const [copied, setCopied] = useState('')
   const editing = Boolean(schedule)
   const busy = phase !== 'ready'
-
-  useEffect(() => {
-    if (!open || draft.agent !== 'codex') return
-    let canceled = false
-    let reading = false
-    setLocalSettings(null)
-    setSettingsError(false)
-    const refresh = async () => {
-      if (reading || document.visibilityState === 'hidden') return
-      reading = true
-      try {
-        const value = await api.runtimeSettings(draft.agent, draft.workspace.trim() || undefined)
-        if (!canceled) { setLocalSettings(value); setSettingsError(false) }
-      } catch { if (!canceled) { setLocalSettings(null); setSettingsError(true) } }
-      finally { reading = false }
-    }
-    const initial = window.setTimeout(() => { void refresh() }, 350)
-    const interval = window.setInterval(() => { void refresh() }, 15_000)
-    const focus = () => { void refresh() }
-    window.addEventListener('focus', focus)
-    document.addEventListener('visibilitychange', focus)
-    return () => {
-      canceled = true
-      window.clearTimeout(initial)
-      window.clearInterval(interval)
-      window.removeEventListener('focus', focus)
-      document.removeEventListener('visibilitychange', focus)
-    }
-  }, [api, open, draft.agent, draft.workspace])
-
-  const localCompact = localSettings?.auto_compact_token_limit
-  const localCompactLabel = settingsError ? '暂时无法读取' : !localCompact ? '读取中…'
-    : localCompact.configured_tokens == null ? '未设置，使用模型默认'
-      : `${localCompact.configured_tokens.toLocaleString()} tokens`
 
   useEffect(() => {
     if (!open) return undefined
@@ -466,25 +430,6 @@ export function ScheduleEditorDialog({
                         <FieldLabel htmlFor="schedule-inherit-limit">最大继承轮数（不含首次，满额新建）</FieldLabel>
                         <Input id="schedule-inherit-limit" disabled={busy} type="number" min={1} max={10000} required value={draft.maxInheritRuns} onChange={(event) => update('maxInheritRuns', event.currentTarget.value)} />
                     </div> : null}
-                    {draft.agent === 'codex' ? <>
-                      <div className="schedule-editor__field">
-                        <div className="schedule-editor__field-label">
-                          <FieldLabel>自动压缩触发阈值</FieldLabel>
-                          <FieldHelp label="自动压缩">按上下文 token 用量触发压缩。跟随模式读取最新本地配置，自定义值仅对本任务生效。</FieldHelp>
-                        </div>
-                        <Select aria-label="自动压缩触发阈值" disabled={busy} value={draft.compactMode} onValueChange={(value) => update('compactMode', value as ScheduleDraft['compactMode'])}>
-                          <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="inherit">{`跟随本地配置（${localCompactLabel}）`}</SelectItem>
-                            <SelectItem value="custom">自定义 token 阈值</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      {draft.compactMode === 'custom' ? <div className="schedule-editor__field">
-                        <FieldLabel htmlFor="schedule-compact-tokens">自定义阈值（tokens）</FieldLabel>
-                        <Input id="schedule-compact-tokens" disabled={busy} type="number" min={1000} max={10000000} required value={draft.autoCompactTokenLimit} onChange={(event) => update('autoCompactTokenLimit', event.currentTarget.value)} />
-                      </div> : null}
-                    </> : <p className="schedule-editor__hint">当前 Agent 的自动压缩跟随其本地配置，暂不支持自定义 token 阈值。</p>}
                   </div>
                 </section>
 

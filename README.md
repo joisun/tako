@@ -19,7 +19,7 @@ Rillo 是运行在本机的 coding-agent 会话与自动化控制台。Sessions 
 
 Teams 成员跨职责延续同一任务中的原生会话，委派可明确产物与验收要求，完全相同的未完成指派复用原执行。共享记忆按当前工作筛选，恢复时从已有记录重建有来源的工作进度。Teams 的 Codex 执行使用完整访问，支持任务内更新项目绑定；分支/worktree 改名后按 Git 标识刷新路径，保留成员会话和文件。用户明确的只读要求仍作为任务约束，Claude 当前仅支持讨论与审阅。Actions 与旧固定阶段任务的权限设置保持不变。
 
-Rillo 0.17.0 使用 `rillo` 命令、插件标识和发布资产名称，GitHub 仓库为 `joisun/rillo`。旧版本的配置、定时任务和执行记录由安装脚本迁移，详见[更名与安装迁移](docs/migrations/rillo-rename.md)。
+Rillo 0.17.1 使用 `rillo` 命令、插件标识和发布资产名称，GitHub 仓库为 `joisun/rillo`。旧版本的配置、定时任务和执行记录由安装脚本迁移，详见[更名与安装迁移](docs/migrations/rillo-rename.md)。
 
 
 Teams 左侧“Agent 管理”统一管理本地与 Marketplace 定义，仍在 view=teams 范围。支持 Agency Agents、ECC 及自定义 GitHub 来源、真实 Markdown 详情、托管安装、版本与本地修改检查、逐行更新审核及备份卸载。成员区 + 改为先搜索本地角色，再配置名字、头像、客户端、模型和 effort。安装角色可沿用 Teams 执行；独立 Session 创建尚未接入，界面明确禁用。详见 [Agent Marketplace](docs/agent-marketplace.md)。
@@ -44,7 +44,7 @@ rillo status
 普通安装不需要 clone repository、`npm install` 或 `npm ci`。更谨慎的固定版本安装方式：
 
 ```bash
-version=v0.17.0
+version=v0.17.1
 curl -fsSLO "https://raw.githubusercontent.com/joisun/rillo/${version}/install.sh"
 less install.sh
 bash install.sh --version "$version"
@@ -235,9 +235,8 @@ Live Session 只干预当前 active Turn，不在 Dashboard 内创建第二轮�
 | `thread_mode: reuse` | 首次运行新建，此后原生 resume 本任务、同 Agent、同 workspace 的上次会话。恢复失败明确报错，不偷偷新建 |
 | `thread_mode: auto` | 首次新建，以后默认继承；本轮成功结果末尾的标记决定下一轮新建还是继承 |
 | `max_inherit_runs: 20` | 同一会话最多继承 20 轮，首次新建不计入；下一轮改为新建并重置计数。可设置 1–10000，自动模式也遵守此上限 |
-| `auto_compact_token_limit: 60000` | Codex 自动压缩的上下文 token 阈值，可设为 1000–10000000；不是轮数上限 |
 
-`auto_compact_token_limit` 省略或为 `null` 表示每轮跟随本地配置，不把页面读取的值保存成覆盖值。编辑器括号显示当前有效的本地配置；未配置时显示“未设置，使用模型默认”，不伪造数值。打开表单、改变 workspace、返回页面及每 15 秒重新读取；HTTP `GET /api/v1/runtimes/:id/settings?workspace=...` 提供相同读取。自定义值仅覆盖本次执行，不修改 `~/.codex/config.toml`。OpenCode 暂不提供自定义 token 阈值。
+Rillo 不配置自动压缩阈值，Codex 自行使用其原生配置与模型默认机制。旧 Markdown 中的 `auto_compact_token_limit` 只在读取时忽略，显式保存时移除；旧 Run 快照保留历史值，执行时不再注入。
 
 自动模式会在每轮执行 Prompt 中附加控制说明。Agent 在最终结果末尾单独输出 `<!-- rillo:next-session=new -->` 或 `<!-- rillo:next-session=reuse -->`。标记缺失、无效或本轮失败时默认继承；新建不删除旧会话。任务正文可说明何时需要连续上下文，例如“连续跟进未完成缺陷时继承，已完成完整日报时下一轮新建”。Rillo 使用已有执行记录保存选择和计数，不写第二份会话正文。运行记录显示本轮实际方式与继承序号，达到上限或自动决策导致的新建有单独标记。
 

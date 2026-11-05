@@ -1,9 +1,5 @@
 export const THREAD_MODES = new Set(['new', 'reuse', 'auto'])
 
-export function validAutoCompactLimit(value) {
-  return value == null || (Number.isSafeInteger(value) && value >= 1_000 && value <= 10_000_000)
-}
-
 export function validInheritanceLimit(value) {
   return Number.isSafeInteger(value) && value >= 1 && value <= 10000
 }

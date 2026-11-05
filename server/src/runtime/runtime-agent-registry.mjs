@@ -102,13 +102,7 @@ export function createRuntimeAgentRegistry({
     resolutionCache.delete(id)
   }
 
-  async function settings(id, { workspace } = {}) {
-    const definition = get(id)
-    if (!definition.readSettings) return { auto_compact_token_limit: { supported: false, configured_tokens: null, source: 'unsupported' } }
-    return definition.readSettings({ launch: await resolve(id), workspace })
-  }
-
-  return Object.freeze({ list, get, resolve, models, settings, refresh })
+  return Object.freeze({ list, get, resolve, models, refresh })
 }
 
 async function discoverModels(definition, launch) {

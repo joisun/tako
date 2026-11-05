@@ -13,7 +13,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const PATCH_FIELDS = new Set([
   'enabled', 'schedule_enabled', 'external_enabled', 'external_secret', 'title', 'prompt', 'workspace', 'agent', 'cadence', 'capabilities', 'sandbox_mode',
   'model', 'reasoning_effort', 'fast_mode', 'network_access', 'timeout_seconds',
-  'thread_mode', 'auto_compact_token_limit', 'max_inherit_runs',
+  'thread_mode', 'max_inherit_runs',
 ])
 
 function fail(code, message, details) {

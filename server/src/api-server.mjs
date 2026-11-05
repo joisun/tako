@@ -150,7 +150,6 @@ function scheduleJob(row, { detail = false, runSummary = null } = {}) {
     ...(detail ? { external_secret: row.external_secret ?? null } : {}),
     timezone_mode: row.timezone_mode,
     thread_mode: row.thread_mode,
-    auto_compact_token_limit: row.auto_compact_token_limit ?? null,
     max_inherit_runs: row.max_inherit_runs ?? 20,
     sandbox_mode: row.sandbox_mode,
     model: row.model,
@@ -589,13 +588,6 @@ export function createApiServer({
         sendJson(response, 200, { runtimes: await runtimeRegistry.list() })
         return
       }
-      const runtimeSettings = pathname.match(/^\/api\/v1\/runtimes\/([^/]+)\/settings$/)
-      if (request.method === 'GET' && runtimeSettings && runtimeRegistry) {
-        const workspace = url.searchParams.get('workspace') || undefined
-        if (workspace && (!workspace.startsWith('/') || workspace.length > 4096 || workspace.includes('\0'))) throw httpError('RUNTIME_INPUT_INVALID', 'Workspace must be an absolute directory', 400)
-        sendJson(response, 200, await runtimeRegistry.settings(safeSegment(runtimeSettings[1]), { workspace }))
-        return
-      }
       const runtimeModels = pathname.match(/^\/api\/v1\/runtimes\/([^/]+)\/models$/)
       if (request.method === 'GET' && runtimeModels && runtimeRegistry) {
         const runtimeId = safeSegment(runtimeModels[1])
@@ -831,7 +823,7 @@ export function createApiServer({
         const input = exactBody(await readJson(request), new Set([
           'enabled', 'schedule_enabled', 'external_enabled', 'external_secret', 'title', 'prompt', 'workspace', 'agent', 'cadence', 'sandbox_mode', 'model',
           'reasoning_effort', 'fast_mode', 'network_access', 'timeout_seconds', 'capabilities',
-          'thread_mode', 'auto_compact_token_limit', 'max_inherit_runs',
+          'thread_mode', 'max_inherit_runs',
         ]), 'Schedule')
         const result = scheduleMutationResult(await schedulerService.createJob(input))
         hub.publish()

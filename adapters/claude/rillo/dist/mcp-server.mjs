@@ -31245,7 +31245,6 @@ var scheduleFields = {
   timeout_seconds: external_exports.number().int().min(60).max(86400).optional(),
   thread_mode: external_exports.enum(["new", "reuse", "auto"]).describe("new: independent session each run (default). reuse: resume this Action\u2019s previous compatible session, creating one on the first run. auto: resume by default; successful agent output ends with <!-- rillo:next-session=new --> or <!-- rillo:next-session=reuse --> to choose the next run.").optional(),
   max_inherit_runs: external_exports.number().int().min(1).max(1e4).describe("Maximum Action executions that resume the same native session. Defaults to 20; the initial new-session run is not counted. Applies to reuse and auto; the next execution starts a new session after the cap.").optional(),
-  auto_compact_token_limit: external_exports.number().int().min(1e3).max(1e7).nullable().describe("Codex automatic context-compaction token threshold. null/unset inherits the current local configuration on each run; it is not a turn limit.").optional(),
   capabilities: external_exports.object({
     skills: external_exports.enum(["inherit", "disabled"]).optional(),
     integrations: external_exports.enum(["inherit", "disabled"]).optional()

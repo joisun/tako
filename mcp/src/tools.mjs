@@ -63,7 +63,6 @@ const scheduleFields = {
   timeout_seconds: z.number().int().min(60).max(86400).optional(),
   thread_mode: z.enum(['new', 'reuse', 'auto']).describe('new: independent session each run (default). reuse: resume this Action’s previous compatible session, creating one on the first run. auto: resume by default; successful agent output ends with <!-- rillo:next-session=new --> or <!-- rillo:next-session=reuse --> to choose the next run.').optional(),
   max_inherit_runs: z.number().int().min(1).max(10000).describe('Maximum Action executions that resume the same native session. Defaults to 20; the initial new-session run is not counted. Applies to reuse and auto; the next execution starts a new session after the cap.').optional(),
-  auto_compact_token_limit: z.number().int().min(1000).max(10000000).nullable().describe('Codex automatic context-compaction token threshold. null/unset inherits the current local configuration on each run; it is not a turn limit.').optional(),
   capabilities: z.object({
     skills: z.enum(['inherit', 'disabled']).optional(),
     integrations: z.enum(['inherit', 'disabled']).optional(),

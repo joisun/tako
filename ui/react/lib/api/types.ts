@@ -199,7 +199,6 @@ export interface ScheduleRecord {
   cadence: ScheduleCadence | null
   timezone_mode: string
   thread_mode: 'new' | 'reuse' | 'auto'
-  auto_compact_token_limit?: number | null
   max_inherit_runs?: number
   sandbox_mode: 'read-only' | 'workspace-write' | 'danger-full-access'
   model: string | null
@@ -241,14 +240,6 @@ export interface RuntimeStatus {
 
 export interface RuntimeListResponse {
   runtimes: RuntimeStatus[]
-}
-
-export interface RuntimeSettingsResponse {
-  auto_compact_token_limit: {
-    supported: boolean
-    configured_tokens: number | null
-    source: 'local_config' | 'model_default' | 'unsupported'
-  }
 }
 
 export interface RuntimeModel {
@@ -396,7 +387,6 @@ export interface ScheduleMutationInput {
   workspace: string
   agent: string
   thread_mode?: ScheduleRecord['thread_mode']
-  auto_compact_token_limit?: number | null
   max_inherit_runs?: number
   cadence: ScheduleCadence | null
   sandbox_mode: ScheduleRecord['sandbox_mode']

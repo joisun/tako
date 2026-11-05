@@ -229,7 +229,6 @@ function createSession({
         ...threadConfig,
         ...(run.execution_config ?? {}),
         ...(run.network_access == null ? {} : { 'sandbox_workspace_write.network_access': run.network_access }),
-        ...(run.auto_compact_token_limit == null ? {} : { model_auto_compact_token_limit: run.auto_compact_token_limit }),
       }
       const startedThread = await client.request(run.resume_session_id ? 'thread/resume' : 'thread/start', compact({
         ...(run.resume_session_id ? { threadId: run.resume_session_id } : { ephemeral: false }),

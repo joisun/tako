@@ -92,7 +92,7 @@ Actions 升级 Schedule。新定义写 rillo/action；旧 rillo/schedule 读取�
 
 Run 创建事务保存不含 external_secret 的任务快照和独立 input_json。启动前根据前一轮实际结果确定 session_mode、session_mode_reason、resume_session_id 和 inherit_run_number；这样队列中的连续请求可继承刚结束的一轮。默认 new；reuse/auto 匹配同 Action、runtime 和 workspace 的最近原生会话。max_inherit_runs 默认 20，首次新建不计入；统计实际记录了同原生 Session 的继承执行，达到上限后换新会话。
 
-auto 的成功 final_message 末尾标记 `<!-- rillo:next-session=new|reuse -->` 决定下一轮；失败或缺失默认 reuse，上限优先。RunService 注入协议但不修改 Markdown 正文。Codex 选择 thread/start 或 thread/resume，OpenCode 选择新建 session 或获取原 session；恢复失败不降级新建。Codex 的自定义 `auto_compact_token_limit` 仅通过原生线程 config 覆盖，null 不覆盖。Runtime settings 通过新 stdio 连接 config/read 动态读取有效本地值，不沿用 model catalog 缓存，未设置与读取失败分开返回。
+auto 的成功 final_message 末尾标记 `<!-- rillo:next-session=new|reuse -->` 决定下一轮；失败或缺失默认 reuse，上限优先。RunService 注入协议但不修改 Markdown 正文。Codex 选择 thread/start 或 thread/resume，OpenCode 选择新建 session 或获取原 session；恢复失败不降级新建。Rillo 不再提供或注入自动压缩阈值，也不主动读取 Runtime 的压缩配置。旧定义的 `auto_compact_token_limit` 只读识别并忽略，保存时不再写出；排队和历史 Run 的快照不改写，CLI 与交互式执行路径都不再应用旧阈值。Codex 原生配置及模型默认压缩机制保持自身行为。
 
 ```text
 queued

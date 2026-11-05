@@ -24,7 +24,6 @@ import type {
   TerminalResumeAction,
   RuntimeListResponse,
   RuntimeModelCatalogResponse,
-  RuntimeSettingsResponse,
   ScheduleListResponse,
   ScheduleMutationInput,
   ScheduleResponse,
@@ -131,7 +130,6 @@ export interface DashboardApi {
   updateSettings(input: { resume_terminal: string }): Promise<DashboardSettingsResponse>
   runtimes(): Promise<RuntimeListResponse>
   runtimeModels(id: string): Promise<RuntimeModelCatalogResponse>
-  runtimeSettings(id: string, workspace?: string): Promise<RuntimeSettingsResponse>
   schedules(): Promise<ScheduleListResponse>
   schedule(id: string): Promise<ScheduleResponse>
   createSchedule(input: ScheduleMutationInput): Promise<ScheduleResponse>
@@ -339,7 +337,6 @@ export function createDashboardApi({
     updateSettings: (input) => request('/api/v1/settings', { method: 'PATCH', body: input }),
     runtimes: () => request('/api/v1/runtimes', { requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
     runtimeModels: (id) => request(`/api/v1/runtimes/${encodeURIComponent(id)}/models`, { requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
-    runtimeSettings: (id, workspace) => request(`/api/v1/runtimes/${encodeURIComponent(id)}/settings${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ''}`, { requestTimeoutMs: 15_000 }),
     schedules: () => request('/api/v1/actions'),
     schedule: (id) => request(`/api/v1/actions/${encodeURIComponent(id)}`),
     createSchedule: (input) => request('/api/v1/actions', { method: 'POST', body: input }),

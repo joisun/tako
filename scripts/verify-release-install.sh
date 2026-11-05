@@ -34,11 +34,17 @@ tar -tzf "$release_directory/$service_asset" > "$smoke_root/entries" 2> "$smoke_
 [ ! -s "$smoke_root/tar-errors" ] || { cat "$smoke_root/tar-errors" >&2; exit 1; }
 awk -F/ '{ for (i = 1; i <= NF; i++) if ($i ~ /^\._/ || $i == ".DS_Store") exit 1 }' "$smoke_root/entries"
 
-smoke_port="$(node --input-type=module -e 'import {createServer} from "node:net"; const server=createServer(); server.listen(0,"127.0.0.1",()=>{console.log(server.address().port);server.close()})')"
-node - "$smoke_home/.config/rillo/config.json" "$smoke_port" <<'NODE'
-const {writeFileSync}=require('node:fs')
-writeFileSync(process.argv[2], JSON.stringify({output_dir:'.',server_host:'127.0.0.1',server_port:Number(process.argv[3])})+'\n')
+smoke_port="$(node --input-type=module - "$smoke_home/.config/rillo/config.json" <<'NODE'
+import { writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
+const servers = [createServer(), createServer()]
+await Promise.all(servers.map(server => new Promise(resolve => server.listen(0, '127.0.0.1', resolve))))
+const [server_port, action_trigger_port] = servers.map(server => server.address().port)
+writeFileSync(process.argv[2], JSON.stringify({ output_dir: '.', server_host: '127.0.0.1', server_port, action_trigger_port }) + '\n')
+console.log(server_port)
+await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve))))
 NODE
+ )"
 cp "$smoke_home/.config/rillo/config.json" "$smoke_root/config-before.json"
 env HOME="$smoke_home" RILLO_RELEASE_BASE_URL="file://$release_directory" \
   bash "$release_directory/install.sh" --version "v$expected_version" --no-start
