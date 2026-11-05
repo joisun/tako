@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
-import { RilloError } from './errors.mjs'
+import { UnderControlError } from './errors.mjs'
 
 export const SERVER_INSTRUCTIONS = `Query native sessions and manage Actions through action_* tools. Actions upgrade Schedule; legacy schedule_* tools use the same implementation. cadence is optional; timer/manual calls use data=null. enabled controls all new executions; schedule_enabled controls only timers; external_enabled controls the separate HTTP trigger. External calls accept only {secret,data}; secret is persisted locally and omitted from MCP responses. Use runtime_list before choosing a schedule agent. Read action_get before changing a schedule and pass its latest etag as expected_etag; on SCHEDULE_VERSION_CONFLICT read again and reconsider the change, never silently overwrite. action_create creates an enabled task; cadence uses the service machine timezone. interval cadence accepts minutes from 1 to 1440. Optional work_hours on recurring cadence restricts automatic starts to selected ISO weekdays and non-overlapping HH:mm windows (start inclusive, end exclusive; end may be 24:00). Each interval window starts its own interval sequence; closed or previous windows are not replayed. Existing executions continue and action_run ignores work hours. Reuse the same idempotency_key when retrying action_run. Session search covers user and assistant text, not just previews. Follow next_cursor even when a search page has no matches; do not claim that a partial page is the complete result. Use session_sources to obtain the exact provider and store_id before registering relations. SessionRef is {provider, store_id, session_id}; for Codex session_id is thread.id. After a delegated child session exists, register its actual identity with session_link. Never guess a session ID from an execution, agent key, PID, worktree, or title. Use session_unlink only to remove an explicitly registered relation; native subagent/fork relations are read-only. For messaging, discover session_control_sources and session_control_capabilities first; reuse the same request_id for the same target, text and mode. queue schedules input, steer supplements a turn, and interrupt stops the expected turn before sending; steer and interrupt require the observed expected_turn_id. accepted does not mean completed. On unknown, query session_delivery; never switch IDs or transports to resend blindly. No Task, heartbeat, attribution, checkpoint or automatic summary recording is needed. Never edit local databases directly.`
 
@@ -61,7 +61,7 @@ const scheduleFields = {
   fast_mode: z.boolean().nullable().optional(),
   network_access: z.boolean().nullable().optional(),
   timeout_seconds: z.number().int().min(60).max(86400).optional(),
-  thread_mode: z.enum(['new', 'reuse', 'auto']).describe('new: independent session each run (default). reuse: resume this Action’s previous compatible session, creating one on the first run. auto: resume by default; successful agent output ends with <!-- rillo:next-session=new --> or <!-- rillo:next-session=reuse --> to choose the next run.').optional(),
+  thread_mode: z.enum(['new', 'reuse', 'auto']).describe('new: independent session each run (default). reuse: resume this Action’s previous compatible session, creating one on the first run. auto: resume by default; successful agent output ends with <!-- undercontrol:next-session=new --> or <!-- undercontrol:next-session=reuse --> to choose the next run.').optional(),
   max_inherit_runs: z.number().int().min(1).max(10000).describe('Maximum Action executions that resume the same native session. Defaults to 20; the initial new-session run is not counted. Applies to reuse and auto; the next execution starts a new session after the cap.').optional(),
   capabilities: z.object({
     skills: z.enum(['inherit', 'disabled']).optional(),
@@ -78,12 +78,12 @@ function handler(operation) {
       if (structuredContent?.job) delete structuredContent.job.external_secret
       return { content: [{ type: 'text', text: JSON.stringify(structuredContent) }], structuredContent, ...(['unknown', 'rejected'].includes(structuredContent?.delivery?.status) ? { isError: true } : {}) }
     } catch (error) {
-      const known = error instanceof RilloError
+      const known = error instanceof UnderControlError
       const structuredContent = {
         ok: false,
         error: {
           code: known ? error.code : 'INTERNAL_ERROR',
-          message: known ? error.message : 'Rillo operation failed.',
+          message: known ? error.message : 'UnderControl operation failed.',
           ...(known && error.details !== undefined ? { details: error.details } : {}),
         },
       }
@@ -92,9 +92,9 @@ function handler(operation) {
   }
 }
 
-export function createRilloServer({ service }) {
+export function createUnderControlServer({ service }) {
   const server = new McpServer(
-    { name: 'rillo', version: '0.16.1' },
+    { name: 'undercontrol', version: '0.16.1' },
     { instructions: SERVER_INSTRUCTIONS },
   )
   server.registerTool('session_sources', {

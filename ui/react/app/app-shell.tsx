@@ -1,6 +1,6 @@
 import type { PropsWithChildren, ReactNode } from 'react'
 
-import { RILLO_LOGO_URL } from '@/branding'
+import { UNDERCONTROL_LOGO_URL } from '@/branding'
 import type { DashboardConnectionState } from '@/lib/events/dashboard-event-source'
 import type { DashboardView } from '@/lib/preferences/dashboard-preferences'
 import { ConnectionStatus } from './connection-status'
@@ -25,8 +25,8 @@ export function AppShell({
     <div className="app-shell">
       <header className="app-shell__header">
         <div className="app-shell__brand">
-          <img className="app-shell__mark" src={RILLO_LOGO_URL} alt="" width={24} height={24} />
-          <h1>Rillo</h1>
+          <img className="app-shell__mark" src={UNDERCONTROL_LOGO_URL} alt="" width={24} height={24} />
+          <h1>UnderControl</h1>
         </div>
         <div className="app-shell__navigation-zone">
           <Navigation view={view} onViewChange={onViewChange} />

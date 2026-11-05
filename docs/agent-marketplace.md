@@ -30,7 +30,7 @@ Agent Definition 保存角色身份、职责、工作流和指令；它不是 Ru
 
 复用 scheduler.sqlite，独立维护 marketplace_schema、marketplace_sources、marketplace_installed、marketplace_operations。Marketplace schema=1 不改变 Scheduled 的 user_version 或 Teams 的 loop_schema。
 
-安装文件位于 Rillo 数据目录 `agents/installed/<稳定哈希>/definition.md`，逐字保存来源原文，权限 0600。稳定标识由来源 ID 和路径生成，不随 commit 改变；记录安装时间、更新时间、版本、摘要及定义快照。不会写入 ~/.agents、~/.claude、~/.codex 或修改客户端全局设置。原有全局定义继续由本地目录读取。
+安装文件位于 UnderControl 数据目录 `agents/installed/<稳定哈希>/definition.md`，逐字保存来源原文，权限 0600。稳定标识由来源 ID 和路径生成，不随 commit 改变；记录安装时间、更新时间、版本、摘要及定义快照。不会写入 ~/.agents、~/.claude、~/.codex 或修改客户端全局设置。原有全局定义继续由本地目录读取。
 
 所有安装、更新、卸载均有确认界面。安装绑定审核时的 commit 与内容摘要，防止来源在确认前变化。已有文件不覆盖；读写不跟随托管路径符号链接。操作日志先保存意图，文件原子替换后提交登记；中断后按原摘要与目标摘要恢复。遇到额外本地修改保留文件并报告待处理错误，不盲目续写。
 
@@ -38,11 +38,11 @@ Agent Definition 保存角色身份、职责、工作流和指令；它不是 Ru
 
 本地修改默认阻止更新和卸载。用户勾选“先保存独立备份”并确认后，保存原文至 `agents/backups/<安装 ID>/`，再次核对审核时的本地摘要才继续。缺失文件可通过确认更新恢复，或卸载其登记。更新与卸载不会改变已加入团队的成员快照。
 
-“本地 Agent”同时列出客户端全局定义与 Rillo 托管角色。全局定义可以查看和确认删除，沿用原来的 canonical 路径/digest 保护及恢复日志；托管角色转到“已安装”管理，不通过全局文件删除接口处理。团队成员菜单只“移出当前团队”，保留定义与历史。
+“本地 Agent”同时列出客户端全局定义与 UnderControl 托管角色。全局定义可以查看和确认删除，沿用原来的 canonical 路径/digest 保护及恢复日志；托管角色转到“已安装”管理，不通过全局文件删除接口处理。团队成员菜单只“移出当前团队”，保留定义与历史。
 
 ## Runtime、Session 与 Teams
 
-Runtime 可用性使用现有 Rillo runtimes 和 Claude 团队运行时探测。Codex 的 Run.prompt → turn/start、Claude 的 Run.prompt → stdin 已具备文本指令注入路径，不等于原生客户端 Agent 安装。OpenCode 客户端可能可用，但 Marketplace 定义适配未接入，界面分别说明。模型/effort 仍只接受实际返回能力，安装不修改任何全局默认值。
+Runtime 可用性使用现有 UnderControl runtimes 和 Claude 团队运行时探测。Codex 的 Run.prompt → turn/start、Claude 的 Run.prompt → stdin 已具备文本指令注入路径，不等于原生客户端 Agent 安装。OpenCode 客户端可能可用，但 Marketplace 定义适配未接入，界面分别说明。模型/effort 仍只接受实际返回能力，安装不修改任何全局默认值。
 
 当前没有带角色定义创建独立 Session 的公开接口。因此“创建会话”打开版本化上下文和客户端选择，明确显示缺口并禁用执行；不会创建临时 Schedule 或 Team 冒充独立 Session。上下文包含 installed_id、definition_id、source_id、version、digest、instructions，未来应接既有 Session 服务，不能另建执行系统。
 

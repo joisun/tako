@@ -1,9 +1,9 @@
 import { isAbsolute } from 'node:path'
 
-import { RilloError } from '../../mcp/src/errors.mjs'
+import { UnderControlError } from '../../mcp/src/errors.mjs'
 
 function resumeError(code, message, details) {
-  return new RilloError(code, message, details)
+  return new UnderControlError(code, message, details)
 }
 
 function scheduledRunTarget(run) {

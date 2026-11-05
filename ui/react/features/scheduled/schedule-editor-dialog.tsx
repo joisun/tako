@@ -262,7 +262,7 @@ export function ScheduleEditorDialog({
     'curl --request POST \\',
     `  --url ${shellQuote(draft.triggerUrl)} \\`,
     "  --header 'Content-Type: application/json' \\",
-    `  --data-raw ${shellQuote(JSON.stringify({ secret: draft.externalSecret, data: { message: 'hello rillo' } }, null, 2))}`,
+    `  --data-raw ${shellQuote(JSON.stringify({ secret: draft.externalSecret, data: { message: 'hello undercontrol' } }, null, 2))}`,
   ].join('\n')
 
   async function copy(value: string, field: string) {

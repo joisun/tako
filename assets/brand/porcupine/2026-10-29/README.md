@@ -1,15 +1,15 @@
-# Rillo 吉祥物：刺刺
+# UnderControl 吉祥物：刺刺
 
 此目录保留带淡紫背景的上一版素材；当前透明近景版见 [2026-10-30](../2026-10-30/README.md)。
 
-当前方向由用户指定为豪猪宝宝，项目名保持 **Rillo**。圆滚身体与短软刺表达亲近感，粉嫩的大鼻子和两只好奇的小眼睛是主要辨识特征。
+当前方向由用户指定为豪猪宝宝，项目名保持 **UnderControl**。圆滚身体与短软刺表达亲近感，粉嫩的大鼻子和两只好奇的小眼睛是主要辨识特征。
 
-- 正式原图：[rillo-baby-porcupine.png](rillo-baby-porcupine.png)，1254 × 1254 PNG。
+- 正式原图：[undercontrol-baby-porcupine.png](undercontrol-baby-porcupine.png)，1254 × 1254 PNG。
 - 配色：奶油白、可可梅紫、玫瑰粉鼻头，淡紫背景。
 - 使用内置 `image_gen` 生成；模型版本未由工具提供。原图未重采样或后处理。
 - 完整提示词与约束：[prompt.json](prompt.json)。
 
-同一原图用于 `ui/assets/rillo.png`，构建时同步到两宿主 adapter 资产；导航、favicon、README 和 Codex 插件图标共用该素材。页面 URL 使用 `?v=porcupine-1`，避免继续显示前一版的缓存。
+同一原图用于 `ui/assets/undercontrol.png`，构建时同步到两宿主 adapter 资产；导航、favicon、README 和 Codex 插件图标共用该素材。页面 URL 使用 `?v=porcupine-1`，避免继续显示前一版的缓存。
 
 之前的 A2-v2 与其他候选保留在 `assets/brand/logo-candidates/2026-10-29`。本次没有修改项目名称、CLI、包名、插件标识、数据目录或 GitHub 仓库名，尚未公开发布。
 

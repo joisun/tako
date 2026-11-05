@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Repository name is `joisun/rillo`. The remote has been renamed; publication status is recorded in `docs/migrations/rillo-rename.md`.
+- Repository name is `joisun/rillo`. The remote has been renamed; publication status is recorded in `docs/migrations/previous-brand-rename.md`.
 - Service support in this release is macOS with Node.js 24 or newer.
 - Persistent user data remains under `~/.config/rillo` and must survive upgrades/uninstall by default.
 - Installed releases live under `~/.local/share/rillo/releases/<version>` with a `current` symlink.
@@ -124,13 +124,13 @@
 **Files:**
 - Create: `.agents/plugins/marketplace.json`
 - Create: `.claude-plugin/marketplace.json`
-- Create: `adapters/codex/rillo/.codex-plugin/plugin.json`
-- Create: `adapters/codex/rillo/.mcp.json`
+- Create: `adapters/codex/undercontrol/.codex-plugin/plugin.json`
+- Create: `adapters/codex/undercontrol/.mcp.json`
 - Create: `adapters/codex/rillo/hooks/**`
 - Create: `adapters/codex/rillo/mcp/**`
 - Create: `adapters/codex/rillo/skills/task-manager/SKILL.md`
-- Create: `adapters/claude/rillo/.claude-plugin/plugin.json`
-- Create: `adapters/claude/rillo/.mcp.json`
+- Create: `adapters/claude/undercontrol/.claude-plugin/plugin.json`
+- Create: `adapters/claude/undercontrol/.mcp.json`
 - Create: `adapters/claude/rillo/hooks/**`
 - Create: `adapters/claude/rillo/mcp/**`
 - Create: `adapters/claude/rillo/skills/task-manager/SKILL.md`

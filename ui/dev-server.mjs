@@ -23,10 +23,10 @@ try {
       sourceRoots: [reactSourceRoot],
     } : {}),
   })
-  process.stderr.write(`Rillo ${entry} source Dashboard: ${runtime.address.url}\n`)
+  process.stderr.write(`UnderControl ${entry} source Dashboard: ${runtime.address.url}\n`)
   process.stderr.write(`Live daemon upstream: ${config.upstream.origin}\n`)
   process.stderr.write(
-    'Warning: Dashboard mutations update your real local Rillo data.\n',
+    'Warning: Dashboard mutations update your real local UnderControl data.\n',
   )
   let stopping = false
   async function stop() {
@@ -37,6 +37,6 @@ try {
   process.once('SIGINT', () => { stop().finally(() => process.exit(0)) })
   process.once('SIGTERM', () => { stop().finally(() => process.exit(0)) })
 } catch (error) {
-  process.stderr.write(`Rillo Dashboard dev server failed: ${error.message}\n`)
+  process.stderr.write(`UnderControl Dashboard dev server failed: ${error.message}\n`)
   process.exitCode = 1
 }

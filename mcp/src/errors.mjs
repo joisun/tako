@@ -1,7 +1,7 @@
-export class RilloError extends Error {
+export class UnderControlError extends Error {
   constructor(code, message, details = undefined) {
     super(message)
-    this.name = 'RilloError'
+    this.name = 'UnderControlError'
     this.code = code
     this.details = details
   }

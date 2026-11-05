@@ -1,10 +1,10 @@
 {
-  "name": "rillo",
-  "version": "0.17.1",
+  "name": "undercontrol",
+  "version": "0.18.0",
   "private": true,
   "type": "module",
   "bin": {
-    "rillo": "server/cli.mjs"
+    "undercontrol": "server/cli.mjs"
   },
   "engines": {
     "node": ">=24.0.0"
@@ -80,10 +80,10 @@
   "license": "GPL-2.0-only",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/joisun/rillo.git"
+    "url": "git+https://github.com/joisun/undercontrol.git"
   },
-  "homepage": "https://github.com/joisun/rillo#readme",
+  "homepage": "https://github.com/joisun/undercontrol#readme",
   "bugs": {
-    "url": "https://github.com/joisun/rillo/issues"
+    "url": "https://github.com/joisun/undercontrol/issues"
   }
 }

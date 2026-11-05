@@ -12,8 +12,8 @@ try {
   if (
     process.env.AGENT_SUPERVISOR_ROLE !== 'worker'
     && input.session_id
-    && !toolName.includes('rillo')
-    && !toolName.includes('rillo_')
+    && !toolName.includes('undercontrol')
+    && !toolName.includes('undercontrol_')
   ) {
     const source = sourceKey(input)
     const turnKey = explicitTurn(input) ?? (await currentTurn(source, input.session_id))?.turn_key

@@ -1,6 +1,6 @@
 export type DashboardView = 'actions' | 'sessions' | 'teams'
 export type SessionGroupMode = 'workspace' | 'branch'
-const SESSIONS_GROUP_KEY = 'rillo.sessions-group'
+const SESSIONS_GROUP_KEY = 'undercontrol.sessions-group'
 
 export function readSessionsGroup(location = window.location): SessionGroupMode {
   const group = new URLSearchParams(location.search).get('group') ?? window.localStorage.getItem(SESSIONS_GROUP_KEY)

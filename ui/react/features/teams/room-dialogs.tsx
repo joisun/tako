@@ -35,7 +35,7 @@ export function RoomSetupDialog({ api, room, copyFrom, onClose, onSaved }: { api
       {!room&&!copyFrom?<SegmentedControl label="团队创建方式" value={mode} onValueChange={setMode} options={[{value:'new',label:'新建'},{value:'restore',label:'从目录恢复'}]}/>:null}
       {!room&&mode==='new'?<label className="room-field"><span>团队名称</span><Input name="title" required maxLength={120} autoFocus defaultValue={copyFrom?`${copyFrom.title.slice(0,117)} 副本`:undefined}/></label>:null}
       {!room&&mode==='restore'?<label className="room-field"><span>团队资料来源目录</span><Input name="source_directory" required placeholder="/path/to/saved-room"/><small>保留来源资料，恢复后先核对执行状态。</small></label>:null}
-      {room||mode==='restore'?<details className="room-storage-settings"><summary>资料存储（可选）</summary><label className="room-field"><span>自定义资料目录</span><Input name="memory_directory" defaultValue={room?.config?.memory_directory??''} placeholder="留空使用 Rillo 默认存储"/><small>用于资料备份与迁移，留空由 Rillo 管理。</small></label></details>:null}
+      {room||mode==='restore'?<details className="room-storage-settings"><summary>资料存储（可选）</summary><label className="room-field"><span>自定义资料目录</span><Input name="memory_directory" defaultValue={room?.config?.memory_directory??''} placeholder="留空使用 UnderControl 默认存储"/><small>用于资料备份与迁移，留空由 UnderControl 管理。</small></label></details>:null}
       </fieldset>{error?<p role="alert" className="room-error">{error}</p>:null}</DialogBody>
 
     <DialogFooter><Button onClick={onClose} disabled={pending}>取消</Button><Button type="submit" variant="primary" isPending={pending}>{room?'保存':copyFrom?'复制房间':mode==='restore'?'恢复团队':'创建团队'}</Button></DialogFooter>

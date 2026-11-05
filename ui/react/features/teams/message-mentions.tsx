@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button'
 
 interface Recipient { id:string; name:string; available:boolean }
 interface MarkdownNode { type:string; value?:string; url?:string; children?:MarkdownNode[] }
-const INLINE_PREFIX='#rillo-mention-'
-const RECIPIENT_PREFIX='#rillo-recipient-'
+const INLINE_PREFIX='#undercontrol-mention-'
+const RECIPIENT_PREFIX='#undercontrol-recipient-'
 const EXCLUDED=new Set(['link','linkReference','code','inlineCode','html','image','imageReference'])
 
 // Only persisted routing IDs authorize a visual mention; text never changes routing.

@@ -9,7 +9,7 @@ export async function handleCollaborationRequest({ request, response, url, colla
       const roomPath=pathname.match(/^\/api\/v1\/rooms\/([a-f0-9-]{36})(?:\/|$)/),runPath=pathname.match(/^\/api\/v1\/loop-runs\/([a-f0-9-]{36})(?:\/|$)/)
       const roomId=value?.room?.id??value?.task?.room_id??value?.member?.room_id??roomPath?.[1]??(runPath?collaboration.detail(collaboration.run(runPath[1]).task_id).room_id:null)
       if(roomId){
-        void collaboration.flushMemory(roomId).catch(error=>{console.error('Rillo room backup pending:',error.code)})
+        void collaboration.flushMemory(roomId).catch(error=>{console.error('UnderControl room backup pending:',error.code)})
         if(value?.room)value={...value,room:collaboration.room(roomId)}
       }
     }

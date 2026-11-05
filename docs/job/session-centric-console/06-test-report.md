@@ -6,7 +6,7 @@
 
 从GitHub Release下载产物并核对SHA256SUMS，再用发布的安装器更新本地。current指向releases/0.9.0，43127的ready=true、API v5；配置文件哈希保持一致。Codex与Claude Code插件均更新至0.9.0。43129源码预览恢复并代理43127；早期43130隔离预览已结束。两个地址真实浏览器均显示100张Cards，实时连接open，无重连遮罩、失败响应或页面异常。主目录main的既有改动保留，未混入本次发布。
 
-发布记录见[更名前的真实历史资源](../../migrations/rillo-rename.md#历史发布)。历史资产未改名或覆盖。
+发布记录见[更名前的真实历史资源](../../migrations/previous-brand-rename.md#历史发布)。历史资产未改名或覆盖。
 
 ## 阶段记录：局部失败触发整页重连（2026-10-26）
 

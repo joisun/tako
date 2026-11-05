@@ -1,6 +1,6 @@
 # UI source provenance and maintenance
 
-Rillo prefers official shadcn/ui Base UI components where available. Kibo UI remains the source for specialized Editor and Kanban composites. The registry is configured in `ui/components.json`. Checked-in code is reviewed and built offline; no component registry is contacted at runtime, in CI or during packaging.
+UnderControl prefers official shadcn/ui Base UI components where available. Kibo UI remains the source for specialized Editor and Kanban composites. The registry is configured in `ui/components.json`. Checked-in code is reviewed and built offline; no component registry is contacted at runtime, in CI or during packaging.
 
 | Components | Source | Retrieved | License | Local adaptation |
 | --- | --- | --- | --- | --- |

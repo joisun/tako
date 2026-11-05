@@ -12,10 +12,10 @@ const roots = [
   'mcp',
   'server',
   'hooks',
-  'adapters/codex/rillo/hooks',
-  'adapters/codex/rillo/mcp',
-  'adapters/claude/rillo/hooks',
-  'adapters/claude/rillo/mcp',
+  'adapters/codex/undercontrol/hooks',
+  'adapters/codex/undercontrol/mcp',
+  'adapters/claude/undercontrol/hooks',
+  'adapters/claude/undercontrol/mcp',
   'ui',
 ]
 

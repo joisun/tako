@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
-import { RilloError } from './errors.mjs'
+import { UnderControlError } from './errors.mjs'
 
 function positiveInteger(value, field, fallback) {
   const candidate = value ?? fallback
@@ -10,14 +10,14 @@ function positiveInteger(value, field, fallback) {
     ? Number(candidate)
     : candidate
   if (!Number.isSafeInteger(normalized) || normalized < 1) {
-    throw new RilloError('CONFIG_INVALID', `${field} must be a positive safe integer.`)
+    throw new UnderControlError('CONFIG_INVALID', `${field} must be a positive safe integer.`)
   }
   return normalized
 }
 
 function schedulerPositiveInteger(value, field, fallback) {
   if (value === null) {
-    throw new RilloError('CONFIG_INVALID', `${field} must be a positive safe integer.`)
+    throw new UnderControlError('CONFIG_INVALID', `${field} must be a positive safe integer.`)
   }
   return positiveInteger(value, field, fallback)
 }
@@ -41,14 +41,14 @@ function schedulerPath(value, field, fallback, dataDirectory) {
     || candidate.includes('\0')
     || isUnsafeRemotePath(candidate)
   ) {
-    throw new RilloError('CONFIG_INVALID', `${field} must be a safe non-empty local path.`)
+    throw new UnderControlError('CONFIG_INVALID', `${field} must be a safe non-empty local path.`)
   }
 
   const resolved = isAbsolute(candidate)
     ? resolve(candidate)
     : resolve(dataDirectory, candidate)
   if (!resolvesUnderDirectory(resolved, dataDirectory)) {
-    throw new RilloError('CONFIG_INVALID', `${field} must resolve under the data directory.`)
+    throw new UnderControlError('CONFIG_INVALID', `${field} must resolve under the data directory.`)
   }
   return resolved
 }
@@ -61,11 +61,11 @@ function definitionsDirectory(value, dataDirectory) {
     || candidate.includes('\0')
     || isUnsafeRemotePath(candidate)
   ) {
-    throw new RilloError('CONFIG_INVALID', 'schedule_definitions_dir must be a safe non-empty local path.')
+    throw new UnderControlError('CONFIG_INVALID', 'schedule_definitions_dir must be a safe non-empty local path.')
   }
   const resolved = isAbsolute(candidate) ? resolve(candidate) : resolve(dataDirectory, candidate)
   if (dirname(resolved) === resolved) {
-    throw new RilloError('CONFIG_INVALID', 'schedule_definitions_dir must not be a filesystem root.')
+    throw new UnderControlError('CONFIG_INVALID', 'schedule_definitions_dir must not be a filesystem root.')
   }
   return resolved
 }
@@ -81,7 +81,7 @@ function configuredCodexPath(value) {
     || !isAbsolute(value)
     || isUnsafeRemotePath(value)
   ) {
-    throw new RilloError('CONFIG_INVALID', 'codex_path must be an absolute local executable path or null.')
+    throw new UnderControlError('CONFIG_INVALID', 'codex_path must be an absolute local executable path or null.')
   }
   return resolve(value)
 }
@@ -92,7 +92,7 @@ export async function resolveAppConfig({
   homeDirectory = homedir(),
 }) {
   const normalizedProjectRoot = resolve(projectRoot)
-  const dataDirectory = join(resolve(homeDirectory), '.config', 'rillo')
+  const dataDirectory = join(resolve(homeDirectory), '.config', 'undercontrol')
   const configPath = join(dataDirectory, 'config.json')
   let fileConfig
 
@@ -100,16 +100,16 @@ export async function resolveAppConfig({
     const source = await readFile(configPath, 'utf8')
     fileConfig = JSON.parse(source)
   } catch (error) {
-    throw new RilloError(
+    throw new UnderControlError(
       'CONFIG_INVALID',
-      `Unable to read a valid rillo config at ${configPath}.`,
+      `Unable to read a valid undercontrol config at ${configPath}.`,
       { cause: error.message },
     )
   }
 
-  const configuredOutput = env.RILLO_OUTPUT_DIR || fileConfig.output_dir
+  const configuredOutput = env.UNDERCONTROL_OUTPUT_DIR || fileConfig.output_dir
   if (typeof configuredOutput !== 'string' || configuredOutput.trim() === '') {
-    throw new RilloError(
+    throw new UnderControlError(
       'CONFIG_INVALID',
       'output_dir must be a non-empty string.',
     )
@@ -118,56 +118,56 @@ export async function resolveAppConfig({
   const outputDir = isAbsolute(configuredOutput)
     ? resolve(configuredOutput)
     : resolve(dataDirectory, configuredOutput)
-  const configuredDatabase = env.RILLO_DATABASE_PATH
+  const configuredDatabase = env.UNDERCONTROL_DATABASE_PATH
   if (configuredDatabase !== undefined && (
     typeof configuredDatabase !== 'string' || configuredDatabase.trim() === ''
   )) {
-    throw new RilloError('CONFIG_INVALID', 'RILLO_DATABASE_PATH must be a non-empty string.')
+    throw new UnderControlError('CONFIG_INVALID', 'UNDERCONTROL_DATABASE_PATH must be a non-empty string.')
   }
   const databasePath = configuredDatabase
     ? (isAbsolute(configuredDatabase) ? resolve(configuredDatabase) : resolve(dataDirectory, configuredDatabase))
     : join(dataDirectory, 'tasks.sqlite')
-  const configuredSpool = env.RILLO_SPOOL_DIR ?? fileConfig.spool_dir ?? 'spool'
+  const configuredSpool = env.UNDERCONTROL_SPOOL_DIR ?? fileConfig.spool_dir ?? 'spool'
   if (typeof configuredSpool !== 'string' || configuredSpool.trim() === '') {
-    throw new RilloError('CONFIG_INVALID', 'spool_dir must be a non-empty string.')
+    throw new UnderControlError('CONFIG_INVALID', 'spool_dir must be a non-empty string.')
   }
   const spoolDirectory = isAbsolute(configuredSpool)
     ? resolve(configuredSpool)
     : resolve(dataDirectory, configuredSpool)
   const spoolMaxBytes = positiveInteger(
-    env.RILLO_SPOOL_MAX_BYTES ?? fileConfig.spool_max_bytes,
+    env.UNDERCONTROL_SPOOL_MAX_BYTES ?? fileConfig.spool_max_bytes,
     'spool_max_bytes',
     4 * 1024 * 1024,
   )
   const spoolMaxFiles = positiveInteger(
-    env.RILLO_SPOOL_MAX_FILES ?? fileConfig.spool_max_files,
+    env.UNDERCONTROL_SPOOL_MAX_FILES ?? fileConfig.spool_max_files,
     'spool_max_files',
     512,
   )
   const spoolMaxAgeMs = positiveInteger(
-    env.RILLO_SPOOL_MAX_AGE_MS ?? fileConfig.spool_max_age_ms,
+    env.UNDERCONTROL_SPOOL_MAX_AGE_MS ?? fileConfig.spool_max_age_ms,
     'spool_max_age_ms',
     7 * 24 * 60 * 60 * 1000,
   )
-  const configuredLogs = env.RILLO_LOGS_DIR ?? fileConfig.logs_dir ?? 'logs'
+  const configuredLogs = env.UNDERCONTROL_LOGS_DIR ?? fileConfig.logs_dir ?? 'logs'
   if (typeof configuredLogs !== 'string' || configuredLogs.trim() === '') {
-    throw new RilloError('CONFIG_INVALID', 'logs_dir must be a non-empty string.')
+    throw new UnderControlError('CONFIG_INVALID', 'logs_dir must be a non-empty string.')
   }
   const logsDirectory = isAbsolute(configuredLogs)
     ? resolve(configuredLogs)
     : resolve(dataDirectory, configuredLogs)
   const logMaxFileBytes = positiveInteger(
-    env.RILLO_LOG_MAX_FILE_BYTES ?? fileConfig.log_max_file_bytes,
+    env.UNDERCONTROL_LOG_MAX_FILE_BYTES ?? fileConfig.log_max_file_bytes,
     'log_max_file_bytes',
     1024 * 1024,
   )
   const logMaxFiles = positiveInteger(
-    env.RILLO_LOG_MAX_FILES ?? fileConfig.log_max_files,
+    env.UNDERCONTROL_LOG_MAX_FILES ?? fileConfig.log_max_files,
     'log_max_files',
     5,
   )
   const logMaxAgeMs = positiveInteger(
-    env.RILLO_LOG_MAX_AGE_MS ?? fileConfig.log_max_age_ms,
+    env.UNDERCONTROL_LOG_MAX_AGE_MS ?? fileConfig.log_max_age_ms,
     'log_max_age_ms',
     14 * 24 * 60 * 60 * 1000,
   )
@@ -179,7 +179,7 @@ export async function resolveAppConfig({
     dataDirectory,
   )
   const scheduleDefinitionsDirectory = definitionsDirectory(
-    env.RILLO_SCHEDULE_DEFINITIONS_DIR ?? fileConfig.schedule_definitions_dir,
+    env.UNDERCONTROL_SCHEDULE_DEFINITIONS_DIR ?? fileConfig.schedule_definitions_dir,
     dataDirectory,
   )
   const schedulerLogsDirectory = schedulerPath(
@@ -208,17 +208,17 @@ export async function resolveAppConfig({
   const configuredHost = fileConfig.server_listen_host ?? fileConfig.server_host ?? '127.0.0.1'
   const configuredPort = fileConfig.server_port ?? 43127
   if (!['127.0.0.1', '0.0.0.0'].includes(configuredHost)) {
-    throw new RilloError('CONFIG_INVALID', 'server_listen_host must be 127.0.0.1 or 0.0.0.0')
+    throw new UnderControlError('CONFIG_INVALID', 'server_listen_host must be 127.0.0.1 or 0.0.0.0')
   }
   if (!Number.isInteger(configuredPort) || configuredPort < 1 || configuredPort > 65535) {
-    throw new RilloError('CONFIG_INVALID', 'server_port must be an integer between 1 and 65535')
+    throw new UnderControlError('CONFIG_INVALID', 'server_port must be an integer between 1 and 65535')
   }
 
   let serverUrl
   try {
-    serverUrl = new URL(env.RILLO_SERVER_URL ?? `http://127.0.0.1:${configuredPort}`)
+    serverUrl = new URL(env.UNDERCONTROL_SERVER_URL ?? `http://127.0.0.1:${configuredPort}`)
   } catch (error) {
-    throw new RilloError('CONFIG_INVALID', 'daemon URL is invalid', { cause: error.message })
+    throw new UnderControlError('CONFIG_INVALID', 'daemon URL is invalid', { cause: error.message })
   }
   if (
     serverUrl.protocol !== 'http:'
@@ -229,30 +229,30 @@ export async function resolveAppConfig({
     || serverUrl.search !== ''
     || serverUrl.hash !== ''
   ) {
-    throw new RilloError('CONFIG_INVALID', 'daemon URL must be an http://127.0.0.1 origin')
+    throw new UnderControlError('CONFIG_INVALID', 'daemon URL must be an http://127.0.0.1 origin')
   }
   const serverPort = Number(serverUrl.port || 80)
   let serverPublicUrl = null
   if (fileConfig.server_public_url !== undefined) {
     let publicUrl
     try { publicUrl = new URL(fileConfig.server_public_url) } catch {
-      throw new RilloError('CONFIG_INVALID', 'server_public_url must be an http origin')
+      throw new UnderControlError('CONFIG_INVALID', 'server_public_url must be an http origin')
     }
     if (publicUrl.protocol !== 'http:' || publicUrl.username || publicUrl.password
       || publicUrl.pathname !== '/' || publicUrl.search || publicUrl.hash || publicUrl.hostname === '0.0.0.0' || publicUrl.port === '0') {
-      throw new RilloError('CONFIG_INVALID', 'server_public_url must be a concrete http origin without a path or credentials')
+      throw new UnderControlError('CONFIG_INVALID', 'server_public_url must be a concrete http origin without a path or credentials')
     }
     serverPublicUrl = publicUrl.origin
   }
-  const actionTriggerHost = env.RILLO_ACTION_TRIGGER_HOST ?? fileConfig.action_trigger_host ?? '127.0.0.1'
-  if (!['127.0.0.1', '0.0.0.0', '::1', '::'].includes(actionTriggerHost)) throw new RilloError('CONFIG_INVALID', 'action_trigger_host is invalid')
-  const actionTriggerPort = positiveInteger(env.RILLO_ACTION_TRIGGER_PORT ?? fileConfig.action_trigger_port, 'action_trigger_port', 43128)
-  if (actionTriggerPort > 65535 || actionTriggerPort === serverPort) throw new RilloError('CONFIG_INVALID', 'action_trigger_port must be a separate port from 1 to 65535')
-  let actionTriggerPublicUrl = env.RILLO_ACTION_TRIGGER_PUBLIC_URL ?? fileConfig.action_trigger_public_url ?? null
+  const actionTriggerHost = env.UNDERCONTROL_ACTION_TRIGGER_HOST ?? fileConfig.action_trigger_host ?? '127.0.0.1'
+  if (!['127.0.0.1', '0.0.0.0', '::1', '::'].includes(actionTriggerHost)) throw new UnderControlError('CONFIG_INVALID', 'action_trigger_host is invalid')
+  const actionTriggerPort = positiveInteger(env.UNDERCONTROL_ACTION_TRIGGER_PORT ?? fileConfig.action_trigger_port, 'action_trigger_port', 43128)
+  if (actionTriggerPort > 65535 || actionTriggerPort === serverPort) throw new UnderControlError('CONFIG_INVALID', 'action_trigger_port must be a separate port from 1 to 65535')
+  let actionTriggerPublicUrl = env.UNDERCONTROL_ACTION_TRIGGER_PUBLIC_URL ?? fileConfig.action_trigger_public_url ?? null
   if (actionTriggerPublicUrl !== null) {
     let url
-    try { url = new URL(actionTriggerPublicUrl) } catch { throw new RilloError('CONFIG_INVALID', 'action_trigger_public_url is invalid') }
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new RilloError('CONFIG_INVALID', 'action_trigger_public_url must be an HTTP(S) origin')
+    try { url = new URL(actionTriggerPublicUrl) } catch { throw new UnderControlError('CONFIG_INVALID', 'action_trigger_public_url is invalid') }
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new UnderControlError('CONFIG_INVALID', 'action_trigger_public_url must be an HTTP(S) origin')
     actionTriggerPublicUrl = url.origin
   }
   return {

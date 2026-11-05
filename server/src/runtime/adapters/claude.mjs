@@ -13,8 +13,8 @@ export function createClaudeRuntimeDefinition() {
       if (spec.sandbox_mode !== 'read-only') throw runtimeError('LOOP_WRITE_UNSUPPORTED', 'Claude 实施权限尚未通过验证；请选择 Codex 实施，Claude 可参与讨论与审阅')
       const args = ['--print', '--verbose', '--output-format', 'stream-json', '--permission-mode', 'dontAsk',
         '--tools', 'Read,Glob,Grep', '--strict-mcp-config', '--settings', '{"disableAllHooks":true}',
-        '--mcp-config', JSON.stringify({ mcpServers: spec.loop_mcp ? { rillo_loop: { ...spec.loop_mcp, env: Object.fromEntries(Object.keys(spec.execution_env ?? {}).map(key => [key, '${' + key + '}'])) } } : {} }),
-        '--allowedTools', 'Read,Glob,Grep,mcp__rillo_loop__read_context,mcp__rillo_loop__submit_result,mcp__rillo_loop__request_action,mcp__rillo_loop__report_progress,mcp__rillo_loop__send_message,mcp__rillo_loop__remember']
+        '--mcp-config', JSON.stringify({ mcpServers: spec.loop_mcp ? { undercontrol_loop: { ...spec.loop_mcp, env: Object.fromEntries(Object.keys(spec.execution_env ?? {}).map(key => [key, '${' + key + '}'])) } } : {} }),
+        '--allowedTools', 'Read,Glob,Grep,mcp__undercontrol_loop__read_context,mcp__undercontrol_loop__submit_result,mcp__undercontrol_loop__request_action,mcp__undercontrol_loop__report_progress,mcp__undercontrol_loop__send_message,mcp__undercontrol_loop__remember']
       for (const workspace of spec.additional_workspaces??[]) args.push('--add-dir',workspace)
       if (spec.model) args.push('--model', spec.model)
       if (spec.resume_session_id) args.push('--resume', spec.resume_session_id)

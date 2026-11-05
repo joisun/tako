@@ -20,7 +20,7 @@ export function activitySections(events:TeamTimelineEvent[]){
 export interface TeamTimelineGroup {id:string;author:string;run:LoopRun|null;events:TeamTimelineEvent[]}
 function loopReceipt(part:LoopPart){
   if(part.type!=='tool'||part.state!=='completed')return null
-  const name=part.label?.match(/^(?:rillo_loop\s*·\s*|mcp__rillo_loop__)(send_message|submit_result)$/)?.[1]
+  const name=part.label?.match(/^(?:(?:undercontrol|rillo)_loop\s*·\s*|mcp__(?:undercontrol|rillo)_loop__)(send_message|submit_result)$/)?.[1]
   if(!name||!part.output)return null
   try{
     const value:unknown=JSON.parse(part.output)

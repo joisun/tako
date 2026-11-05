@@ -284,8 +284,8 @@
 - Modify: `mcp/src/task-client.mjs`
 - Modify: `mcp/src/tools.mjs`
 - Modify: `mcp/server.mjs`
-- Modify: `adapters/codex/rillo/mcp/server.mjs`
-- Modify: `adapters/claude/rillo/mcp/server.mjs`
+- Modify: `adapters/codex/undercontrol/mcp/server.mjs`
+- Modify: `adapters/claude/undercontrol/mcp/server.mjs`
 - Modify: `test/api-server.test.mjs`
 - Modify: `test/task-client.test.mjs`
 - Modify: `test/server-integration.test.mjs`
@@ -411,10 +411,10 @@
 
 **Files:**
 
-- Create: `adapters/codex/rillo/hooks/src/codex-transcript.mjs`
+- Create: `adapters/codex/undercontrol/hooks/src/codex-transcript.mjs`
 - Create: `test/codex-transcript.test.mjs`
-- Modify: `adapters/codex/rillo/hooks/src/daemon-client.mjs`
-- Modify: `adapters/codex/rillo/hooks/src/hook-context.mjs`
+- Modify: `adapters/codex/undercontrol/hooks/src/daemon-client.mjs`
+- Modify: `adapters/codex/undercontrol/hooks/src/hook-context.mjs`
 - Modify: `test/plugin-adapters.test.mjs`
 
 - [x] **Step 1: Write failing parser/client tests**
@@ -445,14 +445,14 @@
 
 **Files:**
 
-- Create: `adapters/codex/rillo/hooks/session-start.mjs`
-- Create: `adapters/codex/rillo/hooks/subagent-start.mjs`
-- Create: `adapters/codex/rillo/hooks/subagent-stop.mjs`
-- Create: `adapters/codex/rillo/hooks/session-end.mjs`
-- Modify: `adapters/codex/rillo/hooks/user-prompt-task-sync.mjs`
-- Modify: `adapters/codex/rillo/hooks/task-heartbeat.mjs`
-- Modify: `adapters/codex/rillo/hooks/stop-task-check.mjs`
-- Modify: `adapters/codex/rillo/hooks/hooks.json`
+- Create: `adapters/codex/undercontrol/hooks/session-start.mjs`
+- Create: `adapters/codex/undercontrol/hooks/subagent-start.mjs`
+- Create: `adapters/codex/undercontrol/hooks/subagent-stop.mjs`
+- Create: `adapters/codex/undercontrol/hooks/session-end.mjs`
+- Modify: `adapters/codex/undercontrol/hooks/user-prompt-task-sync.mjs`
+- Modify: `adapters/codex/undercontrol/hooks/task-heartbeat.mjs`
+- Modify: `adapters/codex/undercontrol/hooks/stop-task-check.mjs`
+- Modify: `adapters/codex/undercontrol/hooks/hooks.json`
 - Modify: `adapters/codex/rillo/skills/task-manager/SKILL.md`
 - Modify: `test/plugin-adapters.test.mjs`
 - Modify: `package.json`

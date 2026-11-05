@@ -15,7 +15,7 @@ const CONTROL_COMMANDS = new Set(['install', 'start', 'stop', 'status', 'uninsta
 
 function usageError() {
   return new Error(
-    'usage: rillo [install|start|stop|status|uninstall|open] | '
+    'usage: undercontrol [install|start|stop|status|uninstall|open] | '
     + 'scheduler (status|reconcile)',
   )
 }
@@ -71,8 +71,8 @@ export async function runCli(argv, {
   dashboardOpener = defaultDashboardOpener,
 } = {}) {
   const command = parseCliArguments(argv)
-  if (command.type === 'help') return { name: 'rillo', usage: 'rillo [install|start|stop|status|uninstall|open] | scheduler (status|reconcile)', description: 'Rillo: native agent sessions and scheduled automation' }
-  if (command.type === 'version') return { name: 'rillo', version: JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8')).version }
+  if (command.type === 'help') return { name: 'undercontrol', usage: 'undercontrol [install|start|stop|status|uninstall|open] | scheduler (status|reconcile)', description: 'UnderControl: native agent sessions and scheduled automation' }
+  if (command.type === 'version') return { name: 'undercontrol', version: JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8')).version }
   if (command.type === 'control') return controlRunner(command.command)
 
   if (command.type === 'open-dashboard') {

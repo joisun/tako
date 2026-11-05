@@ -43,7 +43,7 @@ export async function packageRelease({
 } = {}) {
   const manifest = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8'))
   const version = manifest.version
-  const stageDirectory = await mkdtemp(join(tmpdir(), 'rillo-package-'))
+  const stageDirectory = await mkdtemp(join(tmpdir(), 'undercontrol-package-'))
   await mkdir(outputDirectory, { recursive: true })
 
   try {
@@ -53,7 +53,7 @@ export async function packageRelease({
       buildServerVendor({ projectRoot }),
     ])
 
-    const runtimeName = `rillo-${version}`
+    const runtimeName = `undercontrol-${version}`
     const runtimeRoot = join(stageDirectory, runtimeName)
     await mkdir(runtimeRoot, { recursive: true })
     await copyEntries(projectRoot, runtimeRoot, [
@@ -90,14 +90,14 @@ export async function packageRelease({
 
     const artifacts = []
     for (const platform of ['macos', 'linux']) {
-      artifacts.push(await archive(stageDirectory, runtimeName, join(outputDirectory, `rillo-${platform}.tar.gz`)))
+      artifacts.push(await archive(stageDirectory, runtimeName, join(outputDirectory, `undercontrol-${platform}.tar.gz`)))
     }
 
     for (const host of ['codex', 'claude']) {
       const adapterStage = join(stageDirectory, `${host}-adapter`)
-      const adapterRoot = join(adapterStage, 'rillo')
+      const adapterRoot = join(adapterStage, 'undercontrol')
       await mkdir(adapterRoot, { recursive: true })
-      const sourceRoot = join(projectRoot, 'adapters', host, 'rillo')
+      const sourceRoot = join(projectRoot, 'adapters', host, 'undercontrol')
       await copyEntries(sourceRoot, adapterRoot, [
         host === 'codex' ? '.codex-plugin' : '.claude-plugin',
         '.mcp.json',
@@ -110,8 +110,8 @@ export async function packageRelease({
       await cp(join(projectRoot, 'LICENSE'), join(adapterRoot, 'LICENSE'))
       artifacts.push(await archive(
         adapterStage,
-        'rillo',
-        join(outputDirectory, `rillo-${host}-adapter.tar.gz`),
+        'undercontrol',
+        join(outputDirectory, `undercontrol-${host}-adapter.tar.gz`),
       ))
     }
 

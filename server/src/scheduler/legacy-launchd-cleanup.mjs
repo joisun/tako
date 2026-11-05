@@ -3,7 +3,7 @@ import { lstat, open, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
 // Legacy labels are retained only to stop pre-rename per-Schedule services.
-const LABEL_PREFIXES = ['com.joi.rillo.schedule.', 'com.joi.tasks-recorder.schedule.', 'com.joi.task-recorder.schedule.']
+const LABEL_PREFIXES = ['com.joi.undercontrol.schedule.', 'com.joi.rillo.schedule.', 'com.joi.tasks-recorder.schedule.', 'com.joi.task-recorder.schedule.']
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const MAX_PLIST_BYTES = 64 * 1024
 

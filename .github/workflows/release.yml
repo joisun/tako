@@ -47,10 +47,10 @@ jobs:
           chmod 755 release/install.sh
           cd release
           shasum -a 256 \
-            rillo-macos.tar.gz \
-            rillo-linux.tar.gz \
-            rillo-codex-adapter.tar.gz \
-            rillo-claude-adapter.tar.gz \
+            undercontrol-macos.tar.gz \
+            undercontrol-linux.tar.gz \
+            undercontrol-codex-adapter.tar.gz \
+            undercontrol-claude-adapter.tar.gz \
             install.sh > SHA256SUMS
 
       - name: Upload release assets for Linux verification
@@ -97,12 +97,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-            release/rillo-macos.tar.gz \
-            release/rillo-linux.tar.gz \
-            release/rillo-codex-adapter.tar.gz \
-            release/rillo-claude-adapter.tar.gz \
+            release/undercontrol-macos.tar.gz \
+            release/undercontrol-linux.tar.gz \
+            release/undercontrol-codex-adapter.tar.gz \
+            release/undercontrol-claude-adapter.tar.gz \
             release/install.sh \
             release/SHA256SUMS \
             --verify-tag \
             --generate-notes \
-            --title "Rillo $GITHUB_REF_NAME"
+            --title "UnderControl $GITHUB_REF_NAME"

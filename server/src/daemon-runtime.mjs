@@ -389,7 +389,7 @@ export async function startDaemon({
     }
     return {
       ok: ready,
-      service: 'rillo',
+      service: 'undercontrol',
       api_version: 5,
       live: true,
       ready,

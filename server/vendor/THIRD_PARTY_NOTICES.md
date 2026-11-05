@@ -34,7 +34,7 @@ Micah artwork: “Avatar Illustration System” by Micah Lanier,
 https://www.figma.com/community/file/829741575478342595,
 https://dribbble.com/micahlanier.
 Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/.
-Rillo generates and customizes these avatars offline; see the attribution in the avatar editor.
+UnderControl generates and customizes these avatars offline; see the attribution in the avatar editor.
 
 ## unpdf 2.1.0 / PDF.js
 
@@ -48,4 +48,4 @@ Source: https://github.com/vercel/ai-elements (Apache-2.0, Copyright 2023 Vercel
 See AI_ELEMENTS_LICENSE.txt and https://www.apache.org/licenses/LICENSE-2.0.
 Conversation, Message, PromptInput, ChainOfThought, Task, Tool,
 InlineCitation, Agent, ModelSelector and Attachments composition is adapted to
-Rillo's Base UI primitives and runtime data, without introducing an AI SDK transport.
+UnderControl's Base UI primitives and runtime data, without introducing an AI SDK transport.

@@ -2,7 +2,7 @@ import { constants } from 'node:fs'
 import { access as fsAccess, stat as fsStat } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { RilloError } from './errors.mjs'
+import { UnderControlError } from './errors.mjs'
 import { createDashboardSnapshot } from './dashboard-data.mjs'
 
 export function createTaskService({
@@ -20,7 +20,7 @@ export function createTaskService({
     try {
       await access(outputDir, constants.W_OK)
     } catch (error) {
-      throw new RilloError(
+      throw new UnderControlError(
         'OUTPUT_DIR_UNAVAILABLE',
         `projection output directory is not writable: ${outputDir}`,
         { outputDir, cause: error.message },

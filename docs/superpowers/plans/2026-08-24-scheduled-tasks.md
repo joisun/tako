@@ -708,9 +708,9 @@ If the E2E reveals a spec gap, update `01-plan.md`, append a new immutable task 
 **Files:**
 - Modify: `README.md`
 - Modify: `docs/superpowers/specs/2026-08-19-project-journalist-lifecycle-design.md`
-- Modify: `docs/job/rillo-scheduled-tasks/04-test-plan.md`
-- Modify: `docs/job/rillo-scheduled-tasks/05-test-cases.md`
-- Modify: `docs/job/rillo-scheduled-tasks/06-test-report.md`
+- Modify: `docs/job/undercontrol-scheduled-tasks/04-test-plan.md`
+- Modify: `docs/job/undercontrol-scheduled-tasks/05-test-cases.md`
+- Modify: `docs/job/undercontrol-scheduled-tasks/06-test-report.md`
 - Modify other matching Markdown files found by the required full documentation scan.
 
 **Interfaces:**
@@ -794,4 +794,4 @@ The plan contains no deferred implementation placeholders. Any execution-discove
 
 ## Plan Checkpoint
 
-After user approval, create `docs/job/rillo-scheduled-tasks/02-tasks.md`, phase logs, and one immutable task contract per Task 1–13. Execution should use `subagent-driven-development` with fresh worker context and spec/plan review after each task, while preserving the no-auto-commit rule.
+After user approval, create `docs/job/undercontrol-scheduled-tasks/02-tasks.md`, phase logs, and one immutable task contract per Task 1–13. Execution should use `subagent-driven-development` with fresh worker context and spec/plan review after each task, while preserving the no-auto-commit rule.

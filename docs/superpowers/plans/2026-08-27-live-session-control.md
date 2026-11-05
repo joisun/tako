@@ -48,7 +48,7 @@
 - `ui/src/scheduled-run-review.mjs`: Live Session state reducer, event rendering, composer, stop, and read-only fallback.
 - `ui/src/dashboard.css`: Live Session sheet, stream, activity, composer, responsive, focus, and reduced-motion styles.
 - `test/run-service.test.mjs`, `test/run-event-hub.test.mjs`, `test/run-api.test.mjs`, `test/runtime-api.test.mjs`, `test/scheduled-run-review.test.mjs`, `test/dashboard-build.test.mjs`, `test/daemon-runtime.test.mjs`: focused regression and integration coverage.
-- `README.md`, `docs/architecture.md`, `docs/job/rillo-scheduled-tasks/04-test-plan.md`, and `docs/job/rillo-scheduled-tasks/06-test-report.md`: public behavior, privacy boundary, protocol health, test coverage, and evidence.
+- `README.md`, `docs/architecture.md`, `docs/job/undercontrol-scheduled-tasks/04-test-plan.md`, and `docs/job/undercontrol-scheduled-tasks/06-test-report.md`: public behavior, privacy boundary, protocol health, test coverage, and evidence.
 
 ---
 
@@ -449,8 +449,8 @@ Expected: PASS and `ui/dist/index.html` contains the updated bundled Live Sessio
 - Modify: `test/scheduled-runtime-e2e.test.mjs`
 - Modify: `README.md`
 - Modify: `docs/architecture.md`
-- Modify: `docs/job/rillo-scheduled-tasks/04-test-plan.md`
-- Modify: `docs/job/rillo-scheduled-tasks/06-test-report.md`
+- Modify: `docs/job/undercontrol-scheduled-tasks/04-test-plan.md`
+- Modify: `docs/job/undercontrol-scheduled-tasks/06-test-report.md`
 
 **Interfaces:**
 - Consumes: Codex interactive session factory, RunService, daemon API, Dashboard bundle.

@@ -81,7 +81,7 @@ export function createSvarGanttRenderer({
   onScroll = () => {},
   onError = (error) => {
     const { logMessage } = rendererErrorPresentation(error)
-    console.error('[rillo] SVAR renderer failed:', logMessage)
+    console.error('[undercontrol] SVAR renderer failed:', logMessage)
   },
 }) {
   if (!(element instanceof Element)) {
@@ -98,7 +98,7 @@ export function createSvarGanttRenderer({
   let pendingLocateDate = null
   let separatorPointerId = null
   let renderRevision = 0
-  const eventTag = `rillo-${Math.random().toString(36).slice(2)}`
+  const eventTag = `undercontrol-${Math.random().toString(36).slice(2)}`
 
   function scheduleOverlayUpdate() {
     if (overlayFrame || destroyed) return

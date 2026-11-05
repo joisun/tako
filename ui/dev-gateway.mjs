@@ -2,7 +2,7 @@ import { createServer, request as createUpstreamRequest } from 'node:http'
 import { readFile } from 'node:fs/promises'
 
 const LOOPBACK = '127.0.0.1'
-const DEV_RELOAD_PATH = '/__rillo_dev/reload'
+const DEV_RELOAD_PATH = '/__undercontrol_dev/reload'
 const HTML_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self' data:; frame-ancestors 'none'"
 const hopByHopHeaders = new Set([
   'connection',
@@ -24,10 +24,10 @@ function portValue(value, field) {
 }
 
 export function resolveDashboardDevConfig({ env = process.env } = {}) {
-  const port = portValue(env.RILLO_DEV_PORT ?? 43128, 'RILLO_DEV_PORT')
-  const upstream = new URL(env.RILLO_DEV_UPSTREAM ?? 'http://127.0.0.1:43127')
+  const port = portValue(env.UNDERCONTROL_DEV_PORT ?? 43128, 'UNDERCONTROL_DEV_PORT')
+  const upstream = new URL(env.UNDERCONTROL_DEV_UPSTREAM ?? 'http://127.0.0.1:43127')
   if (upstream.protocol !== 'http:' || upstream.hostname !== LOOPBACK) {
-    throw new Error('RILLO_DEV_UPSTREAM must be an HTTP loopback URL')
+    throw new Error('UNDERCONTROL_DEV_UPSTREAM must be an HTTP loopback URL')
   }
   if (
     upstream.username
@@ -37,15 +37,15 @@ export function resolveDashboardDevConfig({ env = process.env } = {}) {
     || upstream.hash
   ) {
     throw new Error(
-      'RILLO_DEV_UPSTREAM must not contain credentials, path, query, or hash',
+      'UNDERCONTROL_DEV_UPSTREAM must not contain credentials, path, query, or hash',
     )
   }
-  const upstreamPort = portValue(upstream.port || 80, 'RILLO_DEV_UPSTREAM port')
+  const upstreamPort = portValue(upstream.port || 80, 'UNDERCONTROL_DEV_UPSTREAM port')
   if (port === upstreamPort) throw new Error('dev port must differ from upstream port')
   return { host: LOOPBACK, port, upstream }
 }
 
-const reloadClient = `<script data-rillo-dev-reload>
+const reloadClient = `<script data-undercontrol-dev-reload>
 (() => {
   const source = new EventSource('${DEV_RELOAD_PATH}')
   source.addEventListener('reload', () => globalThis.location.reload())
@@ -53,7 +53,7 @@ const reloadClient = `<script data-rillo-dev-reload>
 </script>`
 
 export function injectDashboardReloadClient(html) {
-  if (html.includes('data-rillo-dev-reload')) return html
+  if (html.includes('data-undercontrol-dev-reload')) return html
   if (!html.includes('</body>')) throw new Error('Dashboard HTML is missing </body>')
   return html.replace('</body>', `${reloadClient}\n</body>`)
 }
@@ -160,7 +160,7 @@ export function createDashboardDevGateway({ host, port, upstream, getHtml } = {}
           ok: false,
           error: {
             code: 'DEV_UPSTREAM_UNAVAILABLE',
-            message: 'Rillo upstream is unavailable',
+            message: 'UnderControl upstream is unavailable',
           },
         })
       }
@@ -193,8 +193,8 @@ export function createDashboardDevGateway({ host, port, upstream, getHtml } = {}
       }
       return
     }
-    if (request.method === 'GET' && url.pathname === '/rillo.png') {
-      readFile(new URL('./assets/rillo.png', import.meta.url)).then((logo) => {
+    if (request.method === 'GET' && url.pathname === '/undercontrol.png') {
+      readFile(new URL('./assets/undercontrol.png', import.meta.url)).then((logo) => {
         response.writeHead(200, {
           'Content-Type': 'image/png',
           'Content-Length': logo.byteLength,

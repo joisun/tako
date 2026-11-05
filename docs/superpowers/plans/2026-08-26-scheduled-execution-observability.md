@@ -134,7 +134,7 @@ node --test test/scheduled-tasks-ui.test.mjs test/scheduled-run-review.test.mjs 
 
 **Files:**
 - Modify: `README.md`
-- Modify: `docs/job/rillo-scheduled-tasks/03-phases.md`
+- Modify: `docs/job/undercontrol-scheduled-tasks/03-phases.md`
 - Modify: matching Scheduled docs found by documentation scan
 - Evidence: `.vdr-log/2026-08-26-scheduled-execution-observability/`
 

@@ -9,10 +9,10 @@ import {
 } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { RilloError } from './errors.mjs'
+import { UnderControlError } from './errors.mjs'
 
-const START_MARKER = '<!-- rillo:start -->'
-const END_MARKER = '<!-- rillo:end -->'
+const START_MARKER = '<!-- undercontrol:start -->'
+const END_MARKER = '<!-- undercontrol:end -->'
 const LOCK_RETRY_MS = 25
 const LOCK_ATTEMPTS = 40
 
@@ -93,7 +93,7 @@ function taskEndDate(task) {
 function mermaidLine(task) {
   const tags = STATUS_TAGS[task.status]
   if (tags === undefined) {
-    throw new RilloError('TASK_STATUS_INVALID', `unsupported task status: ${task.status}`)
+    throw new UnderControlError('TASK_STATUS_INVALID', `unsupported task status: ${task.status}`)
   }
   const metadata = tags ? `${tags}, ${task.id}` : task.id
   return `    ${displayTitle(task)} :${metadata}, ${task.start_date}, ${taskEndDate(task)}`
@@ -129,7 +129,7 @@ function generateMermaid(tasks, title) {
 }
 
 function defaultDocument(heading) {
-  return `# ${heading}\n\n此文件由 rillo 从 SQLite 自动生成；marker 外内容可手工维护。\n\n${START_MARKER}\n${END_MARKER}\n`
+  return `# ${heading}\n\n此文件由 undercontrol 从 SQLite 自动生成；marker 外内容可手工维护。\n\n${START_MARKER}\n${END_MARKER}\n`
 }
 
 function markerCount(content, marker) {
@@ -137,19 +137,24 @@ function markerCount(content, marker) {
 }
 
 function replaceGeneratedBlock(content, generated, filePath) {
+  const legacyStart = '<!-- rillo:start -->'
+  const legacyEnd = '<!-- rillo:end -->'
+  if (!content.includes(START_MARKER) && markerCount(content, legacyStart) === 1 && markerCount(content, legacyEnd) === 1) {
+    content = content.replace(legacyStart, START_MARKER).replace(legacyEnd, END_MARKER)
+  }
   if (markerCount(content, START_MARKER) !== 1 || markerCount(content, END_MARKER) !== 1) {
-    throw new RilloError(
+    throw new UnderControlError(
       'PROJECTION_MARKER_INVALID',
-      `${filePath} must contain exactly one rillo marker pair`,
+      `${filePath} must contain exactly one undercontrol marker pair`,
       { filePath },
     )
   }
   const start = content.indexOf(START_MARKER)
   const end = content.indexOf(END_MARKER)
   if (start > end) {
-    throw new RilloError(
+    throw new UnderControlError(
       'PROJECTION_MARKER_INVALID',
-      `${filePath} has reversed rillo markers`,
+      `${filePath} has reversed undercontrol markers`,
       { filePath },
     )
   }
@@ -176,7 +181,7 @@ async function acquireLock(lockPath, now) {
     } catch (error) {
       if (error.code !== 'EEXIST') throw error
       if (attempt === LOCK_ATTEMPTS - 1) {
-        throw new RilloError(
+        throw new UnderControlError(
           'PROJECTION_LOCKED',
           'timed out waiting for the projection render lock',
           { lockPath },
@@ -185,7 +190,7 @@ async function acquireLock(lockPath, now) {
       await delay(LOCK_RETRY_MS)
     }
   }
-  throw new RilloError('PROJECTION_LOCKED', 'could not acquire the projection render lock')
+  throw new UnderControlError('PROJECTION_LOCKED', 'could not acquire the projection render lock')
 }
 
 async function ignoreMissingUnlink(filePath) {
@@ -199,7 +204,7 @@ async function ignoreMissingUnlink(filePath) {
 export async function renderProjections({ loadSnapshot, outputDir, now = new Date() }) {
   const timestamp = now instanceof Date ? now : new Date(now)
   if (Number.isNaN(timestamp.valueOf())) {
-    throw new RilloError('CLOCK_INVALID', 'now must be a valid date')
+    throw new UnderControlError('CLOCK_INVALID', 'now must be a valid date')
   }
   await mkdir(outputDir, { recursive: true })
 
@@ -215,7 +220,7 @@ export async function renderProjections({ loadSnapshot, outputDir, now = new Dat
     lockHandle = await acquireLock(lockPath, timestamp)
     const snapshot = await loadSnapshot()
     if (!snapshot || !Array.isArray(snapshot.tasks)) {
-      throw new RilloError('SNAPSHOT_INVALID', 'loadSnapshot must return a tasks array')
+      throw new UnderControlError('SNAPSHOT_INVALID', 'loadSnapshot must return a tasks array')
     }
 
     const currentTasks = snapshot.tasks.filter(({ status }) => status !== 'done')

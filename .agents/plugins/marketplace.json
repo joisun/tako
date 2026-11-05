@@ -1,14 +1,14 @@
 {
-  "name": "rillo",
+  "name": "undercontrol",
   "interface": {
-    "displayName": "Rillo"
+    "displayName": "UnderControl"
   },
   "plugins": [
     {
-      "name": "rillo",
+      "name": "undercontrol",
       "source": {
         "source": "local",
-        "path": "./adapters/codex/rillo"
+        "path": "./adapters/codex/undercontrol"
       },
       "policy": {
         "installation": "AVAILABLE",

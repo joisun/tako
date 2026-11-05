@@ -231,7 +231,7 @@ export async function stageScheduleDefinitionRelocation({
     }
   }
 
-  const stagingRoot = join(targetRoot, `.rillo-relocation-${randomUUID()}`)
+  const stagingRoot = join(targetRoot, `.undercontrol-relocation-${randomUUID()}`)
   const createdDirectories = []
   const published = []
   const sources = []

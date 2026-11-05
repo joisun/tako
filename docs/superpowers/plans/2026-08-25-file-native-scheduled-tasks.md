@@ -151,8 +151,8 @@
 **Files:**
 - Modify: `README.md`
 - Modify: `docs/superpowers/specs/2026-08-24-scheduled-tasks-design.md`
-- Modify: `docs/job/rillo-scheduled-tasks/05-test-cases.md`
-- Modify: `docs/job/rillo-scheduled-tasks/06-test-report.md`
+- Modify: `docs/job/undercontrol-scheduled-tasks/05-test-cases.md`
+- Modify: `docs/job/undercontrol-scheduled-tasks/06-test-report.md`
 - Modify: related phase/progress documents
 
 - [x] Run `git diff --name-only HEAD` and full Markdown reference scan required by project policy.

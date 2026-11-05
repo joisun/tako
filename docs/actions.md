@@ -4,11 +4,11 @@ Actions 是 Schedule 的升级。一个 Markdown 文件定义一个 Action；定
 
 ## 定义与启停
 
-默认定义目录仍是 `~/.config/rillo/schedules`，沿用 `schedule_definitions_dir` 设置、文件监听、原子写入和 `etag` 并发保护。新建及管理保存使用 `type: rillo/action`：
+默认定义目录仍是 `~/.config/undercontrol/schedules`，沿用 `schedule_definitions_dir` 设置、文件监听、原子写入和 `etag` 并发保护。新建及管理保存使用 `type: undercontrol/action`：
 
 ```yaml
 ---
-type: rillo/action
+type: undercontrol/action
 id: 8b4a8b25-3d1e-4e43-8f5f-9cbef95b9275
 title: Issue follow-up
 enabled: true
@@ -45,7 +45,7 @@ timeout: 2h
 
 ## 上下文压缩
 
-Rillo 0.17.1 移除自动压缩阈值配置，界面、HTTP API 和 MCP 不再提供此字段。Codex 使用自己的原生配置和模型默认机制，Rillo 不修改客户端全局配置。
+UnderControl 0.17.1 移除自动压缩阈值配置，界面、HTTP API 和 MCP 不再提供此字段。Codex 使用自己的原生配置和模型默认机制，UnderControl 不修改客户端全局配置。
 
 已有 Markdown 中的 `auto_compact_token_limit` 可继续读取，但不再应用；通过管理界面或接口保存时移除此字段。已有排队与历史 Run 的快照不变，新执行器忽略其中的旧阈值。运行中的旧进程需要结束或重启后，才会使用新版执行器。
 
@@ -65,7 +65,7 @@ Content-Type: application/json
 }
 ```
 
-`secret` 必须为非空字符串，最多 1024 个字符；`data` 字段必须存在，可为对象、数组、字符串、数字、布尔值或 null。除此之外不接受额外顶层字段。Rillo 不解析 data 的业务字段，不映射参数，不根据内容或哈希去重。每次有效请求建立独立 Run。鉴权使用固定长度 SHA-256 摘要的 timing-safe 比较。
+`secret` 必须为非空字符串，最多 1024 个字符；`data` 字段必须存在，可为对象、数组、字符串、数字、布尔值或 null。除此之外不接受额外顶层字段。UnderControl 不解析 data 的业务字段，不映射参数，不根据内容或哈希去重。每次有效请求建立独立 Run。鉴权使用固定长度 SHA-256 摘要的 timing-safe 比较。
 
 ```sh
 curl -X POST 'http://127.0.0.1:43128/actions/ACTION_ID/trigger' \
@@ -87,7 +87,7 @@ curl -X POST 'http://127.0.0.1:43128/actions/ACTION_ID/trigger' \
 
 同一个 daemon 提供两个监听端口。管理端口继续服务页面、会话、文件和管理 API；外部端口仅匹配上述 POST，不能访问管理、会话或文件接口。不新增 Host/Origin 访问拦截。
 
-在 `~/.config/rillo/config.json` 中配置，重启 daemon 生效：
+在 `~/.config/undercontrol/config.json` 中配置，重启 daemon 生效：
 
 ```json
 {
@@ -97,7 +97,7 @@ curl -X POST 'http://127.0.0.1:43128/actions/ACTION_ID/trigger' \
 }
 ```
 
-这些字段合并到现有配置，不能用该片段覆盖整个 config。默认仅监听本机；host 可为 127.0.0.1、0.0.0.0、::1 或 ::。端口必须与管理端口不同。公开 URL 仅用于生成界面调用地址，接受 HTTP(S) origin；不创建域名、证书或隧道。未配置时展示本机地址。对应环境变量为 `RILLO_ACTION_TRIGGER_HOST`、`RILLO_ACTION_TRIGGER_PORT`、`RILLO_ACTION_TRIGGER_PUBLIC_URL`。
+这些字段合并到现有配置，不能用该片段覆盖整个 config。默认仅监听本机；host 可为 127.0.0.1、0.0.0.0、::1 或 ::。端口必须与管理端口不同。公开 URL 仅用于生成界面调用地址，接受 HTTP(S) origin；不创建域名、证书或隧道。未配置时展示本机地址。对应环境变量为 `UNDERCONTROL_ACTION_TRIGGER_HOST`、`UNDERCONTROL_ACTION_TRIGGER_PORT`、`UNDERCONTROL_ACTION_TRIGGER_PUBLIC_URL`。
 
 典型外部链路：第三方 → 可选 `adnanh/webhook` 与转发脚本 → 可选 frp → 外部触发端口。第三方验签、筛选、业务去重、包装 `{secret,data}` 和选择 Action 都由外部系统负责。frp 与 adnanh/webhook 不是内置依赖，本功能不会安装或启动它们。本机离线时无法接收请求，不提供云端补投。
 
@@ -111,9 +111,9 @@ v5 的未启动队列在重启后继续；开始调用 Runtime 前已持久化�
 
 ## 兼容与迁移
 
-- 现有 `rillo/schedule` 和已支持的旧 Recorder type 自动识别，不因扫描或启动改写文件。
+- 现有 `undercontrol/schedule` 和已支持的旧 Recorder type 自动识别，不因扫描或启动改写文件。
 - 旧 `enabled` 是定时开关，读取时映射为 `schedule_enabled`；整体 Action 默认启用，保留原来暂停定时后仍可手动执行的能力。旧任务外部调用默认关闭、secret 为 null。
-- 显式管理保存写回 `rillo/action`，保留 ID、文件路径、正文与原执行配置。重命名不改 ID 或调用地址。
+- 显式管理保存写回 `undercontrol/action`，保留 ID、文件路径、正文与原执行配置。重命名不改 ID 或调用地址。
 - SQLite v4 原子迁移到 v5，保留 Run ID、快照、结果、Session 与日志引用，输入默认为 null。v4 的 queued 在旧实现中可能已经进入启动过程，因此升级时保守标记 interrupted，不盲目重放；新 v5 队列有明确的启动边界。旧运行中记录仍按恢复规则中断。
 - 保留原数据库路径、scheduled_runs 表和内部 schedule_id 字段。外部管理入口使用 `/api/v1/actions`；旧 `/api/v1/schedules` 路径映射到同一实现。JSON 中保留 `jobs/job` 包装，Run 同时提供 `action_id` 和兼容字段。
 

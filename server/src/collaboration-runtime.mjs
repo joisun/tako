@@ -14,7 +14,7 @@ import { createTeamLiveStream } from './collaboration/live-stream.mjs'
 import { loopError } from './collaboration/errors.mjs'
 import { captureProjectVersions,readEvidence,checkEvidence } from './collaboration-runtime/evidence.mjs'
 
-export function createCollaborationRuntime({ store, executeAgent, resources, registry, logs, onChange = () => {}, concurrency = Number(process.env.RILLO_TEAM_WORK_CONCURRENCY??2), coordinationConcurrency = Number(process.env.RILLO_TEAM_COORDINATION_CONCURRENCY??1),catalog = null, memoryRoot = null, workspaceRoot = null,
+export function createCollaborationRuntime({ store, executeAgent, resources, registry, logs, onChange = () => {}, concurrency = Number(process.env.UNDERCONTROL_TEAM_WORK_CONCURRENCY??2), coordinationConcurrency = Number(process.env.UNDERCONTROL_TEAM_COORDINATION_CONCURRENCY??1),catalog = null, memoryRoot = null, workspaceRoot = null,
   hydrateRunParts=async run=>run,
   toolServerPath = fileURLToPath(new URL('../vendor/loop-server.mjs', import.meta.url)) }) {
   const active = new Map()
@@ -47,7 +47,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     return operation
   }
 
-  function backup(roomId){void store.memory.flush(roomId).catch(error=>{console.error('Rillo room backup pending:',error.code);changed()})}
+  function backup(roomId){void store.memory.flush(roomId).catch(error=>{console.error('UnderControl room backup pending:',error.code);changed()})}
 
   async function refreshProjects(taskId,replacing=[]) {
     const task=store.detail(taskId)
@@ -72,11 +72,11 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       const writing = context.run.phase === 'implementing'
       const unrestricted = context.task.config.workflow === 'conversation' && context.member.runtime_id === 'codex'
       if (writing && registry.get(context.member.runtime_id).capabilities?.collaborationWrite === false) throw loopError('LOOP_WRITE_UNSUPPORTED', '所选 Agent 尚不支持受限实施')
-      const executionEnv = { RILLO_LOOP_URL: baseUrl, RILLO_LOOP_RUN: candidate.id, RILLO_LOOP_TOKEN: token }
+      const executionEnv = { UNDERCONTROL_LOOP_URL: baseUrl, UNDERCONTROL_LOOP_RUN: candidate.id, UNDERCONTROL_LOOP_TOKEN: token }
       const loopMcp = { command: process.execPath, args: [toolServerPath] }
       const executionConfig = {
         ...(!unrestricted && writing && context.task.config.resources?.length ? {'sandbox_workspace_write.writable_roots':context.task.config.resources.map(resource=>resource.workspace)} : {}),
-        'mcp_servers.rillo_loop': { ...loopMcp, env_vars: Object.keys(executionEnv), enabled: true, default_tools_approval_mode: 'approve', enabled_tools: ['read_context','submit_result','request_action','report_progress','send_message','remember'] },
+        'mcp_servers.undercontrol_loop': { ...loopMcp, env_vars: Object.keys(executionEnv), enabled: true, default_tools_approval_mode: 'approve', enabled_tools: ['read_context','submit_result','request_action','report_progress','send_message','remember'] },
       }
       handle = await logs.open({ scheduleId: context.task.id, runId: candidate.id })
       const attached=[]
@@ -112,7 +112,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       const exited = lease ? await lease.releaseWhenExited(pid) : true
       if (claimed) {
         try { store.complete(candidate.id, result ?? { status: 'failed', error_code: 'LOOP_EXECUTION_FAILED' }, { exited }) }
-        catch (error) { console.error('Rillo collaboration result persistence failed:', error.code ?? error.message) }
+        catch (error) { console.error('UnderControl collaboration result persistence failed:', error.code ?? error.message) }
       }
       backup(store.detail(candidate.task_id).room_id)
       active.delete(candidate.id)
@@ -169,7 +169,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       for(const pending of store.pendingDeliveries(runId)){
         if(entry.deferredDeliveryIds.has(pending.id))continue
         if(entry.controller.signal.aborted||!entry.interactive.steerable)break
-        const marker=`[Rillo input ${pending.id}]`,message=store.room(store.detail(entry.taskId).room_id).messages.find(value=>value.id===pending.message_id)
+        const marker=`[UnderControl input ${pending.id}]`,message=store.room(store.detail(entry.taskId).room_id).messages.find(value=>value.id===pending.message_id)
         const source=!message&&pending.source_run_id?store.run(pending.source_run_id):null
         const report=source?store.formalReport(source.id):null
         if(!message&&!source)continue
@@ -200,7 +200,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       }catch(error){
         store.database.prepare("UPDATE loop_definition_deletions SET state='blocked' WHERE id=?").run(job.id)
         if(roomId)throw loopError('LOOP_DEFINITION_DELETE_PENDING','定义文件清理未完成，请检查文件权限或重建的同名文件后重试',409)
-        console.error('Rillo definition cleanup pending:',job.id,error.code??'FILE_ACCESS_FAILED')
+        console.error('UnderControl definition cleanup pending:',job.id,error.code??'FILE_ACCESS_FAILED')
       }
     }
   }
@@ -216,7 +216,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
         store.database.prepare('DELETE FROM loop_catalog_deletions WHERE id=?').run(job.id)
       }catch(error){
         if(strict)throw loopError('LOOP_DEFINITION_DELETE_PENDING','本地定义清理未完成，请检查文件权限后重试',409)
-        console.error('Rillo Agent definition cleanup failed:',error.code??error.message)
+        console.error('UnderControl Agent definition cleanup failed:',error.code??error.message)
       }
     }
   }
@@ -226,7 +226,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     await recoverCatalogDeletions()
     for(const room of store.rooms()) {
       try{if(memoryRoot&&!room.config.memory_directory){const path=await store.memory.bind(join(memoryRoot,room.id),room.id);store.configureMemory(room.id,path)};backup(room.id)}
-      catch(error){console.error('Rillo room memory startup sync failed:',room.id,error.code)}
+      catch(error){console.error('UnderControl room memory startup sync failed:',room.id,error.code)}
     }
     baseUrl = url
     timer = setInterval(wake, 1000); timer.unref?.()
@@ -269,7 +269,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     for (const entry of active.values()) entry.controller.abort()
     await Promise.allSettled([...active.values()].map(entry => entry.promise))
     live.close()
-    try{await store.memory.close()}catch(error){console.error('Rillo room memory shutdown sync failed:',error.code)}
+    try{await store.memory.close()}catch(error){console.error('UnderControl room memory shutdown sync failed:',error.code)}
   }
   function reconcileRun(id, input) {
     if (input.confirmed_exited !== true || active.has(id)) throw loopError('LOOP_PROCESS_UNCONFIRMED', '须确认旧进程已退出，且执行不由当前服务管理', 409)
@@ -448,7 +448,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       const memory_directory=input.memory_directory||memoryRoot&&join(memoryRoot,id)||null
       const directory=memory_directory?await store.memory.bind(memory_directory,id):null
 
-      const initial_member={ name: 'Leader', runtime_id: 'codex', instructions: 'Lead this room from the user’s request to a verified delivery. Delegate concrete work, reconcile results, identify blockers and communicate progress.', profile: { id:'builtin:leader', name:'Leader', source: { kind: 'builtin', label: 'Rillo Leader' }, description: '承接目标、分派成员、跟进进度与交付' } }
+      const initial_member={ name: 'Leader', runtime_id: 'codex', instructions: 'Lead this room from the user’s request to a verified delivery. Delegate concrete work, reconcile results, identify blockers and communicate progress.', profile: { id:'builtin:leader', name:'Leader', source: { kind: 'builtin', label: 'UnderControl Leader' }, description: '承接目标、分派成员、跟进进度与交付' } }
       const value=store.createRoom({...input,id,memory_directory:directory,workspace:workspaces[0]??null,workspaces,initial_member})
       changed();return store.room(value.id)
     },
@@ -488,7 +488,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       const files=await catalog.deletionFiles(id)
       if(!files.length)throw loopError('LOOP_NOT_FOUND','本地 Agent 定义不存在',404)
       if(JSON.stringify(files)!==JSON.stringify(input.files))throw loopError('LOOP_DEFINITION_CHANGED','定义文件已改变，请重新确认删除',409)
-      const job=randomUUID(),staged=files.map(file=>({...file,staged:file.path+'.rillo-delete-'+job}))
+      const job=randomUUID(),staged=files.map(file=>({...file,staged:file.path+'.undercontrol-delete-'+job}))
       store.database.prepare("INSERT INTO loop_catalog_deletions VALUES(?,?,?,'staging')").run(job,id,JSON.stringify(staged))
       let committed=false
       try{

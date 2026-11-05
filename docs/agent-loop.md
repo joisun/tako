@@ -1,10 +1,10 @@
 # Agent Loop 团队协作
 
-状态：Rillo 0.17.0 的 Teams / Agent Loop。已有安装版需要手动更新。[验证记录](job/agent-loop/03-phases.md)区分原始固定阶段原型与当前消息驱动流程。
+状态：UnderControl 0.17.0 的 Teams / Agent Loop。已有安装版需要手动更新。[验证记录](job/agent-loop/03-phases.md)区分原始固定阶段原型与当前消息驱动流程。
 
 ## 团队、成员与消息
 
-Teams 与 Sessions、Actions 并列。创建团队只填写名称，存储与内部执行目录均由 Rillo 管理。用户直接在消息框说明目标，服务建立内部任务；独立新应用或其他产物可在托管执行目录直接创建，操作已有项目时再指定项目路径和分支，无须新建任务表单。新团队默认有 Codex Leader，可从成员中更换。
+Teams 与 Sessions、Actions 并列。创建团队只填写名称，存储与内部执行目录均由 UnderControl 管理。用户直接在消息框说明目标，服务建立内部任务；独立新应用或其他产物可在托管执行目录直接创建，操作已有项目时再指定项目路径和分支，无须新建任务表单。新团队默认有 Codex Leader，可从成员中更换。
 
 用户未指定收件人时唤醒 Leader；显式 `@成员` 直接派发给选中的稳定成员 ID，不先转交 Leader。多个明确收件人可各自执行，不广播唤醒其他成员。成员通过 `send_message` 互相委派、求助或回复。未填写 mentions 的 reply 默认回复本次委派来源；执行结果返回实际请求者；仅需要协调时通知 Leader，不因普通完成确认唤醒。Leader 在成员工作结束后汇总、安排后续工作或交付。普通回复不自动形成新的委派回调，避免无任务的互相确认循环。等待用户时不保持模型轮询。Leader 请求 wait 时，如仍有排队或运行中的成员，Task 保持 active，成员凭据和结果回传继续有效；成员结果交回实际请求者处理后，确实只剩用户输入时才进入 waiting。用户显式暂停、取消或修订仍立即撤销旧执行凭据。每个指派只设一个负责成员与明确产出，不重复派发其他成员的职责；`submit_result` 已自动回传，无须额外发送完成通知或确认。reply 消息立即落盘显示，在发送者退出后交接；与该次完成通知合并为一次唤醒。先恢复待处理的成员工作链，再让 Leader 汇总，避免双方抢着处理同一结果。
 
@@ -26,11 +26,11 @@ Teams 的 Codex 进程统一使用完整访问，不再按 Leader、讨论、实
 
 相同真实目录只扫描一次，同名角色合并客户端变体。Codex 实际目录的 TOML 优先于共享目录中的 TOML。本地目录按请求读取，因此刷新列表能看到定义更新。目录当前读取根目录下的定义文件，不递归扫描子目录。
 
-成员保存名称、描述、完整角色指令、模型、声明的 tools/skills 和来源快照。来源包含路径或 URL、内容摘要，以及远程定义的 commit 和许可证。目录浏览只读取角色数据。原 import HTTP 接口保留“添加到全局”语义，将完整 Markdown 定义写入 `~/.agents/agents` 的真实目录，再允许“加入团队”。如果该路径是符号链接，返回实际落盘路径。写入使用临时文件、fsync 和不覆盖目标的原子 link，重复导入返回同一文件，任何同名不同内容或客户端变体都报冲突。不运行远程脚本，不覆盖已有定义，不修改客户端配置。来源、原内容摘要、revision 和许可证保存在 `rillo_source` 中。导入后全局定义的后续变化不会改写成员快照。ECC 导入使用 ecc-<slug>.md（例如 ecc-planner.md）以避免与同名用户角色混淆；上游定义更新后也不会覆盖已有本地版本，同名不同版本明确报冲突。
+成员保存名称、描述、完整角色指令、模型、声明的 tools/skills 和来源快照。来源包含路径或 URL、内容摘要，以及远程定义的 commit 和许可证。目录浏览只读取角色数据。原 import HTTP 接口保留“添加到全局”语义，将完整 Markdown 定义写入 `~/.agents/agents` 的真实目录，再允许“加入团队”。如果该路径是符号链接，返回实际落盘路径。写入使用临时文件、fsync 和不覆盖目标的原子 link，重复导入返回同一文件，任何同名不同内容或客户端变体都报冲突。不运行远程脚本，不覆盖已有定义，不修改客户端配置。来源、原内容摘要、revision 和许可证保存在 `undercontrol_source` 中。导入后全局定义的后续变化不会改写成员快照。ECC 导入使用 ecc-<slug>.md（例如 ecc-planner.md）以避免与同名用户角色混淆；上游定义更新后也不会覆盖已有本地版本，同名不同版本明确报冲突。
 
 对本机发现的未加引号的单行 Markdown `description`，读取时在内存中规范化后重新解析 YAML；保留原始文件摘要和角色正文，来源标记 `normalized_metadata`。其他损坏文件单独报错，不阻止有效角色显示。
 
-现行 Marketplace 安装保存在 Rillo 的 agents/installed，不写入上述全局目录；托管角色按 managed: ID 进入成员选择器，更新由安装管理审核，旧成员保留自己的版本快照。
+现行 Marketplace 安装保存在 UnderControl 的 agents/installed，不写入上述全局目录；托管角色按 managed: ID 进入成员选择器，更新由安装管理审核，旧成员保留自己的版本快照。
 
 角色声明不能扩大团队执行权限。Claude 的模型别名不会直接传给 Codex。GitHub 返回 403 或 429 时，目录显示受限提示和重试入口，本地定义仍可使用；网络失败不会转换成空目录或示例数据。
 
@@ -122,7 +122,7 @@ flowchart TD
 
 ## 团队资料与恢复
 
-SQLite 是团队消息、任务、决定、摘要与执行状态的持久存储。用户不需要指定记忆目录。文件目录只提供可迁移的资料备份，默认由 Rillo 管理；`room.json` 保存完整团队、成员定义快照、Task、Run、消息、inbox、事件、工作项、决定及摘要，附格式版本和 SHA-256 校验。文件快照在 `artifacts/<sha256>`。不会把 Run token hash 或客户端认证配置导出。
+SQLite 是团队消息、任务、决定、摘要与执行状态的持久存储。用户不需要指定记忆目录。文件目录只提供可迁移的资料备份，默认由 UnderControl 管理；`room.json` 保存完整团队、成员定义快照、Task、Run、消息、inbox、事件、工作项、决定及摘要，附格式版本和 SHA-256 校验。文件快照在 `artifacts/<sha256>`。不会把 Run token hash 或客户端认证配置导出。
 
 业务变更与 `loop_memory_sync.revision` 在同一 SQLite 事务保存。团队修改在数据库提交后成功返回，资料备份在后台异步同步，不作为发送消息或启动执行的前置条件。导出使用临时文件、fsync、原子 rename 和目录 fsync。备份失败保留未导出版本，界面显示提示并可重试，对话与执行继续。显式调用同步接口失败时返回 LOOP_MEMORY_SYNC_FAILED。每个团队独立同步，不阻止其他团队继续使用；重启后继续同步。目录另持有 SQLite 写锁，避免两份服务同时写；进程退出后由系统释放锁，不依赖租约过期或猜测 PID。
 
@@ -138,7 +138,7 @@ Codex 使用每个 Run 独立的 app-server，Skills 和 integrations 继承客�
 
 | execution_mode | 行为 |
 |---|---|
-| isolated | 默认策略；从 HEAD 创建新的 rillo/loop-* 分支及 worktree。显式 branch 可指定起点引用，不会静默改用 HEAD |
+| isolated | 默认策略；从 HEAD 创建新的 undercontrol/loop-* 分支及 worktree。显式 branch 可指定起点引用，不会静默改用 HEAD |
 | existing_branch | 继续已存在的本地分支；优先复用 Git worktree list 中检出该分支的目录，否则在该分支创建 worktree，不另开分支 |
 | in_place | 根据明确要求使用给定原目录，不创建 worktree、不切换分支，保留已有改动。非 Git 目录仅支持此显式策略 |
 
@@ -150,7 +150,7 @@ Claude Code 通过 stream-json CLI 执行，只开放 Read、Glob、Grep，关�
 
 领取派发记录后先持久化 `starting`，再启动原生进程。重启时已领取的 Run 转为 `unknown`，不会自动重放。未领取队列可继续。暂停、取消和修改目标撤销 Run 凭据；旧结果必须匹配 revision 与 generation 才能推进。
 
-目录占用按真实路径及父子目录判重。Teams 依据 resource_scope 选择目录与访问方式，Leader 统筹默认只观察内部执行目录，不因身份取得全部项目写占用；观察性审查允许其他会话编辑，实际写入之间仍互斥。调度先检查资源再领取运行名额，工作默认并发 2，另保留默认 1 个协调名额，配置见下文。同一成员在同一 Task 中最多一个未结束执行。PID 不明或仍存在时不按超时释放，未知执行先核对旧进程，不自动重放。Actions 与旧固定阶段任务保持原有目录占用语义。该协调只覆盖 Rillo 启动的工作，不控制用户手动启动的外部写入者。
+目录占用按真实路径及父子目录判重。Teams 依据 resource_scope 选择目录与访问方式，Leader 统筹默认只观察内部执行目录，不因身份取得全部项目写占用；观察性审查允许其他会话编辑，实际写入之间仍互斥。调度先检查资源再领取运行名额，工作默认并发 2，另保留默认 1 个协调名额，配置见下文。同一成员在同一 Task 中最多一个未结束执行。PID 不明或仍存在时不按超时释放，未知执行先核对旧进程，不自动重放。Actions 与旧固定阶段任务保持原有目录占用语义。该协调只覆盖 UnderControl 启动的工作，不控制用户手动启动的外部写入者。
 
 ## Run 专用 MCP
 
@@ -223,7 +223,7 @@ Teams 在同一 Task、revision、成员与运行客户端内，讨论、实施�
 
 团队快照当前包含最近 100 项任务和 200 条消息，任务详情包含最近 200 条事件。浏览器仍只检索当前已载入消息；Run 工具已支持完整历史分页。跨团队搜索、Actions 触发团队、OpenCode 成员和统一 context 用量尚未实现。
 
-参考 [Multica Squads](https://github.com/multica-ai/multica/blob/2083970b51c03c0773188636c24a96acd09ad4c3/apps/docs/content/docs/squads.mdx) 的 Leader 消息驱动协作机制，以及 [GetLastTaskSession](https://github.com/multica-ai/multica/blob/2083970b51c03c0773188636c24a96acd09ad4c3/server/pkg/db/queries/agent.sql#L1016) 对同一 Agent/Issue 的会话及实际输入快照的续接。Rillo 按同一任务版本、成员和客户端续接，职责切换不另建会话，团队资料持久化由自身实现提供。服务端实现为 Rillo 自身增量模块。原始设计及其后续修订保存在[实施记录](job/agent-loop/03-phases.md)。
+参考 [Multica Squads](https://github.com/multica-ai/multica/blob/2083970b51c03c0773188636c24a96acd09ad4c3/apps/docs/content/docs/squads.mdx) 的 Leader 消息驱动协作机制，以及 [GetLastTaskSession](https://github.com/multica-ai/multica/blob/2083970b51c03c0773188636c24a96acd09ad4c3/server/pkg/db/queries/agent.sql#L1016) 对同一 Agent/Issue 的会话及实际输入快照的续接。UnderControl 按同一任务版本、成员和客户端续接，职责切换不另建会话，团队资料持久化由自身实现提供。服务端实现为 UnderControl 自身增量模块。原始设计及其后续修订保存在[实施记录](job/agent-loop/03-phases.md)。
 
 ## 原型字段转换
 
@@ -271,11 +271,11 @@ PDF 使用 unpdf / PDF.js 在受限 Worker 中提取文本，最多 200 页、12
 - POST /api/v1/teams/:room/attachments：验证文件路径并读取元信息。
 - GET /api/v1/teams/:room/attachments/:message/:index：读取已持久化消息的文件引用。
 
-路由参考最新 [Multica Squads](https://github.com/multica-ai/multica/blob/c321e49098cd1a3e01714a179c0bfca78c510e0f/apps/docs/content/docs/squads.mdx) 和 [Mentioning agents](https://github.com/multica-ai/multica/blob/c321e49098cd1a3e01714a179c0bfca78c510e0f/apps/docs/content/docs/mentioning-agents.mdx)：显式提及直接路由、无明确收件人回退 Leader、共享事实与成员独立会话。Rillo 的资源锁、依赖阻塞和持久化由自身实现，不将 Multica 的全部并发能力等同于已经接入。
+路由参考最新 [Multica Squads](https://github.com/multica-ai/multica/blob/c321e49098cd1a3e01714a179c0bfca78c510e0f/apps/docs/content/docs/squads.mdx) 和 [Mentioning agents](https://github.com/multica-ai/multica/blob/c321e49098cd1a3e01714a179c0bfca78c510e0f/apps/docs/content/docs/mentioning-agents.mdx)：显式提及直接路由、无明确收件人回退 Leader、共享事实与成员独立会话。UnderControl 的资源锁、依赖阻塞和持久化由自身实现，不将 Multica 的全部并发能力等同于已经接入。
 
 ## Teams 命名与会话组件
 
-产品导航为 Sessions、Actions、Teams。新页面使用 view=teams、team=<ID>、team_view=conversation|kanban；旧 view=rooms、room、room_view 链接会读取并规范为新 URL。新接口使用 /api/v1/teams 和 /api/v1/teams-runtime。旧 /api/v1/rooms 接口作为已有客户端与资料的兼容入口继续读取，不另建一套服务；数据库 loop_rooms、room_id、rillo-room-v1 导出格式和已安装的数据目录保持原状，避免仅为界面更名搬动用户数据。
+产品导航为 Sessions、Actions、Teams。新页面使用 view=teams、team=<ID>、team_view=conversation|kanban；旧 view=rooms、room、room_view 链接会读取并规范为新 URL。新接口使用 /api/v1/teams 和 /api/v1/teams-runtime。旧 /api/v1/rooms 接口作为已有客户端与资料的兼容入口继续读取，不另建一套服务；数据库 loop_rooms、room_id、undercontrol-room-v1 导出格式和已安装的数据目录保持原状，避免仅为界面更名搬动用户数据。
 
 Teams 对话使用 shadcn MessageScrollerProvider / Viewport / Content / Item / Button，进入团队定位最新消息，自动跟随新增内容并保留用户向上浏览的位置。PromptInput / Body / Header / Footer / Tools / Submit 负责输入容器、服务器路径附件和提交状态；编辑内容仍使用现有 Tiptap 稳定 ID Mention，不添加浏览器上传或第二套聊天传输。
 
@@ -309,19 +309,19 @@ session-browser 使用注入的 projectSessions 批量查 loop_runs / loop_tasks
 
 列表、读取、时间轴、标记列表和活跃状态返回同一份 team 元信息：团队名称、Task、成员稳定 ID、别名、头像和 Leader 身份。原生 ID、消息内容和原生父子/fork 关系不变。成员移除后读取 Run 中的身份快照。
 
-Sessions 把不同内部执行目录里的同一团队会话放到同一可折叠团队分组，保留组内原生父子关系和 fork 标记。列表及对话显示成员身份，不再把启动用的内部说明当作标题。仅在已确认属于团队的会话中，已知 Rillo 内部输入默认折叠为“团队执行上下文”；原文仍可展开。普通原生会话继续按原来的 workspace 分组。
+Sessions 把不同内部执行目录里的同一团队会话放到同一可折叠团队分组，保留组内原生父子关系和 fork 标记。列表及对话显示成员身份，不再把启动用的内部说明当作标题。仅在已确认属于团队的会话中，已知 UnderControl 内部输入默认折叠为“团队执行上下文”；原文仍可展开。普通原生会话继续按原来的 workspace 分组。
 
 
 ## 全局 Agent 管理与成员添加
 
 Teams 左侧“Agent 管理”面向所有团队，URL 为 view=teams&team_view=agents；顶层仍为 Sessions、Actions、Teams。管理页包含本地 Agent、市场发现、托管安装、更新与来源，详见 [Marketplace 架构与契约](agent-marketplace.md)。成员区 + 只搜索本地角色，选中后另开名字、头像、客户端、模型和 effort 配置弹窗，再确认加入。选择器不加载市场网络、不导入或删除定义；失败保留填写内容，返回选择器保留搜索词。
 
-托管定义经组合层注入现有本地目录，使用 managed: ID；加入时保存具体版本和完整指令快照。团队执行、权限、并行与恢复沿用现有机制。更新托管文件不修改已有成员；独立 Session 创建入口当前明确禁用，不能把其他执行对象冒充 Session。原有全局定义及导入 HTTP 契约保留，但日常市场安装使用 Rillo 托管目录，不意外写入全局配置。
+托管定义经组合层注入现有本地目录，使用 managed: ID；加入时保存具体版本和完整指令快照。团队执行、权限、并行与恢复沿用现有机制。更新托管文件不修改已有成员；独立 Session 创建入口当前明确禁用，不能把其他执行对象冒充 Session。原有全局定义及导入 HTTP 契约保留，但日常市场安装使用 UnderControl 托管目录，不意外写入全局配置。
 
 
 ## 本轮协作排查参考
 
-[Multica Squad 协议](https://github.com/multica-ai/multica/blob/ed7c001778c0226e4ac4e5c4133d6a047922e226/server/internal/handler/squad_briefing.go)要求 Leader 按职责简短指派、派发后结束，并在无需处理时保持安静。[Hivemind 的异步子任务](https://github.com/hivementality-ai/hivemind/blob/538f670aa2d28d3d2cf868711098e9b241d5c370/app/jobs/sub_agent_job.rb)向原委派者发送有界结果与任务引用，完整结果按需读取；其[群聊实现](https://github.com/hivementality-ai/hivemind/blob/538f670aa2d28d3d2cf868711098e9b241d5c370/app/jobs/team_chat_job.rb)使用有界最近消息和各成员独立会话，但无明确目标时唤醒全部成员，不作为 Rillo 的派发规则。以上仅参考协作契约，没有复制上游代码或引入其执行系统。
+[Multica Squad 协议](https://github.com/multica-ai/multica/blob/ed7c001778c0226e4ac4e5c4133d6a047922e226/server/internal/handler/squad_briefing.go)要求 Leader 按职责简短指派、派发后结束，并在无需处理时保持安静。[Hivemind 的异步子任务](https://github.com/hivementality-ai/hivemind/blob/538f670aa2d28d3d2cf868711098e9b241d5c370/app/jobs/sub_agent_job.rb)向原委派者发送有界结果与任务引用，完整结果按需读取；其[群聊实现](https://github.com/hivementality-ai/hivemind/blob/538f670aa2d28d3d2cf868711098e9b241d5c370/app/jobs/team_chat_job.rb)使用有界最近消息和各成员独立会话，但无明确目标时唤醒全部成员，不作为 UnderControl 的派发规则。以上仅参考协作契约，没有复制上游代码或引入其执行系统。
 
 
 ## 消息处理与工作交接
@@ -336,7 +336,7 @@ loop_inbox 的 delivery_json 记录 pending、sending、delivered、unknown，pr
 
 ## 调度容量与实际状态
 
-RILLO_TEAM_WORK_CONCURRENCY 控制工作并发，默认 2。RILLO_TEAM_COORDINATION_CONCURRENCY 保留协调容量，默认 1，两者范围均为 1–32。用户要求、问题和统筹具有起始优先级，等待每 30 秒增加优先级。候选每批最多 32 条并轮转分页，前一批的目录等待不阻塞后续就绪工作。先检查资源占用再占运行名额，等待目录的工作仍保持 queued。同一任务成员的未结束 Run 和原生会话互斥规则保留。
+UNDERCONTROL_TEAM_WORK_CONCURRENCY 控制工作并发，默认 2。UNDERCONTROL_TEAM_COORDINATION_CONCURRENCY 保留协调容量，默认 1，两者范围均为 1–32。用户要求、问题和统筹具有起始优先级，等待每 30 秒增加优先级。候选每批最多 32 条并轮转分页，前一批的目录等待不阻塞后续就绪工作。先检查资源占用再占运行名额，等待目录的工作仍保持 queued。同一任务成员的未结束 Run 和原生会话互斥规则保留。
 
 resource_scope 用 access=none、read、write 和 projects=[项目编号] 声明实际资源。Leader 默认统筹不占全部项目。显式长审查或写入使用工作容量。Teams 的 read 以观察方式允许其他会话修改文件；写入仍互斥。未知进程的占用仍须核对，Actions 和旧固定阶段任务的原有读写规则不变。资源声明不是权限授予，用户只读约束与客户端权限继续有效。
 
@@ -372,4 +372,4 @@ Leader 负责分工、冲突、依赖和验收，必要时可以检查代码及�
 
 Leader 与成员使用同一套结果交接规则。Leader 在统筹 Run 中回答成员问题后，同样向实际提问者交回报告。答复保留提问者的原工作关联，不让提问者重新承接 Leader 的任务。正式报告通知也可通过 Codex steer 进入正在处理相关工作的请求者；包含稳定 inbox ID、来源 Run、报告 ID、版本和有界摘录，全文按报告 ID 读取。原生端确认后才记 delivered。相同原生 Session 续接时，已投递的结果不再次放入新增结果输入。不支持实时补充的 Runtime 继续保留待投递记录，续接时处理。
 
-上述提示词为 Rillo 自行编写。[DSH 的职责约定](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/prompts/shared.md)和[报告通知实现](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/tools/executor.ts)用于机制参考，没有复制上游源码或成段提示词，也没有将 Leader 限定为纯路由角色。
+上述提示词为 UnderControl 自行编写。[DSH 的职责约定](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/prompts/shared.md)和[报告通知实现](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/tools/executor.ts)用于机制参考，没有复制上游源码或成段提示词，也没有将 Leader 限定为纯路由角色。

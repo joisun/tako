@@ -1,7 +1,7 @@
-// These are the instruction transport paths already used by Rillo, not global CLI installers.
+// These are the instruction transport paths already used by UnderControl, not global CLI installers.
 export const marketplaceRuntimeAdapters=Object.freeze([
-  {id:'codex',name:'Codex',instructions_supported:true,transport:'Rillo Run.prompt → Codex turn/start text input',native_install:false,session_creation_supported:false},
-  {id:'claude',name:'Claude Code',instructions_supported:true,transport:'Rillo Run.prompt → Claude stdin',native_install:false,session_creation_supported:false},
+  {id:'codex',name:'Codex',instructions_supported:true,transport:'UnderControl Run.prompt → Codex turn/start text input',native_install:false,session_creation_supported:false},
+  {id:'claude',name:'Claude Code',instructions_supported:true,transport:'UnderControl Run.prompt → Claude stdin',native_install:false,session_creation_supported:false},
   {id:'opencode',name:'OpenCode',instructions_supported:false,transport:null,native_install:false,session_creation_supported:false},
 ])
 export function agentSessionContext(installed){

@@ -7,15 +7,15 @@ import { SchedulerError } from './scheduler-errors.mjs'
 import { isCodexModelSlug, isCodexReasoningLevel } from './codex-model-selection.mjs'
 import { THREAD_MODES, validInheritanceLimit } from '../session-policy.mjs'
 
-const DEFINITION_TYPE = 'rillo/action'
-// Read existing user Markdown without rewriting it during installation. New writes use Rillo.
-const LEGACY_DEFINITION_TYPES = new Set(['rillo/schedule', 'tasks-recorder/schedule', 'task-recorder/schedule', 'tasks_recorder/schedule', 'task_recorder/schedule'])
+const DEFINITION_TYPE = 'undercontrol/action'
+// Read existing user Markdown without rewriting it during installation. New writes use UnderControl.
+const LEGACY_DEFINITION_TYPES = new Set(['rillo/action', 'rillo/schedule', 'undercontrol/schedule', 'tasks-recorder/schedule', 'task-recorder/schedule', 'tasks_recorder/schedule', 'task_recorder/schedule'])
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const TIME = /^(?:[01]\d|2[0-3]):[0-5]\d$/
 const DURATION = /^(\d+)(s|m|h)$/
 const AGENT = /^[a-z][a-z0-9-]{0,63}$/
 const FRONT_MATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/
-const MARKER = /^type:\s*["']?(?:rillo|tasks?[-_]recorder)\/(?:schedule|action)["']?\s*(?:#.*)?$/m
+const MARKER = /^type:\s*["']?(?:undercontrol|rillo|tasks?[-_]recorder)\/(?:schedule|action)["']?\s*(?:#.*)?$/m
 const FIELDS = new Set([
   'type', 'id', 'title', 'enabled', 'schedule_enabled', 'external_enabled', 'external_secret', 'workspace', 'agent', 'schedule', 'capabilities',
   'sandbox', 'model', 'reasoning', 'fast_mode', 'network_access', 'timeout', 'session_id',

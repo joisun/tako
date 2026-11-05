@@ -2,7 +2,7 @@
 
 set -eu
 
-repository="joisun/rillo"
+repository="joisun/undercontrol"
 asset_name=""
 requested_version="latest"
 start_service=1
@@ -19,7 +19,7 @@ EOF
 }
 
 die() {
-  printf 'rillo installer: %s\n' "$*" >&2
+  printf 'undercontrol installer: %s\n' "$*" >&2
   exit 1
 }
 
@@ -48,10 +48,10 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-platform="${RILLO_TEST_PLATFORM:-$(uname -s)}"
+platform="${UNDERCONTROL_TEST_PLATFORM:-$(uname -s)}"
 case "$platform" in
-  Darwin) asset_name='rillo-macos.tar.gz' ;;
-  Linux) asset_name='rillo-linux.tar.gz' ;;
+  Darwin) asset_name='undercontrol-macos.tar.gz' ;;
+  Linux) asset_name='undercontrol-linux.tar.gz' ;;
   *) die 'this release supports macOS and Linux only' ;;
 esac
 [ -n "${HOME:-}" ] || die 'HOME is not set'
@@ -75,12 +75,12 @@ fi
 node_major="$(node -p 'process.versions.node.split(".")[0]')"
 [ "$node_major" -ge 24 ] || die 'Node.js 24 or newer is required'
 
-install_root="$HOME/.local/share/rillo"
+install_root="$HOME/.local/share/undercontrol"
 releases_root="$install_root/releases"
 current_link="$install_root/current"
 bin_directory="$HOME/.local/bin"
-wrapper_path="$bin_directory/rillo"
-data_directory="$HOME/.config/rillo"
+wrapper_path="$bin_directory/undercontrol"
+data_directory="$HOME/.config/undercontrol"
 config_path="$data_directory/config.json"
 
 if [ "$uninstall" -eq 1 ]; then
@@ -91,27 +91,27 @@ if [ "$uninstall" -eq 1 ]; then
     rm -f "$wrapper_path"
   fi
   if [ -d "$install_root" ]; then
-    [ "$install_root" = "$HOME/.local/share/rillo" ] || die 'refusing to remove an unexpected install directory'
+    [ "$install_root" = "$HOME/.local/share/undercontrol" ] || die 'refusing to remove an unexpected install directory'
     rm -rf "$install_root"
   fi
-  printf 'Uninstalled Rillo program files. Preserved %s and logs.\n' "$data_directory"
+  printf 'Uninstalled UnderControl program files. Preserved %s and logs.\n' "$data_directory"
   exit 0
 fi
 
-temporary_directory="$(mktemp -d "${TMPDIR:-/tmp}/rillo-install.XXXXXX")"
+temporary_directory="$(mktemp -d "${TMPDIR:-/tmp}/undercontrol-install.XXXXXX")"
 migration_journal=""
 migration_finished=0
 migration_tool="$temporary_directory/migrate.mjs"
 cleanup() {
   if [ -n "$migration_journal" ] && [ "$migration_finished" -eq 0 ]; then
-    node "$migration_tool" rollback "$migration_journal" || printf 'Rillo migration needs manual recovery: %s\n' "$migration_journal" >&2
+    node "$migration_tool" rollback "$migration_journal" || printf 'UnderControl migration needs manual recovery: %s\n' "$migration_journal" >&2
   fi
   rm -rf "$temporary_directory"
 }
 trap cleanup EXIT HUP INT TERM
 
-if [ -n "${RILLO_RELEASE_BASE_URL:-}" ]; then
-  release_base_url="${RILLO_RELEASE_BASE_URL%/}"
+if [ -n "${UNDERCONTROL_RELEASE_BASE_URL:-}" ]; then
+  release_base_url="${UNDERCONTROL_RELEASE_BASE_URL%/}"
 elif [ "$requested_version" = 'latest' ]; then
   release_base_url="https://github.com/$repository/releases/latest/download"
 else
@@ -149,7 +149,7 @@ awk -F/ '{ for (i = 1; i <= NF; i++) if ($i ~ /^\._/ || $i == ".DS_Store") next;
 [ -s "$program_entries" ] || die 'release archive contains no program files'
 archive_root="$(sed -n '1{s#/.*##;p;}' "$program_entries")"
 case "$archive_root" in
-  rillo-*) ;;
+  undercontrol-*) ;;
   *) die "unexpected release archive root: $archive_root" ;;
 esac
 if awk -F/ -v root="$archive_root" '$1 != root { exit 1 }' "$program_entries"; then
@@ -171,7 +171,7 @@ installed_version="$(node -e 'const fs=require("node:fs"); const p=JSON.parse(fs
 case "$installed_version" in
   ''|*[!0-9A-Za-z.+-]*) die 'release contains an invalid version' ;;
 esac
-[ "$archive_root" = "rillo-$installed_version" ] || die 'release archive root does not match its package version'
+[ "$archive_root" = "undercontrol-$installed_version" ] || die 'release archive root does not match its package version'
 if [ "$requested_version" != 'latest' ]; then
   normalized_requested_version="${requested_version#v}"
   [ "$normalized_requested_version" = "$installed_version" ] || die "release version $installed_version does not match requested tag $requested_version"
@@ -221,12 +221,12 @@ node -e 'require("node:fs").renameSync(process.argv[1], process.argv[2])' "$temp
 cat > "$wrapper_path" <<'EOF'
 #!/usr/bin/env sh
 set -eu
-runtime="$HOME/.local/share/rillo/current"
+runtime="$HOME/.local/share/undercontrol/current"
 [ -d "$runtime" ] || {
-  printf 'Rillo is not installed.\n' >&2
+  printf 'UnderControl is not installed.\n' >&2
   exit 1
 }
-RILLO_PREBUILT=1 exec node "$runtime/server/cli.mjs" "$@"
+UNDERCONTROL_PREBUILT=1 exec node "$runtime/server/cli.mjs" "$@"
 EOF
 chmod 755 "$wrapper_path"
 
@@ -245,9 +245,9 @@ if [ "$start_service" -eq 1 ]; then
     sleep 0.2
   done
   if [ "$platform" = Linux ]; then
-    service_log="$HOME/.local/state/rillo/daemon.stderr.log"
+    service_log="$HOME/.local/state/undercontrol/daemon.stderr.log"
   else
-    service_log="$HOME/Library/Logs/rillo/daemon.stderr.log"
+    service_log="$HOME/Library/Logs/undercontrol/daemon.stderr.log"
   fi
   [ "$ready" -eq 1 ] || die "service did not become ready; check $service_log"
 fi
@@ -257,11 +257,11 @@ if [ -n "$migration_journal" ]; then
 fi
 migration_finished=1
 
-printf 'Installed Rillo %s.\n' "$installed_version"
+printf 'Installed UnderControl %s.\n' "$installed_version"
 dashboard_url="$(node -e 'const fs=require("node:fs"); const p=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(p.server_public_url || process.argv[2])' "$config_path" "$dashboard_url")"
 printf 'Dashboard: %s\n' "$dashboard_url"
-printf 'Open Dashboard: rillo open\n'
+printf 'Open Dashboard: undercontrol open\n'
 if [ ":${PATH}:" != *":$bin_directory:"* ]; then
-  printf 'Add %s to PATH to use the rillo command.\n' "$bin_directory"
+  printf 'Add %s to PATH to use the undercontrol command.\n' "$bin_directory"
 fi
 printf 'Install a Codex or Claude Code adapter separately; see the project README.\n'

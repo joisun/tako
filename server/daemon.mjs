@@ -14,7 +14,7 @@ try {
   const config = await resolveAppConfig({ projectRoot })
   const manifest = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8'))
   if (typeof manifest.version !== 'string' || !manifest.version.trim()) {
-    throw new Error('Rillo package.json must declare a version')
+    throw new Error('UnderControl package.json must declare a version')
   }
   config.packageVersion = manifest.version
   const dashboardHtml = await readFile(dashboardPath, 'utf8')
@@ -27,8 +27,8 @@ try {
   }
   process.once('SIGTERM', () => { stop().catch(() => {}).finally(() => process.exit(0)) })
   process.once('SIGINT', () => { stop().catch(() => {}).finally(() => process.exit(0)) })
-  process.stderr.write(`rillo daemon listening at ${runtime.address.url}\n`)
+  process.stderr.write(`undercontrol daemon listening at ${runtime.address.url}\n`)
 } catch (error) {
-  process.stderr.write(`rillo daemon failed to start: ${error.stack ?? error}\n`)
+  process.stderr.write(`undercontrol daemon failed to start: ${error.stack ?? error}\n`)
   process.exitCode = 1
 }

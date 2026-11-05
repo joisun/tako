@@ -1,1 +1,1 @@
-export const RILLO_LOGO_URL = '/rillo.png?v=porcupine-closeup-2'
+export const UNDERCONTROL_LOGO_URL = '/undercontrol.png?v=porcupine-closeup-2'

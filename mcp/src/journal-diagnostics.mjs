@@ -160,7 +160,7 @@ export function createJournalDiagnostics({
       || schedulerState?.degraded === true
     return {
       ok: true,
-      service: 'rillo',
+      service: 'undercontrol',
       live: true,
       ready,
       degraded,

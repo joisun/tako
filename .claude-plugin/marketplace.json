@@ -1,15 +1,15 @@
 {
-  "name": "rillo",
-  "description": "Rillo adapters for Claude Code",
+  "name": "undercontrol",
+  "description": "UnderControl adapters for Claude Code",
   "owner": {
     "name": "Joi Sun"
   },
   "plugins": [
     {
-      "name": "rillo",
+      "name": "undercontrol",
       "description": "Search native agent sessions, read conversation history, and manage scheduled automation",
-      "version": "0.17.1",
-      "source": "./adapters/claude/rillo",
+      "version": "0.18.0",
+      "source": "./adapters/claude/undercontrol",
       "author": {
         "name": "Joi Sun"
       }

@@ -37,12 +37,13 @@ export function parseAgentDefinition(contents, { format, source, fallbackName })
     data = document.toJS(); instructions = match[2].trim()
   }
   if (!data || typeof data !== 'object' || typeof instructions !== 'string' || !instructions.trim()) throw catalogError('Agent定义缺少有效的角色指令')
+  const origin = data.undercontrol_source ?? data.rillo_source
   return {
     name: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : fallbackName,
     description: typeof data.description === 'string' ? data.description.slice(0, 8000) : '',
     instructions: instructions.trim(), model: typeof data.model === 'string' ? data.model : null,
     tools: list(data.tools), skills: list(data.skills), color: typeof data.color === 'string' ? data.color : null,
-    source: { ...source, digest: hash(contents), normalized_metadata: normalizedMetadata, ...(data.rillo_source ? { origin: data.rillo_source, license:data.rillo_source.license, revision:data.rillo_source.revision, url:data.rillo_source.url } : {}) },
+    source: { ...source, digest: hash(contents), normalized_metadata: normalizedMetadata, ...(origin ? { origin, license:origin.license, revision:origin.revision, url:origin.url } : {}) },
   }
 }
 
@@ -138,9 +139,9 @@ export function createAgentCatalog({ home = homedir(), codexHome = process.env.C
     await mkdir(root,{recursive:true})
     const canonical = await realpath(root), destination = join(canonical,`${slug}.md`)
     const metadata = { name:definition.name, description:definition.description, ...(definition.model ? { model:definition.model } : {}), tools:definition.tools, skills:definition.skills,
-      rillo_source:{ id, ...definition.source } }
+      undercontrol_source:{ id, ...definition.source } }
     const contents = '---\n'+Object.entries(metadata).map(([key,value])=>`${key}: ${JSON.stringify(value)}`).join('\n')+'\n---\n'+definition.instructions+'\n'
-    const temp = await mkdtemp(join(canonical,'.rillo-import-'))
+    const temp = await mkdtemp(join(canonical,'.undercontrol-import-'))
     let imported = true
     try {
       const file = await open(join(temp,'definition.md'),'wx',0o600)

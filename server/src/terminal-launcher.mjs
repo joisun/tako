@@ -6,7 +6,7 @@ import { homedir } from 'node:os'
 import { delimiter, isAbsolute, join } from 'node:path'
 import { promisify } from 'node:util'
 
-import { RilloError } from '../../mcp/src/errors.mjs'
+import { UnderControlError } from '../../mcp/src/errors.mjs'
 import { createGhosttyRouter } from './terminal-launcher/ghostty.mjs'
 
 const execFileAsync = promisify(nodeExecFile)
@@ -37,7 +37,7 @@ const APP_PATHS = Object.freeze({
 })
 
 function taskError(code, message, details) {
-  return new RilloError(code, message, details)
+  return new UnderControlError(code, message, details)
 }
 
 export function shellQuote(value) {
@@ -125,7 +125,7 @@ export function createTerminalLauncher({
   platform = process.platform,
   env = process.env,
   homeDirectory = homedir(),
-  runtimeDirectory = join(homeDirectory, '.config', 'rillo', 'runtime'),
+  runtimeDirectory = join(homeDirectory, '.config', 'undercontrol', 'runtime'),
   accessImpl = access,
   statImpl = stat,
   mkdirImpl = mkdir,
@@ -245,7 +245,7 @@ export function createTerminalLauncher({
     return enqueueLaunch(async () => {
       try { return await launchOnce(input) }
       catch (error) {
-        if (error instanceof RilloError) throw error
+        if (error instanceof UnderControlError) throw error
         throw taskError('TERMINAL_LAUNCH_FAILED', '无法定位或打开目标终端，请检查终端的控制权限。', { terminal: input.terminal ?? DEFAULT_RESUME_TERMINAL, cause: error.code ?? error.message })
       }
     })
@@ -322,7 +322,7 @@ export function createTerminalLauncher({
       }
     } catch (error) {
       if (scriptPath) await rmImpl(scriptPath, { force: true }).catch(() => undefined)
-      if (error instanceof RilloError) throw error
+      if (error instanceof UnderControlError) throw error
       throw taskError('TERMINAL_LAUNCH_FAILED', `Unable to launch ${terminalDefinition.label}.`, {
         terminal,
         cause: error?.code ?? error?.message ?? 'launch failed',

@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
 
-import { RilloError } from './errors.mjs'
+import { UnderControlError } from './errors.mjs'
 
 function fail(code, message, details) {
-  throw new RilloError(code, message, details)
+  throw new UnderControlError(code, message, details)
 }
 
 function requiredString(value, field) {

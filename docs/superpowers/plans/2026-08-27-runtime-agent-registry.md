@@ -1274,7 +1274,7 @@ Confirm no preview instruction requires publishing, reinstalling, or running thr
 - Modify: `docs/superpowers/specs/2026-08-24-scheduled-tasks-design.md`
 - Modify: `docs/superpowers/specs/2026-08-25-file-native-scheduled-tasks-design.md`
 - Modify: `docs/superpowers/specs/2026-08-26-scheduled-execution-observability-design.md`
-- Modify: `docs/job/rillo-scheduled-tasks/06-test-report.md`
+- Modify: `docs/job/undercontrol-scheduled-tasks/06-test-report.md`
 - Test in documentation worktree: `test/documentation.test.mjs`
 
 **Interfaces:**
@@ -1339,7 +1339,7 @@ npm run package:release
 bash -n install.sh
 ```
 
-Expected: all commands PASS. Record exact test counts and durations in `docs/job/rillo-scheduled-tasks/06-test-report.md`.
+Expected: all commands PASS. Record exact test counts and durations in `docs/job/undercontrol-scheduled-tasks/06-test-report.md`.
 
 - [ ] **Step 5: Perform Playwright MCP visual verification**
 
