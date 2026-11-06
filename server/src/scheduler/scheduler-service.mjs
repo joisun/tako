@@ -50,6 +50,10 @@ export function createDefinitionScheduleService({
   async function normalizedInput(input, { patch = false, existingAgent = 'codex', existingCadence = null } = {}) {
     allowOnly(input, JOB_FIELDS, patch ? 'Schedule patch' : 'Schedule')
     const output = { ...input }
+    if (!patch || own(output, 'title')) output.title = boundedString(output.title, 'title', 200)
+    if (!patch || own(output, 'prompt')) output.prompt = boundedString(output.prompt, 'prompt', 20_000)
+    if (!patch || own(output, 'workspace')) output.workspace = await canonicalWorkspace(output.workspace)
+    if (!patch || own(output, 'agent')) output.agent = registeredAgent(output.agent)
     for (const field of ['enabled', 'schedule_enabled', 'external_enabled']) {
       if (own(output, field) && typeof output[field] !== 'boolean') fail('SCHEDULE_INPUT_INVALID', `${field} must be boolean`, { field })
     }
