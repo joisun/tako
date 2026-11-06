@@ -1,9 +1,9 @@
 # 状态
 
-status: implemented
-current_task: 源码和品牌基础已落地，安装切换待发布时执行
+status: complete
+current_task: TAKO 0.19.0 已发布，本机程序与插件已更新
 
-分支：`feature/tako-rebrand`，基于 main 的 `5e43aa4`。全部任务修改位于独立 worktree，main 未改动。未提交、推送或发布。
+分支：`feature/tako-rebrand`，基于 main 的 `5e43aa4`。开发在独立 worktree 完成，代码已整合并推送 main，以 v0.19.0 发布。
 
 ## 实际改动
 
@@ -14,7 +14,7 @@ current_task: 源码和品牌基础已落地，安装切换待发布时执行
 - 复用事务迁移并补齐 UnderControl 安装、已有 Rillo 软链接链、真实路径比对、团队与组队中的执行保护。数据库备份、路径冲突检查及回滚继续使用原流程。
 - 新 Logo、favicon、Banner 与章鱼形象未设计、未生成；来源素材包 SVG 未采用。旧公开版本和历史文件保留原样。
 
-## 验证
+## 首轮验证
 
 2026-11-06，全部在本 worktree 或隔离临时目录执行：
 
@@ -35,11 +35,11 @@ current_task: 源码和品牌基础已落地，安装切换待发布时执行
 
 全量测试保留原有行为断言，不跳过或降低发布校验。遗留问题涉及已移除的 Host/Origin 拦截断言、旧 UI 组件接口、Schedule→Actions 的旧预期及其他既存用例。本轮仅同步直接涉及品牌的测试名称、路径、版本头和预期。
 
-## 预览和未执行的切换
+## 预览和切换状态
 
-唯一开发预览为 http://127.0.0.1:43130/，源码来自本 worktree，API 仍连接现有 43127 服务。没有创建新的一套真实数据或执行系统；浏览器只核验显示，没有发送业务任务。
+唯一开发预览为 http://127.0.0.1:43130/，源码现来自 main。正式本机服务为 http://127.0.0.1:43127/，从已发布的 `~/.local/share/tako/releases/0.19.0` 运行。没有新建真实业务任务或手动触发 Linear 自动化。
 
-真实 GitHub 仓库仍为 joisun/undercontrol，仓库 ID 1332808132；本机仍使用 UnderControl 服务、插件和数据目录。已确认本机 gh 有仓库管理权限，但未执行远端更名。本轮不重启真实服务、不迁移真实数据、不操作 Linear 自动化。最终安装和客户端插件切换按 [迁移文档](../../migrations/tako-rename.md) 在后续发布时执行。
+GitHub 仓库为 joisun/tako，仓库 ID 1332808132。本机 CLI、服务、程序、数据目录和两个客户端插件均已切换到 TAKO。旧目录软链接和已打开客户端使用的旧插件文件保留，旧插件注册及服务已移除。Codex 受维护的配置源、实际配置及 Claude 的配置链接已核对；dotfiles 中其他已有修改未提交或覆盖。
 
 品牌约定见 [品牌基础](../../brand/tako-foundation.md)。构建日志、完整测试输出与隔离安装包保存在本 worktree 的 `node_modules/.cache/tako-rebrand/`，不进入版本控制。
 
@@ -55,3 +55,15 @@ current_task: 源码和品牌基础已落地，安装切换待发布时执行
 - 本机两条 unknown 历史执行的原进程已不存在；对应原生日志最后事件均为 2026-11-05 的 turn_aborted。安装前将通过现有 reconcile 接口登记中断，不重跑任务。
 - 客户端和旧服务配置已备份到本机 .local/state/tako-rename。正式数据备份仍由安装事务执行。
 - 根据用户 Git 规则，35 个测试文件的提交已单独请求授权；授权到达前不提交测试、不触发发布。非测试源码提交沿用本次用户授权。
+
+
+## 发布与本机验收
+
+- 用户已明确批准提交测试，测试修正提交为 6a70ca7；发布 tag v0.19.0 指向该提交。
+- GitHub Release 工作流 42164658495 的 release、verify-linux、publish 三项全部成功。正式发布地址：https://github.com/joisun/tako/releases/tag/v0.19.0 。
+- 六份正式资产已下载并按 SHA256SUMS 核验后安装。本机升级事务完成，旧 launchd 服务已卸载，新服务从不可变 0.19.0 目录启动；CLI、meta 和健康检查均返回 TAKO / 0.19.0。
+- 9 份外部 Markdown 的内容哈希保持一致。436 条 Action Run、5 条团队 Run、10 条团队消息、9 个成员的已记录身份、正文、输入／快照和 Session 关联逐项核对保留，旧 0.18.0 程序元数据未重写。
+- 两条历史 unknown 执行在核对原生 turn_aborted 日志和原进程退出后，使用现有 reconcile 接口登记 interrupted，没有重跑。
+- Codex 和 Claude 插件均为 tako@tako 0.19.0；两个实际安装缓存的 MCP 均已初始化并通过 session_sources 只读调用。新会话加载新命名空间，未强行重启客户端。
+- 浏览器在 43127 与 43130 均验证 TAKO 标题、字标和 0.19.0 meta，无横向溢出。43130 仅保留一个来自 main 的开发预览。
+- 本机服务及客户端配置备份位于 ~/.local/state/tako-rename/20261106-121452；数据事务备份位于 ~/.local/state/tako-migrations。没有在公开文档记录真实 secret 或运行输入。

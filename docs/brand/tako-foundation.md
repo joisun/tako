@@ -1,6 +1,6 @@
-# TAKO 品牌基础草案
+# TAKO 品牌基础
 
-状态：用户已确认采用 TAKO。本文件为实施中的品牌规范；尚未发布。
+状态：用户已确认采用 TAKO。本文件记录 0.19.0 已落地的品牌约定，图形资源后续设计。
 
 依据：用户提供的 tako_brand_kit 中的 BRAND_GUIDE.md、README-HERO-DRAFT.md、MASCOT-BRIEF.md、RENAME-CHECKLIST.md 和 brand-tokens.json，以及当前项目的 README、设计变量与迁移机制。未采用该素材包的 SVG 图形。
 
