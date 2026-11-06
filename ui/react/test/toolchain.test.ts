@@ -4,16 +4,16 @@ import { expect, test } from 'vitest'
 
 test('React UI test toolchain boots in jsdom', () => {
   const element = document.createElement('div')
-  element.textContent = 'Rillo'
+  element.textContent = 'TAKO'
   document.body.append(element)
-  expect(element).toHaveTextContent('Rillo')
+  expect(element).toHaveTextContent('TAKO')
 })
 
-test('pins the dotUI Vercel registry for reproducible source components', async () => {
+test('pins the Kibo registry for reproducible source components', async () => {
   const components = JSON.parse(await readFile(resolve('ui/components.json'), 'utf8')) as {
     registries: Record<string, string>
   }
-  expect(components.registries['@dotui']).toMatch(/^https:\/\/dotui\.org\/r\/\{name\}\?preset=/)
+  expect(components.registries['@kibo-ui']).toBe('https://www.kibo-ui.com/r/{name}.json')
 })
 
 test('vendors only the minimal AI Elements presentation contract', async () => {

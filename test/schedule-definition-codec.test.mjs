@@ -36,6 +36,10 @@ test('parses human-friendly daily front matter into the scheduler domain shape',
     id: '34826d22-b33b-4d1d-b9d0-8459d71009dc',
     title: 'Codex daily news',
     enabled: true,
+    schedule_enabled: true,
+    external_enabled: false,
+    external_secret: null,
+    max_inherit_runs: 20,
     workspace: '/tmp/project',
     agent: 'codex',
     cadence: { kind: 'daily', hour: 9, minute: 5, timezone_mode: 'system' },
@@ -67,7 +71,8 @@ schedule:
 
 Review the week.
 `)
-  assert.equal(parsed.enabled, false)
+  assert.equal(parsed.enabled, true)
+  assert.equal(parsed.schedule_enabled, false)
   assert.deepEqual(parsed.cadence, {
     kind: 'weekly', weekdays: [1, 5], hour: 18, minute: 30, timezone_mode: 'system',
   })
@@ -82,7 +87,7 @@ test('serializes and parses without changing the executable definition', () => {
     'reasoning_effort', 'timeout_seconds', 'capabilities', 'thread_mode', 'timezone_mode', 'prompt',
   ]) assert.deepEqual(roundTrip[key], original[key], key)
   assert.match(source, /^---\n/)
-  assert.match(source, /type: rillo\/schedule/)
+  assert.match(source, /type: tako\/action/)
 })
 
 test('round-trips exact capability isolation and rejects unsupported policy', () => {
@@ -121,6 +126,7 @@ test('uses the repository clock and preserves an expired disabled once definitio
   }, { clock })
   const parsed = parseScheduleDefinition(source, { clock })
   assert.equal(parsed.enabled, false)
+  assert.equal(parsed.schedule_enabled, true)
   assert.equal(parsed.cadence.at, '2000-01-01T00:00:00.000Z')
 })
 
@@ -199,6 +205,6 @@ test('migration reads legacy Schedule markers without changing user bytes or ena
     const legacy = DAILY.replace('rillo/schedule', marker)
     const definition = parseScheduleDefinition(legacy)
     assert.equal(definition.enabled, true); assert.equal(definition.etag, definitionEtag(legacy))
-    assert.match(serializeScheduleDefinition(definition), /type: rillo\/schedule/)
+    assert.match(serializeScheduleDefinition(definition), /type: tako\/action/)
   }
 })

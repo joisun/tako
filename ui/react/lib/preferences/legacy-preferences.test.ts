@@ -17,14 +17,22 @@ describe('legacy browser preference migration', () => {
   it('moves old product keys while keeping unrelated preferences', () => {
     const data = storage({ 'tasks-recorder.sessions-group': 'branch', unrelated: 'value' })
     migrateLegacyPreferences(data)
-    expect(data.getItem('rillo.sessions-group')).toBe('branch')
+    expect(data.getItem('tako.sessions-group')).toBe('branch')
     expect(data.getItem('tasks-recorder.sessions-group')).toBeNull()
     expect(data.getItem('unrelated')).toBe('value')
   })
-  it('retains an existing Rillo preference', () => {
-    const data = storage({ 'task_recorder.sessions-group': 'branch', 'rillo.sessions-group': 'workspace' })
+  it('prefers newer legacy preferences regardless of insertion order', () => {
+    const data = storage({ 'task_recorder.sessions-group': 'branch', 'rillo.sessions-group': 'project', 'undercontrol.sessions-group': 'workspace' })
     migrateLegacyPreferences(data)
-    expect(data.getItem('rillo.sessions-group')).toBe('workspace')
+    expect(data.getItem('tako.sessions-group')).toBe('workspace')
+  })
+  it('keeps existing TAKO values and migrates pending team drafts with the same storage contract', () => {
+    const data = storage({ 'undercontrol.sessions-group': 'branch', 'tako.sessions-group': 'workspace', 'undercontrol.team-plan': '{"id":"pending-plan"}' })
+    migrateLegacyPreferences(data)
+    migrateLegacyPreferences(data)
+    expect(data.getItem('tako.sessions-group')).toBe('workspace')
+    expect(data.getItem('tako.team-plan')).toBe('{"id":"pending-plan"}')
+    expect(data.getItem('undercontrol.team-plan')).toBeNull()
   })
   it('keeps the old value when storage cannot write the migrated preference', () => {
     const data = storage({ 'tasks-recorder.sessions-group': 'branch' })

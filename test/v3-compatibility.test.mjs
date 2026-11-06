@@ -12,7 +12,7 @@ import { createTaskStore } from '../mcp/src/task-store.mjs'
 import { startDaemon } from '../server/src/daemon-runtime.mjs'
 
 async function fixture() {
-  const directory = await mkdtemp(join(tmpdir(), 'rillo-v3-compat-'))
+  const directory = await mkdtemp(join(tmpdir(), 'tako-v3-compat-'))
   const store = createJournalStore({
     databasePath: join(directory, 'tasks.sqlite'),
     clock: () => new Date('2026-08-20T07:00:00.000Z'),
@@ -153,7 +153,7 @@ test('legacy context and sync tree delegate to compact v3 semantics with depreca
       }],
       focus_task_id: 'child-task',
     })
-    assert.equal(synced.compatibility.replacement, 'rillo_sync_structure')
+    assert.equal(synced.compatibility.replacement, 'tako_sync_structure')
     assert.equal(synced.root.status, 'active')
     assert.equal(synced.children[0].parent_id, 'root-task')
     assert.equal(current.store.work.context({ execution_id: current.executionId }).task.id, 'child-task')

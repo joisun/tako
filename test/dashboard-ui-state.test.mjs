@@ -303,7 +303,7 @@ test('maps status mutation errors to actionable Chinese messages', () => {
   )
   assert.equal(
     statusMutationMessage({ code: 'ORIGIN_REJECTED' }),
-    '状态修改被本机安全策略拒绝',
+    '状态修改失败，仍显示最后一次成功数据',
   )
 })
 

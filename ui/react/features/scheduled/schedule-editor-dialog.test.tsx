@@ -34,5 +34,6 @@ test('Schedule editor presents Skills and integrations as separate accessible co
   await user.click(integrations)
   expect(skills).toBeChecked()
   expect(integrations).toBeChecked()
-  expect(screen.getByText(/Web Search 和 Codex 内置工具不受影响/)).toBeInTheDocument()
+  await user.hover(screen.getByRole('button', { name: '扩展能力说明' }))
+  expect(await screen.findByRole('tooltip')).toHaveTextContent('不影响 Web Search 和 Codex 内置工具')
 })

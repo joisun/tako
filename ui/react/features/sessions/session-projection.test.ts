@@ -51,7 +51,7 @@ test('each chart uses session creation and the final message, including that mes
 test('heat cells count actual one-second buckets and keep long idle gaps sparse', () => {
   const points = [1001, 1999, 2000, 2001, 90_000_000].map(at => ({ at: new Date(at).toISOString() }))
   expect(secondHeatCells(points, 1500, 90_000_001)).toEqual([
-    { start: 1000, count: 1 }, { start: 2000, count: 2 }, { start: 90_000_000, count: 1 },
+    { start: 1000, count: 1, user: 0, assistant: 0, unknown: 1 }, { start: 2000, count: 2, user: 0, assistant: 0, unknown: 2 }, { start: 90_000_000, count: 1, user: 0, assistant: 0, unknown: 1 },
   ])
 })
 

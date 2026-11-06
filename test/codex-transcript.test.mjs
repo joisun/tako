@@ -5,11 +5,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { readCodexTranscriptMetadata } from '../adapters/codex/rillo/hooks/src/codex-transcript.mjs'
-import { sendJournalEvent } from '../adapters/codex/rillo/hooks/src/daemon-client.mjs'
+import { readCodexTranscriptMetadata } from '../adapters/codex/tako/hooks/src/codex-transcript.mjs'
+import { sendJournalEvent } from '../adapters/codex/tako/hooks/src/daemon-client.mjs'
 
 async function transcriptFixture() {
-  const directory = await mkdtemp(join(tmpdir(), 'rillo-codex-transcript-'))
+  const directory = await mkdtemp(join(tmpdir(), 'tako-codex-transcript-'))
   const sessionsRoot = join(directory, 'sessions')
   await mkdir(sessionsRoot)
   return {
@@ -139,7 +139,7 @@ test('Codex hook client sends one bounded Event Envelope request to loopback dae
   })
   await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen))
   const { port } = server.address()
-  const env = { RILLO_SERVER_URL: `http://127.0.0.1:${port}` }
+  const env = { TAKO_SERVER_URL: `http://127.0.0.1:${port}` }
   const envelope = {
     source: 'codex',
     event_type: 'execution.started',
@@ -177,7 +177,7 @@ test('Codex hook client sends one bounded Event Envelope request to loopback dae
 
 test('Codex hook client rejects non-loopback origins through its fail-open result', async () => {
   const result = await sendJournalEvent({}, {
-    RILLO_SERVER_URL: 'http://localhost:43127',
+    TAKO_SERVER_URL: 'http://localhost:43127',
   })
   assert.deepEqual(result, {
     ok: true,

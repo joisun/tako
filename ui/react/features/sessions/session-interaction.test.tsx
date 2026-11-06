@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import { useState } from 'react'
+import { LazyMotion, domMax } from 'motion/react'
 
 import { createDashboardApi, DashboardApiError, type DashboardApi } from '@/lib/api/dashboard-api'
 import type { BrowserSession, SessionFilters, SessionMessagesPage, SessionTimeline } from '@/lib/api/types'
@@ -57,7 +58,7 @@ function fixture() {
     readSession: vi.fn(async () => ({ session })), resumeSession: vi.fn<DashboardApi['resumeSession']>(),
   }
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } })
-  function wrap(children: React.ReactNode) { return <QueryClientProvider client={client}>{children}</QueryClientProvider> }
+  function wrap(children: React.ReactNode) { return <LazyMotion features={domMax}><QueryClientProvider client={client}>{children}</QueryClientProvider></LazyMotion> }
   return { api, client, wrap }
 }
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
@@ -102,12 +103,12 @@ test('mouse hover selects the nearest real message without holding, and leaving 
     { item_id: 'last', turn_id: 'b', role: 'assistant', at: new Date(900).toISOString() },
   ]} onSeek={onSeek} />)
   const slider = screen.getByRole('slider')
-  slider.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect)
-  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientX: 15 })
+  slider.getBoundingClientRect = () => ({ top: 0, height: 100 } as DOMRect)
+  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientY: 15 })
   expect(onSeek).not.toHaveBeenCalled()
   await act(async () => vi.advanceTimersByTime(120))
   expect(onSeek).toHaveBeenLastCalledWith(new Date(100).toISOString(), 'first')
-  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientX: 85 })
+  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientY: 85 })
   fireEvent.pointerLeave(slider)
   await act(async () => vi.advanceTimersByTime(200))
   expect(onSeek).toHaveBeenCalledTimes(1)
@@ -124,16 +125,16 @@ test('continuous hover samples the newest target each frame without waiting for 
     { item_id: 'last', turn_id: 'c', role: 'assistant', at: new Date(900).toISOString() },
   ]} onSeek={onSeek} />)
   const slider = screen.getByRole('slider')
-  slider.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect)
-  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientX: 5 })
+  slider.getBoundingClientRect = () => ({ top: 0, height: 100 } as DOMRect)
+  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientY: 5 })
   await act(async () => vi.advanceTimersByTime(8))
-  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientX: 50 })
+  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientY: 50 })
   await act(async () => vi.advanceTimersByTime(16))
   expect(onSeek).toHaveBeenLastCalledWith(new Date(500).toISOString(), 'middle')
-  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientX: 52 })
+  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientY: 52 })
   await act(async () => vi.advanceTimersByTime(16))
   expect(onSeek).toHaveBeenCalledTimes(1)
-  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientX: 90 })
+  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientY: 90 })
   await act(async () => vi.advanceTimersByTime(16))
   expect(onSeek).toHaveBeenLastCalledWith(new Date(900).toISOString(), 'last')
 })
@@ -243,28 +244,28 @@ test('pointer capture keeps dragging outside row, release preserves selection an
   }
   render(<Harness />)
   const slider = screen.getByRole('slider')
-  slider.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect)
+  slider.getBoundingClientRect = () => ({ top: 100, height: 100 } as DOMRect)
   slider.setPointerCapture = vi.fn()
   slider.releasePointerCapture = vi.fn()
-  fireEvent.pointerMove(slider, { pointerId: 1, clientX: 150 })
+  fireEvent.pointerMove(slider, { pointerId: 1, clientY: 150 })
   expect(onSeek).not.toHaveBeenCalled()
-  fireEvent.pointerDown(slider, { pointerId: 1, button: 0, clientX: 150 })
+  fireEvent.pointerDown(slider, { pointerId: 1, button: 0, clientY: 150 })
   expect(slider.setPointerCapture).toHaveBeenCalledWith(1)
-  slider.getBoundingClientRect = () => ({ left: 100, width: 20 } as DOMRect)
-  fireEvent.pointerMove(slider, { pointerId: 1, clientX: 175 })
+  slider.getBoundingClientRect = () => ({ top: 100, height: 20 } as DOMRect)
+  fireEvent.pointerMove(slider, { pointerId: 1, clientY: 175 })
   expect(onSeek).toHaveBeenLastCalledWith(new Date(750).toISOString())
-  fireEvent.pointerLeave(slider, { pointerId: 1, clientX: 300 })
-  fireEvent.pointerMove(slider, { pointerId: 1, clientX: 300 })
+  fireEvent.pointerLeave(slider, { pointerId: 1, clientY: 300 })
+  fireEvent.pointerMove(slider, { pointerId: 1, clientY: 300 })
   expect(onSeek).toHaveBeenLastCalledWith(new Date(999).toISOString())
-  fireEvent.pointerUp(slider, { pointerId: 1, clientX: 300 })
+  fireEvent.pointerUp(slider, { pointerId: 1, clientY: 300 })
   expect(slider.releasePointerCapture).toHaveBeenCalledWith(1)
   expect(slider).toHaveAttribute('aria-valuenow', '999')
   fireEvent.keyDown(slider, { key: 'Home' })
   expect(onSeek).toHaveBeenLastCalledWith(new Date(0).toISOString())
-  fireEvent.keyDown(slider, { key: 'ArrowRight' })
+  fireEvent.keyDown(slider, { key: 'ArrowDown' })
   expect(onSeek).toHaveBeenLastCalledWith(new Date(999).toISOString())
-  slider.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect)
-  fireEvent.pointerDown(slider, { pointerId: 2, pointerType: 'touch', button: 0, clientX: 125 })
+  slider.getBoundingClientRect = () => ({ top: 100, height: 100 } as DOMRect)
+  fireEvent.pointerDown(slider, { pointerId: 2, pointerType: 'touch', button: 0, clientY: 125 })
   expect(onSeek).toHaveBeenLastCalledWith(new Date(250).toISOString())
 })
 
@@ -282,11 +283,14 @@ test('partial indexing stays unknown until final page; visible children are disc
   const child = { ...session, session_id: 'child', title: '原生子会话', native_parent: session }
   api.sessionChildren.mockResolvedValue({ sessions: [child], relations: [], next_cursor: null, search_scope: null, scanned_count: 1 })
   render(wrap(<SessionsView api={api} />))
+  await userEvent.click(await screen.findByRole('button', { name: '父会话' }))
   await waitFor(() => expect(api.sessionTimeline).toHaveBeenCalledWith(expect.objectContaining({ session_id: 'parent' }), expect.objectContaining({ cursor: 'next' }), expect.any(AbortSignal)))
-  expect(document.querySelector('.session-tree__index-status[aria-busy="true"]')).toBeInTheDocument()
+  const density = screen.getByRole('slider', { name: '定位 父会话 的消息' })
+  fireEvent.keyDown(density, { key: 'Home' })
+  expect(density).toHaveAttribute('aria-valuetext', expect.stringContaining('+ 条消息'))
   expect(api.sessionChildren).not.toHaveBeenCalledWith(expect.objectContaining({ session_id: 'child' }), expect.anything(), expect.anything())
   await act(async () => finish(timelinePage()))
-  await waitFor(() => expect(document.querySelector('.session-tree__index-status[aria-busy="true"]')).not.toBeInTheDocument())
+  await waitFor(() => expect(density.getAttribute('aria-valuetext')).not.toContain('+ 条消息'))
   await userEvent.click(screen.getByRole('button', { name: '展开 父会话' }))
   expect(await screen.findByRole('button', { name: '原生子会话' })).toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: '查看 fork 来源' }))
@@ -345,6 +349,7 @@ test('parent and child have independent start/end domains and workspace headings
   const { api, wrap } = fixture()
   const child = { ...session, session_id: 'child', title: '子会话', created_at: '2026-10-22T08:00:00Z', native_parent: session }
   api.sessionChildren.mockResolvedValue({ sessions: [child], relations: [], next_cursor: null, search_scope: null, scanned_count: 1 })
+  api.sessionMessages.mockImplementation(async (ref, filters) => ({ ...messagePage('正文', filters.at), session: ref.session_id === 'child' ? child : session }))
   api.sessionTimeline.mockImplementation(async (ref, filters) => ({ ...timelinePage(filters), session: ref.session_id === 'child' ? child : session,
     bounds: { start_at: ref.session_id === 'child' ? child.created_at : session.created_at, end_at: ref.session_id === 'child' ? '2026-10-22T08:00:00Z' : firstAt, end_state: 'known', indexed_from: null },
     points: [{ item_id: ref.session_id, turn_id: ref.session_id, role: 'user', at: ref.session_id === 'child' ? '2026-10-22T08:00:00Z' : firstAt }], points_coverage: 'complete', untimed_messages: ref.session_id === 'child' ? 1 : 0,
@@ -353,15 +358,20 @@ test('parent and child have independent start/end domains and workspace headings
   }))
   render(wrap(<SessionsView api={api} />))
   await userEvent.click(await screen.findByRole('button', { name: '展开 父会话' }))
+  await userEvent.click(await screen.findByRole('button', { name: '子会话' }))
   const childSlider = await screen.findByRole('slider', { name: '定位 子会话 的消息' })
   const ticks = (element: Element) => Number(element.getAttribute('data-second-cells') ?? 0)
   await waitFor(() => expect(ticks(childSlider)).toBe(1))
-  expect(ticks(screen.getByRole('slider', { name: '定位 父会话 的消息' }))).toBe(1)
+  expect(screen.queryByRole('slider', { name: '定位 父会话 的消息' })).not.toBeInTheDocument()
   expect(childSlider).toHaveAttribute('data-second-cells', '1')
   expect(ticks(document.querySelector('.session-tree__group')!)).toBe(0)
   expect(childSlider).toHaveAttribute('aria-valuemin', String(Date.parse(child.created_at)))
   expect(childSlider).toHaveAttribute('aria-valuemax', String(Date.parse(child.created_at)))
   expect(api.sessionTimeline.mock.calls[0][1]).not.toHaveProperty('from')
+  await userEvent.click(within(screen.getByRole('region', { name: '会话列表' })).getByRole('button', { name: '父会话' }))
+  const parentSlider = await screen.findByRole('slider', { name: '定位 父会话 的消息' })
+  await waitFor(() => expect(parentSlider).toHaveAttribute('aria-valuemin', String(Date.parse(session.created_at!))))
+  expect(ticks(parentSlider)).toBe(1)
 })
 
 test('an out-of-page parent is read before its child can appear in the tree', async () => {
@@ -373,10 +383,10 @@ test('an out-of-page parent is read before its child can appear in the tree', as
   api.readSession.mockResolvedValue({ session: parent })
   render(wrap(<SessionsView api={api} />))
   await waitFor(() => expect(api.readSession).toHaveBeenCalledWith(expect.objectContaining({ session_id: 'unloaded-parent' }), expect.any(AbortSignal)))
-  expect(await screen.findByRole('button', { name: '已读取的主会话' })).toBeVisible()
+  await waitFor(() => expect(screen.getByRole('button', { name: '已读取的主会话' })).toBeVisible())
   expect(screen.queryByRole('button', { name: '子项' })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: '展开 已读取的主会话' }))
-  expect(await screen.findByRole('button', { name: '子项' })).toBeVisible()
+  await waitFor(() => expect(screen.getByRole('button', { name: '子项' })).toBeVisible())
 })
 
 test('visible timelines automatically continue beyond three pages and stop at the native end', async () => {
@@ -387,6 +397,7 @@ test('visible timelines automatically continue beyond three pages and stop at th
     return { ...timelinePage(filters), points_coverage: page < 4 ? 'partial' : 'complete', next_cursor: page < 4 ? String(page + 1) : null }
   })
   render(wrap(<SessionsView api={api} />))
+  await userEvent.click(await screen.findByRole('button', { name: '父会话' }))
   await waitFor(() => expect(api.sessionTimeline).toHaveBeenCalledTimes(5))
   expect(api.sessionTimeline).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ cursor: '4' }), expect.any(AbortSignal))
   expect(screen.queryByRole('button', { name: /继续加载|继续读取/ })).not.toBeInTheDocument()
@@ -399,7 +410,7 @@ test('registration selects a configured source and only asks for the child nativ
   api.linkSessions = vi.fn<DashboardApi['linkSessions']>(async (input) => ({ relation: { id: 'registered', kind: 'delegation', origin: 'registered', parent: input.parent, child: input.child, source: input.source ?? '', created_at: null }, created: true }))
   render(wrap(<SessionRelations api={api} session={session} onReadSession={vi.fn()} />))
   await userEvent.click(screen.getByText('会话关系'))
-  const source = await screen.findByRole('button', { name: /子会话来源/ })
+  const source = await screen.findByRole('combobox', { name: '子会话来源' })
   await userEvent.click(source)
   await userEvent.click(await screen.findByRole('option', { name: 'Codex · 来源 2' }))
   expect(screen.queryByRole('textbox', { name: /provider|store_id/ })).not.toBeInTheDocument()
@@ -408,7 +419,7 @@ test('registration selects a configured source and only asks for the child nativ
   await waitFor(() => expect(api.linkSessions).toHaveBeenCalledWith({ parent: { provider: 'codex', store_id: 'store', session_id: 'parent' }, child: { provider: 'codex', store_id: 'second-store', session_id: 'child-thread' }, source: 'session-browser' }))
 })
 
-test('offscreen timelines do not queue native reads until their row approaches the viewport', async () => {
+test('list rows do not queue native timeline reads until a Session is selected', async () => {
   window.history.replaceState(null, '', '/?view=sessions&sessions=activity')
   const observers: Array<{ callback: (entries: Array<{ isIntersecting: boolean }>) => void; target?: Element }> = []
   vi.stubGlobal('IntersectionObserver', class {
@@ -422,9 +433,9 @@ test('offscreen timelines do not queue native reads until their row approaches t
   render(wrap(<SessionsView api={api} />))
   await screen.findByRole('button', { name: '屏幕外会话' })
   expect(api.sessionTimeline).not.toHaveBeenCalled()
-  await act(async () => observers.find(record => record.target?.classList.contains('session-tree__index-status'))!.callback([{ isIntersecting: true }]))
+  await userEvent.click(screen.getByRole('button', { name: '屏幕外会话' }))
   await waitFor(() => expect(api.sessionTimeline).toHaveBeenCalledTimes(1))
-  expect(api.sessionTimeline).toHaveBeenCalledWith(expect.objectContaining({ session_id: 'parent' }), expect.anything(), expect.any(AbortSignal))
+  expect(api.sessionTimeline).toHaveBeenCalledWith(expect.objectContaining({ session_id: 'far' }), expect.anything(), expect.any(AbortSignal))
 })
 
 test('normal reading opens recent content and automatically keeps its anchor when older messages arrive', async () => {
@@ -467,7 +478,7 @@ test('the sheet opens on selection, collapses without losing its reader, and ope
   await userEvent.click(screen.getByRole('button', { name: '父会话' }))
   expect(await screen.findByText('正文')).toBeInTheDocument()
   const reader = document.querySelector('.session-detail__conversation')
-  await userEvent.click(screen.getByRole('button', { name: '收起会话面板' }))
+  await userEvent.click(screen.getByRole('button', { name: '关闭对话' }))
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '会话面板' })).not.toBeInTheDocument())
   expect(document.querySelector('.session-detail__conversation')).toBe(reader)
   await userEvent.click(screen.getByRole('button', { name: '展开会话面板' }))
@@ -484,6 +495,7 @@ test('recent messages also seeks the latest item and explicitly resumes paused r
     { item_id: 'latest', turn_id: 'turn', role: 'assistant', at: secondAt },
   ] }))
   render(wrap(<SessionsView api={api} />))
+  await userEvent.click(await screen.findByRole('button', { name: '父会话' }))
   const slider = await screen.findByRole('slider', { name: '定位 父会话 的消息' })
   await waitFor(() => expect(slider).toHaveAttribute('data-second-cells', '2'))
   fireEvent.keyDown(slider, { key: 'Home' })
@@ -507,15 +519,15 @@ test('unread history never seeks to a fabricated nearby message, and equal-time 
     { item_id: 'a', turn_id: 't', role: 'user', at }, { item_id: 'b', turn_id: 't', role: 'assistant', at },
   ]} onSeek={onSeek} />)
   const slider = screen.getByRole('slider')
-  slider.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect)
-  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientX: 10 })
+  slider.getBoundingClientRect = () => ({ top: 0, height: 100 } as DOMRect)
+  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientY: 10 })
   await act(async () => vi.advanceTimersByTime(200))
   expect(onSeek).not.toHaveBeenCalled()
   expect(slider).not.toHaveAttribute('aria-valuetext', expect.stringContaining('0 条消息'))
   expect(screen.queryByText(/尚未读取/)).not.toBeInTheDocument()
   fireEvent.keyDown(slider, { key: 'Home' })
   expect(onSeek).toHaveBeenLastCalledWith(at, 'a')
-  fireEvent.keyDown(slider, { key: 'ArrowRight' })
+  fireEvent.keyDown(slider, { key: 'ArrowDown' })
   expect(onSeek).toHaveBeenLastCalledWith(at, 'b')
 })
 
@@ -551,22 +563,22 @@ test('the cursor and tooltip follow reading while focused and leave a hover prev
   ]} selectedAt={new Date(900).toISOString()} selectedItemId="late" readingAt={new Date(reading).toISOString()} onSeek={onSeek} />
   const { rerender } = render(density(900))
   const slider = screen.getByRole('slider')
-  slider.getBoundingClientRect = () => ({ left: 0, width: 100 } as DOMRect)
+  slider.getBoundingClientRect = () => ({ top: 0, height: 100 } as DOMRect)
   fireEvent.focus(slider)
   fireEvent.keyDown(slider, { key: 'End' })
   expect(onSeek).toHaveBeenLastCalledWith(new Date(900).toISOString(), 'late')
   onSeek.mockClear()
   rerender(density(400))
   expect(slider).toHaveAttribute('aria-valuenow', '400')
-  expect(slider.querySelector('.session-density__cursor')).toHaveStyle({ left: '40%' })
-  expect(slider.querySelector('.session-density__reading')).toHaveStyle({ left: '40%' })
-  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientX: 80 })
+  expect(slider.querySelector('.session-density__cursor')).toHaveStyle({ top: '40%' })
+  expect(slider.querySelector('.session-density__reading')).toHaveStyle({ top: '40%' })
+  fireEvent.pointerMove(slider, { pointerType: 'mouse', clientY: 80 })
   expect(slider).toHaveAttribute('aria-valuenow', '800')
-  expect(slider.querySelector('.session-density__reading')).toHaveStyle({ left: '40%' })
+  expect(slider.querySelector('.session-density__reading')).toHaveStyle({ top: '40%' })
   fireEvent.pointerLeave(slider)
   await act(async () => vi.advanceTimersByTime(200))
   expect(slider).toHaveAttribute('aria-valuenow', '400')
-  expect(slider.querySelector('.session-density__cursor')).toHaveStyle({ left: '40%' })
+  expect(slider.querySelector('.session-density__cursor')).toHaveStyle({ top: '40%' })
   expect(onSeek).not.toHaveBeenCalled()
 })
 
@@ -592,14 +604,14 @@ test('reduced motion positions the message immediately without scheduling animat
   scroll.mockRestore()
 })
 
-test('every Tree item has exactly title, subtitle and timeline rows without a view switch', async () => {
+test('Tree items keep title and subtitle compact and load timelines only in the reader', async () => {
   window.history.replaceState(null, '', '/?view=sessions')
   const { api, wrap } = fixture()
   render(wrap(<SessionsView api={api} />))
   await screen.findByRole('button', { name: '父会话' })
   expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   const row = document.querySelector('.session-tree__row')!
-  expect([...row.children].map(child => child.className)).toEqual(['session-tree__title-row', 'session-tree__workspace-row', 'session-tree__heat'])
+  expect([...row.children].map(child => child.className)).toEqual(['session-tree__title-row', 'session-tree__workspace-row'])
   expect(row.querySelector('.session-tree__meta')).toBeNull()
 })
 
@@ -616,8 +628,8 @@ test('registered and native children appear only below their main session', asyn
   expect(document.querySelectorAll('.session-tree__workspace > .session-tree__branch')).toHaveLength(1)
   expect(screen.queryByRole('button', { name: '协作子项' })).not.toBeInTheDocument()
   await userEvent.click(expand)
-  expect(await screen.findByRole('button', { name: '校验服务端权限' })).toBeVisible()
-  expect(screen.getByRole('button', { name: '协作子项' })).toBeVisible()
+  await waitFor(() => expect(screen.getByRole('button', { name: '校验服务端权限' })).toBeVisible())
+  await waitFor(() => expect(screen.getByRole('button', { name: '协作子项' })).toBeVisible())
   expect(document.querySelectorAll('.session-tree__workspace > .session-tree__branch')).toHaveLength(1)
 })
 

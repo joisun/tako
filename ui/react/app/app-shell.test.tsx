@@ -9,7 +9,7 @@ import { AppProviders } from './app-providers'
 import { DashboardApp } from './dashboard-app'
 
 const meta: DashboardMeta = {
-  service: 'rillo',
+  service: 'tako',
   service_version: '0.8.0',
   api_version: 'v1',
   capabilities: {
@@ -98,6 +98,7 @@ function dashboardApi(runRecord: RunRecord = run): DashboardApi {
     schedule: vi.fn(async () => ({ job: { ...schedule, prompt: 'Create report.' } })),
     scheduleRuns: vi.fn(async () => ({ runs: [runRecord], dispatches: [] })),
     scheduledRun: vi.fn(async () => ({ run: runRecord })),
+    scheduledRunConversation: vi.fn(async () => ({ run_id: runRecord.id, session_id: runRecord.thread_id!, messages: [], truncated: false })),
     scheduledRunLog: vi.fn(async () => ({ stream: 'stdout' as const, content: 'completed\n' })),
     markScheduledRunReviewed: vi.fn(async () => ({
       run: { ...runRecord, reviewed_at: '2026-08-28T03:00:00.000Z' }, changed: true,
@@ -136,15 +137,15 @@ test('only Sessions and Scheduled remain and old Tasks URLs open activity', asyn
   window.history.replaceState(null, '', '/?view=tasks')
   const api = dashboardApi()
   renderApp(api)
-  expect(screen.getByRole('heading', { name: 'Rillo' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Sessions' })).toHaveAttribute('aria-current', 'page')
+  expect(screen.getByRole('heading', { name: 'TAKO' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Sessions' })).toHaveAttribute('aria-pressed', 'true')
   expect(screen.queryByRole('button', { name: 'Tasks' })).not.toBeInTheDocument()
-  expect(screen.getByRole('region', { name: '活跃时间轴' })).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: '会话列表' })).toBeInTheDocument()
   expect(screen.queryByRole('tab', { name: 'List' })).not.toBeInTheDocument()
   await waitFor(() => expect(window.location.search).toContain('view=sessions'))
-  await userEvent.click(screen.getByRole('button', { name: 'Scheduled' }))
-  expect(await screen.findByText('1 个计划')).toBeInTheDocument()
-  expect(window.location.search).toContain('view=scheduled')
+  await userEvent.click(screen.getByRole('button', { name: 'Actions' }))
+  expect(await screen.findByText('1 个 Action')).toBeInTheDocument()
+  expect(window.location.search).toContain('view=actions')
   expect(screen.getByTestId('global-actions')).toHaveAttribute('data-safe-area', 'global-actions')
 })
 
@@ -153,7 +154,7 @@ test('opens Run Review and reads durable Run facts and logs', async () => {
   const api = dashboardApi()
   renderApp(api)
 
-  await user.click(screen.getByRole('button', { name: 'Scheduled' }))
+  await user.click(screen.getByRole('button', { name: 'Actions' }))
   await user.click(await screen.findByRole('button', {
     name: '查看 Codex update report 的执行记录',
   }))
@@ -161,9 +162,11 @@ test('opens Run Review and reads durable Run facts and logs', async () => {
   expect(await screen.findByRole('heading', { name: 'Codex update report' })).toBeInTheDocument()
   expect(await screen.findByText('Report completed.')).toBeInTheDocument()
   expect(screen.getByText('report.md')).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'stdout' }))
-  expect(await screen.findByText('completed', { selector: '.run-detail__log code' })).toBeInTheDocument()
-  expect(api.scheduledRunLog).toHaveBeenCalledWith('run-a', { stream: 'stdout', tail: 32 * 1024 })
+  await user.click(screen.getByRole('tab', { name: '产出文件' }))
+  expect(screen.getByText('report.md')).toBeVisible()
+  await user.click(screen.getByRole('tab', { name: '本轮输入' }))
+  expect(screen.getByLabelText('本轮输入 JSON')).toHaveTextContent('null')
+  expect(api.scheduledRunConversation).toHaveBeenCalledWith('run-a')
 })
 
 test('streams an interactive Run and steers the authoritative Turn without an optimistic bubble', async () => {
@@ -195,7 +198,7 @@ test('streams an interactive Run and steers the authoritative Turn without an op
   vi.stubGlobal('EventSource', FakeRunEventSource)
   renderApp(api)
 
-  await user.click(screen.getByRole('button', { name: 'Scheduled' }))
+  await user.click(screen.getByRole('button', { name: 'Actions' }))
   await user.click(await screen.findByRole('button', {
     name: '查看 Codex update report 的执行记录',
   }))

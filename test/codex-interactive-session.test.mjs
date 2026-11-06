@@ -26,7 +26,8 @@ function fakeClient({ skillsResponse } = {}) {
       if (method === 'turn/start') {
         return { turn: { id: 'private-turn', status: 'inProgress', items: [] } }
       }
-      if (method === 'turn/steer' || method === 'turn/interrupt') return {}
+      if (method === 'turn/steer') return { turnId: 'private-turn' }
+      if (method === 'turn/interrupt') return {}
       throw new Error(`unexpected method ${method}`)
     },
     notify() {},
@@ -86,7 +87,7 @@ test('Codex interactive session streams a private Turn and steers it through a p
   assert.deepEqual(client.requests.slice(0, 3), [
     {
       method: 'initialize',
-      params: { clientInfo: { name: 'rillo', title: 'Rillo', version: 'source' } },
+      params: { clientInfo: { name: 'tako', title: 'TAKO', version: 'source' } },
     },
     {
       method: 'thread/start',
@@ -236,7 +237,7 @@ test('Codex interactive session applies integration launch isolation and disable
   assert.deepEqual(client.requests.slice(0, 3), [
     {
       method: 'initialize',
-      params: { clientInfo: { name: 'rillo', title: 'Rillo', version: 'source' } },
+      params: { clientInfo: { name: 'tako', title: 'TAKO', version: 'source' } },
     },
     {
       method: 'skills/list',

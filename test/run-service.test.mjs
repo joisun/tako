@@ -314,7 +314,7 @@ test('canceling during runtime resolution prevents process launch', async (t) =>
   assert.equal(launches, 0)
 })
 
-test('shutdown does not wait for a runtime resolution that never settles', async (t) => {
+test('shutdown preserves a durable queue without waiting for runtime resolution', async (t) => {
   const resolution = deferred()
   const current = await fixture(t, {
     registry: {
@@ -332,12 +332,12 @@ test('shutdown does not wait for a runtime resolution that never settles', async
 
   await current.service.shutdown()
 
-  const canceled = current.runStore.get(run.id)
-  assert.equal(canceled.status, 'canceled')
-  assert.equal(canceled.error_code, 'RUN_CANCELED')
+  const queued = current.runStore.get(run.id)
+  assert.equal(queued.status, 'queued')
+  assert.equal(queued.error_code, null)
 })
 
-test('recover marks abandoned queued and running rows interrupted', async (t) => {
+test('recover resumes queued work instead of treating it as an interrupted execution', async (t) => {
   const current = await fixture(t)
   const queued = current.runStore.create({
     schedule: SCHEDULE,
@@ -348,8 +348,10 @@ test('recover marks abandoned queued and running rows interrupted', async (t) =>
     idempotency_key: 'recovery',
   })
 
-  assert.equal(current.service.recover(), 1)
-  assert.equal(current.runStore.get(queued.id).status, 'interrupted')
+  assert.equal(current.service.recover(), 0)
+  assert.equal(current.runStore.get(queued.id).status, 'queued')
+  await current.service.whenIdle()
+  assert.equal(current.runStore.get(queued.id).status, 'succeeded')
   assert.equal(current.service.recover(), 0)
 })
 

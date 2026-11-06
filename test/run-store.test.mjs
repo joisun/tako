@@ -65,7 +65,7 @@ test('Run creation is durable before launch and deduplicates an occurrence', asy
   })
 })
 
-test('one Schedule can have only one queued or running Run', async (t) => {
+test('independent calls to one Action create distinct durable queued Runs', async (t) => {
   await withStore(t, ({ store }) => {
     const definition = schedule()
     store.create({
@@ -76,14 +76,17 @@ test('one Schedule can have only one queued or running Run', async (t) => {
       scheduled_for: null,
       idempotency_key: 'request-1',
     })
-    assert.throws(() => store.create({
+    const second = store.create({
       schedule: definition,
       runtime_id: 'codex',
       origin: 'manual',
       occurrence_key: null,
       scheduled_for: null,
       idempotency_key: 'request-2',
-    }), { code: 'RUN_ALREADY_ACTIVE' })
+    })
+    assert.equal(second.status, 'queued')
+    assert.equal(store.queued().length, 2)
+    assert.notEqual(store.queued()[0].id, store.queued()[1].id)
   })
 })
 

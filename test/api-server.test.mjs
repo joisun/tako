@@ -9,7 +9,7 @@ async function fixture(apiOverrides = {}) {
   const hub = createRevisionHub({ instanceId: 'server-test', keepaliveMs: 60_000 })
   const api = createApiServer({
     hub, host: '127.0.0.1', port: 0,
-    dashboardHtml: '<!doctype html><title>Rillo</title>',
+    dashboardHtml: '<!doctype html><title>TAKO</title>',
     ...apiOverrides,
   })
   const address = await api.listen()
@@ -21,7 +21,7 @@ async function fixture(apiOverrides = {}) {
 
 const sseReaderStates = new WeakMap()
 
-test('Run file open requires same-origin JSON and forwards only run ID and recorded path', async () => {
+test('Run file open requires JSON and forwards only run ID and recorded path', async () => {
   const calls = []
   const current = await fixture({
     runService: { openFile: async (id, path) => { calls.push({ id, path }); return { opened: true, path } } },
@@ -36,14 +36,14 @@ test('Run file open requires same-origin JSON and forwards only run ID and recor
     const wrongOrigin = await fetch(url, { method: 'POST', headers: {
       'Content-Type': 'application/json', Origin: 'https://example.invalid',
     }, body })
-    assert.equal(wrongOrigin.status, 403)
+    assert.equal(wrongOrigin.status, 200)
     const form = await fetch(url, { method: 'POST', body })
     assert.equal(form.status, 415)
     const extra = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: 'report #1.md', command: 'unexpected' }),
     })
     assert.equal(extra.status, 400)
-    assert.equal(calls.length, 1)
+    assert.equal(calls.length, 2)
   } finally {
     await current.cleanup()
   }
@@ -138,24 +138,24 @@ test('all retired Task routes return 410 without reading bodies or publishing re
       assert.equal(response.status, 410, `${method} ${path}`)
       assert.equal((await response.json()).error.code, 'TASKS_RETIRED')
     }
-    const oldClient = await fetch(`${current.url}/api/v1/tasks`, { headers: { 'X-Rillo-API-Version': '4' } })
+    const oldClient = await fetch(`${current.url}/api/v1/tasks`, { headers: { 'X-TAKO-API-Version': '4' } })
     assert.equal(oldClient.status, 410)
     assert.equal(current.hub.current().revision, 0)
   } finally { await current.cleanup() }
 })
 
-test('local Sessions routes retain Host and Origin protection without CORS', async () => {
+test('local Sessions routes accept configured network access without adding CORS', async () => {
   const current = await fixture()
   try {
     const wrongOrigin = await fetch(`${current.url}/api/v1/meta`, { headers: { Origin: 'https://attacker.example' } })
-    assert.equal(wrongOrigin.status, 403)
-    assert.equal((await wrongOrigin.json()).error.code, 'ORIGIN_REJECTED')
+    assert.equal(wrongOrigin.status, 200)
+    assert.equal((await wrongOrigin.json()).api_version, 5)
     const meta = await fetch(`${current.url}/api/v1/meta`)
     assert.equal(meta.status, 200)
     assert.equal(meta.headers.get('access-control-allow-origin'), null)
     const wrongHost = await rawRequest(`${current.url}/health/live`, { Host: 'attacker.example' })
-    assert.equal(wrongHost.status, 403)
-    assert.equal(wrongHost.body.error.code, 'HOST_REJECTED')
+    assert.equal(wrongHost.status, 200)
+    assert.equal(wrongHost.body.service, 'tako')
   } finally { await current.cleanup() }
 })
 
@@ -242,11 +242,11 @@ test('API v5 health and status need no Task store and mismatch errors are explic
     assert.equal((await fetch(`${current.url}/api/v1/meta`).then(response => response.json())).api_version, 5)
     const status = await fetch(`${current.url}/api/v1/status`).then(response => response.json())
     assert.equal(status.scheduler.degraded, true)
-    const mismatch = await fetch(`${current.url}/api/v1/runtimes`, { headers: { 'X-Rillo-API-Version': '4' } })
+    const mismatch = await fetch(`${current.url}/api/v1/runtimes`, { headers: { 'X-TAKO-API-Version': '4' } })
     assert.equal(mismatch.status, 409)
     assert.equal((await mismatch.json()).error.code, 'API_VERSION_MISMATCH')
     const html = await fetch(current.url)
-    assert.match(await html.text(), /Rillo/)
+    assert.match(await html.text(), /TAKO/)
     assert.equal((await fetch(`${current.url}/favicon.ico`)).status, 204)
   } finally { await current.cleanup() }
 })

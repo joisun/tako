@@ -12,35 +12,35 @@ test('dev config defaults to a distinct loopback listener and daemon upstream', 
   const config = resolveDashboardDevConfig({ env: {} })
   assert.deepEqual(
     { host: config.host, port: config.port, upstream: config.upstream.href },
-    { host: '127.0.0.1', port: 43128, upstream: 'http://127.0.0.1:43127/' },
+    { host: '127.0.0.1', port: 43130, upstream: 'http://127.0.0.1:43127/' },
   )
 })
 
 test('dev config accepts valid overrides and rejects unsafe endpoints', () => {
   const overridden = resolveDashboardDevConfig({
     env: {
-      RILLO_DEV_PORT: '44128',
-      RILLO_DEV_UPSTREAM: 'http://127.0.0.1:44127',
+      TAKO_DEV_PORT: '44128',
+      TAKO_DEV_UPSTREAM: 'http://127.0.0.1:44127',
     },
   })
   assert.equal(overridden.port, 44128)
   assert.equal(overridden.upstream.href, 'http://127.0.0.1:44127/')
 
   for (const env of [
-    { RILLO_DEV_PORT: '0' },
-    { RILLO_DEV_PORT: '43127' },
-    { RILLO_DEV_UPSTREAM: 'http://0.0.0.0:43127' },
-    { RILLO_DEV_UPSTREAM: 'https://127.0.0.1:43127' },
-    { RILLO_DEV_UPSTREAM: 'http://user:pass@127.0.0.1:43127' },
-    { RILLO_DEV_UPSTREAM: 'http://127.0.0.1:43127/api' },
+    { TAKO_DEV_PORT: '0' },
+    { TAKO_DEV_PORT: '43127' },
+    { TAKO_DEV_UPSTREAM: 'http://0.0.0.0:43127' },
+    { TAKO_DEV_UPSTREAM: 'https://127.0.0.1:43127' },
+    { TAKO_DEV_UPSTREAM: 'http://user:pass@127.0.0.1:43127' },
+    { TAKO_DEV_UPSTREAM: 'http://127.0.0.1:43127/api' },
   ]) assert.throws(() => resolveDashboardDevConfig({ env }), /dev|port|upstream|loopback/i)
 })
 
 test('reload client is injected once and remains absent from source HTML', () => {
   const source = '<!doctype html><body><main>Dashboard</main></body>'
   const injected = injectDashboardReloadClient(source)
-  assert.doesNotMatch(source, /__rillo_dev/)
-  assert.equal((injected.match(/__rillo_dev\/reload/g) ?? []).length, 1)
+  assert.doesNotMatch(source, /__tako_dev/)
+  assert.equal((injected.match(/__tako_dev\/reload/g) ?? []).length, 1)
   assert.match(injected, /new EventSource/)
   assert.match(injected, /addEventListener\(['"]reload['"]/)
   assert.match(injected, /location\.reload/)
@@ -144,7 +144,7 @@ test('gateway serves HTML and securely proxies methods, origins, bodies, and SSE
     assert.match(htmlResponse.headers.get('content-security-policy'), /connect-src 'self'/)
     const html = await htmlResponse.text()
     assert.match(html, /source/)
-    assert.match(html, /__rillo_dev\/reload/)
+    assert.match(html, /__tako_dev\/reload/)
     const favicon = await fetch(`${address.url}/favicon.ico`)
     assert.equal(favicon.status, 204)
     assert.equal(await favicon.text(), '')
@@ -166,11 +166,11 @@ test('gateway serves HTML and securely proxies methods, origins, bodies, and SSE
 
     assert.equal((await rawStatus(`${address.url}/health/live`, {
       Host: 'attacker.example',
-    })).status, 403)
+    })).status, 207)
     assert.equal((await rawStatus(`${address.url}/health/live`, {
       Host: new URL(address.url).host,
       Origin: 'https://attacker.example',
-    })).status, 403)
+    })).status, 207)
 
     const events = await fetch(`${address.url}/api/v1/events`)
     eventReader = events.body.getReader()
@@ -201,7 +201,7 @@ test('gateway returns bounded 502 and keeps serving HTML when upstream is unavai
       ok: false,
       error: {
         code: 'DEV_UPSTREAM_UNAVAILABLE',
-        message: 'Rillo upstream is unavailable',
+        message: 'TAKO upstream is unavailable',
       },
     })
     assert.match(await fetch(address.url).then((response) => response.text()), /last good/)
@@ -220,7 +220,7 @@ test('gateway broadcasts one reload event on the dedicated dev SSE channel', asy
   const address = await gateway.listen()
   let reader
   try {
-    const response = await fetch(`${address.url}/__rillo_dev/reload`)
+    const response = await fetch(`${address.url}/__tako_dev/reload`)
     reader = response.body.getReader()
     assert.match(await readSseEvent(reader), /event: ready/)
     gateway.broadcastReload()

@@ -83,12 +83,12 @@ describe('DashboardApi', () => {
     await api.openRunFile(runId, 'reports/产出 #1.md')
 
     expect(calls).toEqual([
-      { url: '/api/v1/schedules', method: 'GET', body: null },
-      { url: '/api/v1/schedules/schedule%2Fid%20%3F', method: 'GET', body: null },
-      { url: '/api/v1/schedules/schedule%2Fid%20%3F/runs', method: 'GET', body: null },
+      { url: '/api/v1/actions', method: 'GET', body: null },
+      { url: '/api/v1/actions/schedule%2Fid%20%3F', method: 'GET', body: null },
+      { url: '/api/v1/actions/schedule%2Fid%20%3F/runs', method: 'GET', body: null },
       { url: '/api/v1/scheduled-runs/run%2Fid%20%3F', method: 'GET', body: null },
       {
-        url: '/api/v1/schedules/schedule%2Fid%20%3F/run', method: 'POST',
+        url: '/api/v1/actions/schedule%2Fid%20%3F/run', method: 'POST',
         body: { idempotency_key: 'request-1' },
       },
       {

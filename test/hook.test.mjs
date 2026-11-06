@@ -28,8 +28,8 @@ function runHook(script, input, env = {}) {
 }
 
 async function hookFixture() {
-  const homeDirectory = await mkdtemp(join(tmpdir(), 'rillo-root-hook-'))
-  const configDirectory = join(homeDirectory, '.config', 'rillo')
+  const homeDirectory = await mkdtemp(join(tmpdir(), 'tako-root-hook-'))
+  const configDirectory = join(homeDirectory, '.config', 'tako')
   await mkdir(configDirectory, { recursive: true })
   await writeFile(join(configDirectory, 'config.json'), JSON.stringify({
     output_dir: '.',
@@ -51,7 +51,7 @@ async function hookFixture() {
     requests,
     env: {
       HOME: homeDirectory,
-      RILLO_SERVER_URL: `http://127.0.0.1:${port}`,
+      TAKO_SERVER_URL: `http://127.0.0.1:${port}`,
     },
     async cleanup() {
       await new Promise((resolveClose, reject) => server.close((error) => (
@@ -100,7 +100,7 @@ test('canonical hooks emit the same Event Envelope contract and never block Stop
 
     assert.match(results[1].hookSpecificOutput.additionalContext, /agent_work_context/)
     assert.match(results[1].hookSpecificOutput.additionalContext, /"execution_id":"execution-/)
-    assert.doesNotMatch(results[1].hookSpecificOutput.additionalContext, /rillo_sync_tree/)
+    assert.doesNotMatch(results[1].hookSpecificOutput.additionalContext, /tako_sync_tree/)
     assert.deepEqual(results[3], {})
     assert.deepEqual(fixture.requests.map(({ event_type }) => event_type), [
       'session.started',
@@ -117,8 +117,8 @@ test('canonical hooks emit the same Event Envelope contract and never block Stop
 })
 
 test('canonical lifecycle hooks fail open while daemon is unavailable', async () => {
-  const homeDirectory = await mkdtemp(join(tmpdir(), 'rillo-root-fail-open-'))
-  const configDirectory = join(homeDirectory, '.config', 'rillo')
+  const homeDirectory = await mkdtemp(join(tmpdir(), 'tako-root-fail-open-'))
+  const configDirectory = join(homeDirectory, '.config', 'tako')
   await mkdir(configDirectory, { recursive: true })
   await writeFile(join(configDirectory, 'config.json'), JSON.stringify({
     output_dir: '.',
@@ -127,7 +127,7 @@ test('canonical lifecycle hooks fail open while daemon is unavailable', async ()
   }))
   const env = {
     HOME: homeDirectory,
-    RILLO_SERVER_URL: 'http://127.0.0.1:9',
+    TAKO_SERVER_URL: 'http://127.0.0.1:9',
   }
   const input = {
     session_id: 'session-1',

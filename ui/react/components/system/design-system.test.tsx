@@ -4,17 +4,16 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, test } from 'vitest'
 
-import { IconButton } from './icon-button'
 import { Button } from '../ui/button'
-import { Tab, TabList, Tabs } from '../ui/tabs'
-import { Tooltip, TooltipContent } from '../ui/tooltip'
+import { TabsTrigger, TabsList, Tabs } from '../ui/tabs'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 describe('Dashboard design system', () => {
   test('uses compact controls without losing accessible names', () => {
     render(
       <div>
         <Button>Continue</Button>
-        <IconButton aria-label="Open settings">S</IconButton>
+        <Button isIconOnly aria-label="Open settings">S</Button>
       </div>,
     )
 
@@ -26,8 +25,8 @@ describe('Dashboard design system', () => {
   test('makes tooltip content available from keyboard focus', async () => {
     const user = userEvent.setup()
     render(
-      <Tooltip delay={0}>
-        <Button>Inspect</Button>
+      <Tooltip>
+        <TooltipTrigger delay={0} render={<Button />}>Inspect</TooltipTrigger>
         <TooltipContent>Inspect task details</TooltipContent>
       </Tooltip>,
     )
@@ -39,11 +38,11 @@ describe('Dashboard design system', () => {
   test('supports arrow-key navigation between tabs', async () => {
     const user = userEvent.setup()
     render(
-      <Tabs defaultSelectedKey="tasks">
-        <TabList>
-          <Tab id="tasks">Tasks</Tab>
-          <Tab id="scheduled">Scheduled</Tab>
-        </TabList>
+      <Tabs defaultValue="tasks">
+        <TabsList>
+          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="scheduled">Scheduled</TabsTrigger>
+        </TabsList>
       </Tabs>,
     )
     const tasks = screen.getByRole('tab', { name: 'Tasks' })

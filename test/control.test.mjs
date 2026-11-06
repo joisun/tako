@@ -15,15 +15,15 @@ test('LaunchAgent plist fixes Node/daemon paths, lifecycle policy, logs, and XML
   const plist = renderLaunchAgentPlist({
     label: LAUNCH_AGENT_LABEL,
     nodePath: '/opt/Node & Tools/bin/node',
-    daemonPath: '/Users/me/rillo/server/daemon.mjs',
-    workingDirectory: '/Users/me/rillo',
-    stdoutPath: '/Users/me/Library/Logs/rillo/out.log',
-    stderrPath: '/Users/me/Library/Logs/rillo/error.log',
+    daemonPath: '/Users/me/tako/server/daemon.mjs',
+    workingDirectory: '/Users/me/tako',
+    stdoutPath: '/Users/me/Library/Logs/tako/out.log',
+    stderrPath: '/Users/me/Library/Logs/tako/error.log',
   })
 
-  assert.match(plist, /<string>com\.joi\.rillo\.daemon<\/string>/)
+  assert.match(plist, /<string>com\.joi\.tako\.daemon<\/string>/)
   assert.match(plist, /<string>\/opt\/Node &amp; Tools\/bin\/node<\/string>/)
-  assert.match(plist, /<string>\/Users\/me\/rillo\/server\/daemon\.mjs<\/string>/)
+  assert.match(plist, /<string>\/Users\/me\/tako\/server\/daemon\.mjs<\/string>/)
   assert.match(plist, /<key>RunAtLoad<\/key>\s*<true\/>/)
   assert.match(plist, /<key>KeepAlive<\/key>\s*<true\/>/)
   assert.match(plist, /StandardOutPath[\s\S]*out\.log/)
@@ -31,8 +31,8 @@ test('LaunchAgent plist fixes Node/daemon paths, lifecycle policy, logs, and XML
 })
 
 test('controller install is repeatable and uninstall removes only the plist', async () => {
-  const homeDirectory = await mkdtemp(join(tmpdir(), 'rillo-control-'))
-  const projectRoot = join(homeDirectory, 'projects', 'rillo')
+  const homeDirectory = await mkdtemp(join(tmpdir(), 'tako-control-'))
+  const projectRoot = join(homeDirectory, 'projects', 'tako')
   const calls = []
   let builds = 0
   const run = async (command, args, options = {}) => {
@@ -57,8 +57,8 @@ test('controller install is repeatable and uninstall removes only the plist', as
     assert.equal(installed.label, LAUNCH_AGENT_LABEL)
     const plist = await readFile(installed.plistPath, 'utf8')
     assert.match(plist, /\/opt\/homebrew\/bin\/node/)
-    assert.match(plist, /projects\/rillo\/server\/daemon\.mjs/)
-    assert.match(plist, /<key>WorkingDirectory<\/key>\s*<string>[^<]*projects\/rillo<\/string>/)
+    assert.match(plist, /projects\/tako\/server\/daemon\.mjs/)
+    assert.match(plist, /<key>WorkingDirectory<\/key>\s*<string>[^<]*projects\/tako<\/string>/)
     assert.deepEqual(calls.slice(-2).map(({ args }) => args[0]), ['bootout', 'bootstrap'])
 
     await writeFile(controller.paths.stdoutPath, 'keep-log')
@@ -71,8 +71,8 @@ test('controller install is repeatable and uninstall removes only the plist', as
 })
 
 test('controller uninstall delegates schedule cleanup through the owned-unit verifier and preserves Scheduler data', async () => {
-  const homeDirectory = await mkdtemp(join(tmpdir(), 'rillo-control-schedules-'))
-  const projectRoot = join(homeDirectory, 'projects', 'rillo')
+  const homeDirectory = await mkdtemp(join(tmpdir(), 'tako-control-schedules-'))
+  const projectRoot = join(homeDirectory, 'projects', 'tako')
   const known = [
     '11111111-1111-4111-8111-111111111111',
     '22222222-2222-4222-8222-222222222222',
@@ -86,8 +86,8 @@ test('controller uninstall delegates schedule cleanup through the owned-unit ver
       uid: 502,
       config: {
         serverBaseUrl: 'http://127.0.0.1:43127',
-        schedulerDatabasePath: join(homeDirectory, '.config', 'rillo', 'scheduler.sqlite'),
-        schedulerLogsDirectory: join(homeDirectory, '.config', 'rillo', 'schedules', 'logs'),
+        schedulerDatabasePath: join(homeDirectory, '.config', 'tako', 'scheduler.sqlite'),
+        schedulerLogsDirectory: join(homeDirectory, '.config', 'tako', 'schedules', 'logs'),
       },
       run: async (command, args, options = {}) => {
         calls.push(['launchctl', command, args, options.allowFailure ?? false])
@@ -98,7 +98,7 @@ test('controller uninstall delegates schedule cleanup through the owned-unit ver
         return {
           removed: known.map((job_id) => ({
             job_id,
-            label: `com.joi.rillo.schedule.${job_id}`,
+            label: `com.joi.tako.schedule.${job_id}`,
           })),
           skipped: [],
         }
@@ -110,8 +110,8 @@ test('controller uninstall delegates schedule cleanup through the owned-unit ver
       ['cleanup-legacy', 502, homeDirectory],
       ['launchctl', 'launchctl', ['bootout', 'gui/502', controller.paths.plistPath], true],
     ])
-    assert.ok(result.preserved.includes(join(homeDirectory, '.config', 'rillo', 'scheduler.sqlite')))
-    assert.ok(result.preserved.includes(join(homeDirectory, '.config', 'rillo', 'schedules', 'logs')))
+    assert.ok(result.preserved.includes(join(homeDirectory, '.config', 'tako', 'scheduler.sqlite')))
+    assert.ok(result.preserved.includes(join(homeDirectory, '.config', 'tako', 'schedules', 'logs')))
   } finally {
     await rm(homeDirectory, { recursive: true, force: true })
   }
@@ -119,7 +119,7 @@ test('controller uninstall delegates schedule cleanup through the owned-unit ver
 
 test('controller rejects old Node and a foreign service occupying the configured port', async () => {
   const common = {
-    projectRoot: '/projects/rillo', homeDirectory: '/Users/me', nodePath: '/node', uid: 502,
+    projectRoot: '/projects/tako', homeDirectory: '/Users/me', nodePath: '/node', uid: 502,
     config: { serverBaseUrl: 'http://127.0.0.1:43127' },
     run: async () => ({ code: 0, stdout: '', stderr: '' }),
     build: async () => {},
@@ -139,14 +139,14 @@ test('controller rejects old Node and a foreign service occupying the configured
 })
 
 test('release install validates the prebuilt dashboard without invoking the source builder', async () => {
-  const projectRoot = await mkdtemp(join(tmpdir(), 'rillo-prebuilt-'))
+  const projectRoot = await mkdtemp(join(tmpdir(), 'tako-prebuilt-'))
   const calls = []
   try {
     const run = async (...args) => { calls.push(args) }
     const build = createInstallBuildStep({
       projectRoot,
       nodePath: '/opt/homebrew/bin/node',
-      env: { RILLO_PREBUILT: '1' },
+      env: { TAKO_PREBUILT: '1' },
       run,
     })
     await assert.rejects(build(), /prebuilt Dashboard is missing/)
@@ -166,7 +166,7 @@ test('source install invokes the Dashboard builder with the selected Node runtim
   const calls = []
   const run = async (...args) => { calls.push(args) }
   const build = createInstallBuildStep({
-    projectRoot: '/projects/rillo',
+    projectRoot: '/projects/tako',
     nodePath: '/opt/homebrew/bin/node',
     env: {},
     run,
@@ -174,6 +174,6 @@ test('source install invokes the Dashboard builder with the selected Node runtim
   await build()
   assert.deepEqual(calls, [[
     '/opt/homebrew/bin/node',
-    ['/projects/rillo/ui/build.mjs'],
+    ['/projects/tako/ui/build.mjs'],
   ]])
 })

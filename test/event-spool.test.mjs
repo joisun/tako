@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { createEventSpool as createClaudeEventSpool } from '../adapters/claude/rillo/hooks/src/event-spool.mjs'
-import { parseEventEnvelope as parseClaudeEventEnvelope } from '../adapters/claude/rillo/hooks/src/event-envelope.mjs'
-import { createEventSpool as createCodexEventSpool } from '../adapters/codex/rillo/hooks/src/event-spool.mjs'
-import { parseEventEnvelope as parseCodexEventEnvelope } from '../adapters/codex/rillo/hooks/src/event-envelope.mjs'
+import { createEventSpool as createClaudeEventSpool } from '../adapters/claude/tako/hooks/src/event-spool.mjs'
+import { parseEventEnvelope as parseClaudeEventEnvelope } from '../adapters/claude/tako/hooks/src/event-envelope.mjs'
+import { createEventSpool as createCodexEventSpool } from '../adapters/codex/tako/hooks/src/event-spool.mjs'
+import { parseEventEnvelope as parseCodexEventEnvelope } from '../adapters/codex/tako/hooks/src/event-envelope.mjs'
 import { parseEventEnvelope } from '../mcp/src/event-envelope.mjs'
 import { createEventSpool } from '../hooks/src/event-spool.mjs'
 
@@ -32,7 +32,7 @@ function event(overrides = {}) {
 }
 
 async function fixture(options = {}) {
-  const directory = await mkdtemp(join(tmpdir(), 'rillo-spool-'))
+  const directory = await mkdtemp(join(tmpdir(), 'tako-spool-'))
   const spoolDirectory = join(directory, 'spool')
   return {
     directory,
@@ -45,7 +45,7 @@ async function fixture(options = {}) {
 }
 
 test('root, Codex and Claude adapters preserve the same self-contained spool contract', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'rillo-spool-parity-'))
+  const directory = await mkdtemp(join(tmpdir(), 'tako-spool-parity-'))
   const implementations = [
     ['root', createEventSpool, parseEventEnvelope],
     ['codex', createCodexEventSpool, parseCodexEventEnvelope],

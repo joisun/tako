@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { createJournalEventClient as createClaudeJournalEventClient } from '../adapters/claude/rillo/hooks/src/journal-client.mjs'
-import { createJournalEventClient as createCodexJournalEventClient } from '../adapters/codex/rillo/hooks/src/journal-client.mjs'
+import { createJournalEventClient as createClaudeJournalEventClient } from '../adapters/claude/tako/hooks/src/journal-client.mjs'
+import { createJournalEventClient as createCodexJournalEventClient } from '../adapters/codex/tako/hooks/src/journal-client.mjs'
 import { createJournalEventClient } from '../hooks/src/journal-client.mjs'
 
 function event(overrides = {}) {
@@ -29,7 +29,7 @@ function event(overrides = {}) {
 }
 
 async function fixture(options = {}) {
-  const directory = await mkdtemp(join(tmpdir(), 'rillo-delivery-'))
+  const directory = await mkdtemp(join(tmpdir(), 'tako-delivery-'))
   return {
     directory,
     client: createJournalEventClient({
@@ -44,7 +44,7 @@ async function fixture(options = {}) {
 }
 
 test('root, Codex and Claude delivery clients keep the same fail-open contract', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'rillo-delivery-parity-'))
+  const directory = await mkdtemp(join(tmpdir(), 'tako-delivery-parity-'))
   const implementations = [
     ['root', createJournalEventClient],
     ['codex', createCodexJournalEventClient],

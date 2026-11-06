@@ -71,7 +71,7 @@ test('creates, CAS-updates, pauses and recoverably removes definitions', async (
   })
   assert.equal(created.id, id)
   assert.match(basename(created.source_path), /^daily-review--[0-9a-f]{8}\.md$/)
-  assert.equal((await readFile(created.source_path, 'utf8')).includes('type: rillo/schedule'), true)
+  assert.equal((await readFile(created.source_path, 'utf8')).includes('type: tako/action'), true)
   assert.match(await readFile(created.source_path, 'utf8'), /capabilities:\n  skills: disabled\n  integrations: disabled/)
 
   const updated = await repository.update(id, created.etag, { title: 'Morning review' })

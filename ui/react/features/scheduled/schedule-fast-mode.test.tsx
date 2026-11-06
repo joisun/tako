@@ -37,11 +37,12 @@ it('edits an enabled Fast mode to ordinary speed and saves false', async () => {
   }
   render(<ScheduleEditorDialog api={api as unknown as DashboardApi} open schedule={job} onOpenChange={() => {}} onSaved={async () => {}} />)
   const user = userEvent.setup()
-  const control = await screen.findByRole('button', { name: /Fast mode/ })
+  await user.click(await screen.findByText('高级设置'))
+  const control = await screen.findByRole('combobox', { name: 'Fast mode' })
   await waitFor(() => expect(control).toHaveTextContent('开启'))
   await user.click(control)
   await user.click(await screen.findByRole('option', { name: '关闭（普通速度）' }))
-  await user.click(screen.getByRole('button', { name: '保存计划' }))
+  await user.click(screen.getByRole('button', { name: '保存 Action' }))
   await waitFor(() => expect(api.updateSchedule).toHaveBeenCalledWith(job.id, job.etag, expect.objectContaining({ fast_mode: false })))
 })
 

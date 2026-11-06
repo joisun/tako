@@ -43,7 +43,7 @@ test('one changed revision invalidates the server-backed dashboard queries', () 
   const filter = invalidate.mock.calls.find(([options]) => options?.queryKey === queryKeys.sessionBrowser)?.[0]
   const ref = { provider: 'codex', store_id: 'local', session_id: 'thread' }
   for (const key of [queryKeys.sessionActivity('codex', 'local'), queryKeys.sessionWorkspaces('codex', false), queryKeys.sessionList('codex', '', '', false), queryKeys.sessionChildren(ref), queryKeys.sessionRelations(ref)]) expect(filter?.predicate?.({ queryKey: key } as never)).toBe(true)
-  for (const key of [queryKeys.sessionSearch('codex', '', '', false), queryKeys.sessionSearch('codex', '', 'search', false), queryKeys.sessionList('codex', '', 'search', false), queryKeys.sessionMessages('codex', 'local', 'thread', ''), queryKeys.sessionTimeline(ref, 'from', 'to')]) expect(filter?.predicate?.({ queryKey: key } as never)).toBe(false)
+  for (const key of [queryKeys.sessionSearch('codex', '', false), queryKeys.sessionSearch('codex', 'search', false), queryKeys.sessionList('codex', '', 'search', false), queryKeys.sessionMessages('codex', 'local', 'thread', ''), queryKeys.sessionTimeline(ref, 'from', 'to')]) expect(filter?.predicate?.({ queryKey: key } as never)).toBe(false)
 })
 
 test('continuous changed revisions are coalesced into one refresh per interval', () => {
@@ -62,11 +62,11 @@ test('continuous changed revisions are coalesced into one refresh per interval',
   source.emit('changed')
   source.emit('changed')
 
-  expect(invalidate).toHaveBeenCalledTimes(3)
+  expect(invalidate).toHaveBeenCalledTimes(4)
   vi.advanceTimersByTime(1_999)
-  expect(invalidate).toHaveBeenCalledTimes(3)
+  expect(invalidate).toHaveBeenCalledTimes(4)
   vi.advanceTimersByTime(1)
-  expect(invalidate).toHaveBeenCalledTimes(6)
+  expect(invalidate).toHaveBeenCalledTimes(8)
 })
 
 test('connection state follows the native stream and close removes every listener', () => {

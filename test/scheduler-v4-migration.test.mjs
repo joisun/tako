@@ -104,7 +104,7 @@ test('migrates v3 Runs to the unified v4 ledger without inventing dispatch Runs'
 
   const migrated = new DatabaseSync(databasePath, { readOnly: true })
   try {
-    assert.equal(migrated.prepare('PRAGMA user_version').get().user_version, 4)
+    assert.equal(migrated.prepare('PRAGMA user_version').get().user_version, 5)
     const rows = migrated.prepare('SELECT * FROM scheduled_runs ORDER BY id').all()
     assert.equal(rows.length, 3)
     const succeeded = rows.find(({ id }) => id === runs[0].id)
@@ -174,7 +174,7 @@ test('initializes an empty scheduler database directly as the v4 Run ledger', as
 
   const database = new DatabaseSync(databasePath, { readOnly: true })
   try {
-    assert.equal(database.prepare('PRAGMA user_version').get().user_version, 4)
+    assert.equal(database.prepare('PRAGMA user_version').get().user_version, 5)
   } finally {
     database.close()
   }
