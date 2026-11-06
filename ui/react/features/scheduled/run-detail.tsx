@@ -1,9 +1,11 @@
 import { Pill } from '@/components/kibo-ui/pill'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Clipboard, FileText, RefreshCw, Square } from 'lucide-react'
+import { Check, Clipboard, FileText, RefreshCw, Square, Terminal } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { CodeBlock, CodeBlockContent, CodeBlockCopyButton, CodeBlockHeader } from '@/components/ui/code-block'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { DashboardApi } from '@/lib/api/dashboard-api'
 import type { RunRecord } from '@/lib/api/types'
 import { queryKeys } from '@/lib/query/keys'
@@ -15,27 +17,16 @@ import {
 } from './schedule-format'
 import { LiveSession, SessionConversation } from './live-session'
 
-const LOG_TAIL_BYTES = 32 * 1024
 const ACTIVE_STATUSES = new Set(['queued', 'claimed', 'running'])
-
-function shortSessionId(value: string) {
-  if (value.length <= 20) return value
-  return `${value.slice(0, 8)}…${value.slice(-8)}`
-}
 
 export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
   const queryClient = useQueryClient()
-  const [logStream, setLogStream] = useState<'stdout' | 'stderr' | null>(null)
   const [copied, setCopied] = useState(false)
   const [actionError, setActionError] = useState('')
   const active = ACTIVE_STATUSES.has(run.status)
+  const input = JSON.stringify(run.data ?? null, null, 2)
   const settings = useQuery({ queryKey: queryKeys.settings, queryFn: () => api.settings(), staleTime: 60_000 })
   const localActions = Boolean(settings.data && settings.data.local_actions_supported !== false)
-  const log = useQuery({
-    queryKey: queryKeys.runLog(run.id, logStream ?? 'stdout'),
-    queryFn: () => api.scheduledRunLog(run.id, { stream: logStream ?? 'stdout', tail: LOG_TAIL_BYTES }),
-    enabled: logStream !== null,
-  })
 
   const reviewed = useMutation({
     mutationFn: () => api.markScheduledRunReviewed(run.id),
@@ -109,9 +100,9 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
             <i aria-hidden="true" />{runStatusLabel(run.status)}
           </Pill>
           <strong>{triggerLabel(run.trigger)}</strong>
+          <div className="run-detail__actions">
           {active && !run.interactive ? (
             <Button
-              className="run-detail__stop"
               isPending={cancel.isPending}
               size="xs"
               variant="quiet"
@@ -120,6 +111,19 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
               <Square aria-hidden="true" />停止
             </Button>
           ) : null}
+          {run.thread_id ? (
+            <>
+              {localActions ? (
+                <Button aria-label="恢复此 Session" title={active ? '运行结束后恢复 Session' : '恢复此 Session'} isIconOnly isPending={resume.isPending} disabled={active} size="xs" variant="quiet" onClick={() => resume.mutate()}>
+                  <Terminal aria-hidden="true" />
+                </Button>
+              ) : null}
+              <Button aria-label="复制 Session ID" title="复制 Session ID" isIconOnly size="xs" variant="quiet" onClick={() => void copySession()}>
+                {copied ? <Check aria-hidden="true" /> : <Clipboard aria-hidden="true" />}
+              </Button>
+            </>
+          ) : null}
+          </div>
         </div>
         <dl>
           <div><dt>开始</dt><dd>{fullDateTime(run.started_at ?? run.created_at)}</dd></div>
@@ -127,8 +131,19 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
           <div><dt>Exit code</dt><dd>{run.exit_code ?? '—'}</dd></div>
           <div><dt>Runtime</dt><dd>{run.runtime_id}</dd></div>
         </dl>
+        {resume.isSuccess ? <p className="run-detail__action-status" role="status">Terminal 已打开</p> : null}
+        {actionError ? <p className="run-detail__action-error" role="alert">{actionError}</p> : null}
       </div>
 
+      <Tabs defaultValue="conversation" className="run-detail__tabs">
+        <TabsList aria-label="运行详情">
+          <TabsTrigger value="conversation">会话</TabsTrigger>
+          <TabsTrigger value="input">本轮输入</TabsTrigger>
+          <TabsTrigger value="files">产出文件</TabsTrigger>
+          {run.error_code ? <TabsTrigger value="details">详情</TabsTrigger> : null}
+        </TabsList>
+
+        <TabsContent value="conversation" keepMounted className="run-detail__panel run-detail__panel--conversation">
       <LiveSession
         api={api}
         run={run}
@@ -140,6 +155,12 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
           ])
         }}
       />
+
+      {active && !run.interactive ? (
+        <section className="live-session" aria-label="Session 对话">
+          <SessionConversation entries={[]} emptyText={run.thread_id ? '此运行尚未提供实时对话，结束后可查看会话记录。' : '等待创建 Session…'} />
+        </section>
+      ) : null}
 
       {!active ? (
         <section className="live-session" aria-label="Session 对话">
@@ -171,19 +192,26 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
         </section>
       ) : null}
 
-      {run.error_code ? (
+        </TabsContent>
+
+        <TabsContent value="input" keepMounted className="run-detail__panel run-detail__panel--input">
+          <CodeBlock className="run-detail__input-code">
+            <CodeBlockHeader><span>data · JSON</span><CodeBlockCopyButton code={input} /></CodeBlockHeader>
+            <CodeBlockContent aria-label="本轮输入 JSON">{input}</CodeBlockContent>
+          </CodeBlock>
+        </TabsContent>
+
+        {run.error_code ? (
+        <TabsContent value="details" keepMounted className="run-detail__panel">
         <section className="run-detail__section">
           <div className="run-detail__section-heading"><h3>错误</h3></div>
-          <code className="run-detail__error">{run.error_code === 'RUNTIME_PROTOCOL_CLOSED' ? `${run.runtime_id === 'opencode' ? 'OpenCode' : 'Codex'} 执行连接已关闭，本次任务已结束。可查看退出码后重新运行。` : run.error_code === 'RUNTIME_PROTOCOL_FRAME_TOO_LARGE' ? '执行器单条消息超过接收上限，本次运行已中断。Session 已保留时可在 Terminal 恢复。' : run.error_code === 'RUNTIME_TIMEOUT' ? '执行超过任务设置的时间上限。请检查超时配置，或从已保存的 Session 继续。' : run.error_code === 'RUNTIME_PERMISSION_REQUIRED' ? 'OpenCode 正在等待工具权限，本次任务已停止。请调整本机 OpenCode 权限后重新运行，或在 Terminal 恢复。' : run.error_code === 'RUNTIME_INPUT_REQUIRED' ? 'OpenCode 需要交互回答，本次任务已停止。可在 Terminal 恢复后继续。' : run.error_code === 'RUNTIME_MODEL_UNAVAILABLE' ? '所选模型在当前地区不可用，请换用可访问的模型。' : run.error_code}</code>
+          <code className="run-detail__error">{run.error_code === 'RUNTIME_SESSION_IN_USE' ? '该会话正被其他 Codex 客户端占用，无法继承。请先在占用它的终端或客户端中退出该会话，再重新运行任务。' : run.error_code === 'RUNTIME_PROTOCOL_CLOSED' ? `${run.runtime_id === 'opencode' ? 'OpenCode' : 'Codex'} 执行连接已关闭，本次任务已结束。可查看退出码后重新运行。` : run.error_code === 'RUNTIME_PROTOCOL_FRAME_TOO_LARGE' ? '执行器单条消息超过接收上限，本次运行已中断。Session 已保留时可在 Terminal 恢复。' : run.error_code === 'RUNTIME_TIMEOUT' ? '执行超过任务设置的时间上限。请检查超时配置，或从已保存的 Session 继续。' : run.error_code === 'RUNTIME_PERMISSION_REQUIRED' ? 'OpenCode 正在等待工具权限，本次任务已停止。请调整本机 OpenCode 权限后重新运行，或在 Terminal 恢复。' : run.error_code === 'RUNTIME_INPUT_REQUIRED' ? 'OpenCode 需要交互回答，本次任务已停止。可在 Terminal 恢复后继续。' : run.error_code === 'RUNTIME_MODEL_UNAVAILABLE' ? '所选模型在当前地区不可用，请换用可访问的模型。' : run.error_code}</code>
           {run.runtime_id === 'opencode' && run.final_message ? <p className="run-detail__error-detail">{run.final_message}</p> : null}
         </section>
-      ) : null}
+        </TabsContent>
+        ) : null}
 
-      <section className="run-detail__section">
-        <div className="run-detail__section-heading"><h3>本轮输入 data</h3><span>{triggerLabel(run.trigger)}</span></div>
-        <pre className="select-text whitespace-pre-wrap break-all">{JSON.stringify(run.data ?? null, null, 2)}</pre>
-      </section>
-
+        <TabsContent value="files" keepMounted className="run-detail__panel">
       <section className="run-detail__section">
         <div className="run-detail__section-heading"><h3>产出文件</h3><span>{run.file_changes.length}</span></div>
         {run.file_changes.length ? (
@@ -219,44 +247,8 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
         ) : null}
       </section>
 
-      <section className="run-detail__section">
-        <div className="run-detail__section-heading"><h3>Session</h3></div>
-        {run.thread_id ? (
-          <div className="run-detail__session">
-            {localActions ? <Button className="run-detail__session-resume" aria-label="恢复此 Session" isPending={resume.isPending} disabled={active} size="xs" variant="quiet" onClick={() => resume.mutate()}>
-              <code>{shortSessionId(run.thread_id)}</code>
-            </Button> : <code title={run.thread_id}>{shortSessionId(run.thread_id)}</code>}
-            <Button aria-label="复制 Session ID" isIconOnly size="xs" variant="quiet" onClick={() => void copySession()}>
-              {copied ? <Check aria-hidden="true" /> : <Clipboard aria-hidden="true" />}
-            </Button>
-          </div>
-        ) : <p className="run-detail__empty">{active ? '等待 Codex 创建 Session…' : '任务在创建 Session 前结束，无法恢复；可重新运行。'}</p>}
-        {active && run.thread_id ? <p className="run-detail__empty">Session 已保存，运行结束后可在 Terminal 恢复。</p> : null}
-        {resume.isSuccess ? <p className="run-detail__action-status">Terminal 已打开</p> : null}
-        {actionError ? <p className="run-detail__action-error" role="alert">{actionError}</p> : null}
-      </section>
-
-      {(run.has_stdout_log || run.has_stderr_log) ? (
-        <section className="run-detail__section">
-          <div className="run-detail__section-heading">
-            <h3>日志</h3>
-            <div className="run-detail__log-actions">
-              {run.has_stdout_log ? (
-                <Button size="xs" variant={logStream === 'stdout' ? 'secondary' : 'quiet'} onClick={() => setLogStream('stdout')}>stdout</Button>
-              ) : null}
-              {run.has_stderr_log ? (
-                <Button size="xs" variant={logStream === 'stderr' ? 'secondary' : 'quiet'} onClick={() => setLogStream('stderr')}>stderr</Button>
-              ) : null}
-            </div>
-          </div>
-          {log.isPending && logStream ? <div className="run-detail__log-state">正在读取日志…</div> : null}
-          {log.isError ? <div className="run-detail__log-state is-error">{log.error.message}</div> : null}
-          {log.data ? (
-            <pre className="run-detail__log"><code>{log.data.content || '日志为空'}</code></pre>
-          ) : null}
-          {log.data?.truncated ? <small className="run-detail__log-note">仅显示最后 32 KiB</small> : null}
-        </section>
-      ) : null}
+        </TabsContent>
+      </Tabs>
     </article>
   )
 }

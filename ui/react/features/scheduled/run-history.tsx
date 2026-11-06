@@ -55,6 +55,7 @@ export function RunHistory({
         <thead>
           <tr>
             <th>状态</th>
+            <th>会话</th>
             <th>开始</th>
             <th>耗时</th>
           </tr>
@@ -72,6 +73,7 @@ export function RunHistory({
                     </span>
                     <small>{triggerLabel(dispatch.trigger)} · 未创建 Run</small>
                   </td>
+                  <td>—</td>
                   <td>{compactDateTime(dispatch.last_attempted_at ?? dispatch.requested_at)}</td>
                   <td>—</td>
                 </tr>
@@ -98,11 +100,13 @@ export function RunHistory({
                   <span className="run-history__status">
                     <i data-status={run.status} aria-hidden="true" />
                     {runStatusLabel(run.status)}
-                    <Pill title={run.session_mode_reason === 'inherit_limit'
-                      ? `已达到 ${run.max_inherit_runs ?? 20} 轮继承上限，本轮新建会话`
-                      : run.thread_mode === 'auto' ? '配置为自动；此标签显示本轮实际使用的方式' : '本轮执行的会话方式'}>{sessionModeLabel(run)}</Pill>
                   </span>
                   <small>{triggerLabel(run.trigger)}{run.reviewed_at ? '' : ' · 未读'}</small>
+                </td>
+                <td>
+                  <Pill title={run.session_mode_reason === 'inherit_limit'
+                    ? `已达到 ${run.max_inherit_runs ?? 20} 轮继承上限，本轮新建会话`
+                    : run.thread_mode === 'auto' ? '配置为自动；此标签显示本轮实际使用的方式' : '本轮执行的会话方式'}>{sessionModeLabel(run)}</Pill>
                 </td>
                 <td>{compactDateTime(run.started_at ?? run.created_at)}</td>
                 <td>{runDuration(run.started_at, run.finished_at)}</td>

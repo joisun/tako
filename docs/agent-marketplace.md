@@ -1,6 +1,10 @@
 # Teams · Agent 管理与 Marketplace
 
-在 Teams 左侧底部点击“Agent 管理”，管理所有团队共用的角色定义。地址保持 `/?view=teams&team_view=agents`，`market_tab` 可指定 `local`、`discover`、`installed`、`updates` 或 `sources`。顶层导航仍为 Sessions、Schedule、Teams。
+在 Teams 左侧顶部点击“新建团队”左边的团队图标按钮，悬停提示为“Agent 管理”，管理所有团队共用的角色定义。地址保持 `/?view=teams&team_view=agents`，`market_tab` 可指定 `local`、`discover`、`installed`、`updates` 或 `sources`。顶层导航仍为 Sessions、Actions、Teams。
+
+Agent 管理使用与 Sessions、Actions 相同的应用配色和紧凑布局，不继承团队对话的 `room-theme`。导航、筛选、目录卡片、管理列表和定义抽屉复用现有组件与颜色变量；目录网格随可用宽度调整列数，窄屏保留可横向滚动的导航及触控尺寸。
+
+团队侧栏始终复用同一导航和 `TeamSidebarItem`，切换 Agent 管理与对话时保持公共配色、字号和行高，窄屏导航抽屉也使用这套样式。`room-theme` 只作用于团队内容和成员区域，不包裹公共侧栏。
 
 团队成员区的 `+` 只打开可搜索的本地角色选择器。选中后才显示当前团队的名字、头像、运行客户端、模型和 effort 配置，确认后加入团队。选择器不导入、不删除定义，不读取市场网络目录；角色管理与成员配置分开。已加入的角色不可重复加入，失败保留成员配置，返回选择器保留关键词。
 

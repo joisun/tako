@@ -350,7 +350,6 @@
 .session-detail__conversation { min-width: 0; scrollbar-width: none; }
 .session-detail__conversation::-webkit-scrollbar { display: none; }
 .session-minimap { display: flex; min-height: 0; flex-direction: column; padding: 10px 3px 12px 4px; border-left: 1px solid var(--border-subtle); background: var(--surface-0); }
-.session-detail__subtitle > .session-timeline-legend { margin-left: auto; }
 .session-minimap__track { position: relative; min-width: 0; min-height: 0; flex: 1; }
 .session-minimap__track .session-density { width: 100%; height: 100%; min-height: 0; padding: 0; border: 0; border-radius: 4px; }
 .session-minimap__state { display: block; text-align: center; color: var(--text-muted); font-size: 10px; line-height: 1.6; }
@@ -368,7 +367,6 @@
 @media (max-width: 680px) {
  .session-reader-sheet-host { inset: 8px; }
  .session-reader-sheet { width: 100%; border-radius: 10px; }
- .session-detail__subtitle .session-timeline-legend { font-size: 9px; }
  .session-tree__row .session-family { max-width: 62%; }
  .session-detail__conversation { padding: 14px 12px 20px; }
 }
@@ -385,11 +383,7 @@
 .session-status-sort > button > svg { width: 12px; height: 12px; }
 .session-status-sort > button:disabled { opacity: .5; cursor: default; }
 
-.session-density, .session-timeline-legend { --timeline-user-color: var(--success); }
-.session-timeline-legend { display: inline-flex; flex-shrink: 0; align-items: center; gap: 10px; color: var(--text-muted); font-size: 10px; }
-.session-timeline-legend > span { display: inline-flex; align-items: center; gap: 4px; }
-.session-timeline-legend > span::before { width: 5px; height: 8px; border-radius: 1px; content: ''; background: var(--timeline-agent-color); }
-.session-timeline-legend > [data-role='user']::before { background: var(--timeline-user-color); }
+.session-density { --timeline-user-color: var(--success); }
 
 .session-density__tooltip { white-space: normal; overflow-wrap: anywhere; }
 

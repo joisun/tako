@@ -278,6 +278,5 @@ function SessionTimeRange({ pages }: { pages: SessionTimeline[] }) {
   const format = (at: string) => new Date(at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   return <div className="session-detail__subtitle">
     {bounds?.start_at && bounds.end_at ? <><time dateTime={bounds.start_at} title="会话开始">{format(bounds.start_at)}</time><span>–</span><time dateTime={bounds.end_at} title="最后一条消息">{format(bounds.end_at)}</time></> : null}
-    <span className="session-timeline-legend" aria-label="时间轴消息颜色"><span data-role="user">用户</span><span data-role="assistant">Agent</span></span>
   </div>
 }

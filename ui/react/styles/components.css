@@ -42,6 +42,13 @@
 .ui-popover { padding: 10px; }
 .ui-tooltip { min-width: 0; max-width: 280px; padding: 7px 10px; font-size: 11px; line-height: 1.5; }
 .ui-label { color: var(--text-muted); font-size: 11px; font-weight: 500; }
+.ui-tabs { display: flex; min-height: 0; flex-direction: column; }
+.ui-tabs__list { display: flex; flex-shrink: 0; align-items: center; gap: 16px; padding-inline: 18px; border-bottom: 1px solid var(--border-subtle); }
+.ui-tabs__trigger { min-height: 36px; padding: 7px 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font: 500 12px var(--font-geist-sans); cursor: pointer; }
+.ui-tabs__trigger:hover, .ui-tabs__trigger[data-active] { color: var(--text-primary); }
+.ui-tabs__trigger[data-active] { border-bottom-color: var(--text-primary); }
+.ui-tabs__content { flex: 1; min-height: 0; outline: none; }
+.ui-tabs__content[hidden] { display: none; }
 .ui-switch-field { display: inline-flex; align-items: center; gap: 9px; color: var(--text-primary); font-size: 12px; cursor: pointer; }
 .ui-switch { position: relative; display: inline-flex; align-items: center; flex-shrink: 0; width: 30px; height: 18px; padding: 2px; border: 1px solid var(--border-strong); border-radius: 100px; background: #333; transition: background var(--motion-fast); }
 .ui-switch[data-checked] { background: var(--text-primary); }

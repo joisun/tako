@@ -103,7 +103,9 @@ curl -X POST 'http://127.0.0.1:43128/actions/ACTION_ID/trigger' \
 
 ## 输入、Session 与恢复
 
-Run 的 `input_json` 单独保存本轮 data，固定 Markdown 不随调用改写。执行提示明确区分任务正文与本轮外部数据；data 从不作为 workspace、Agent、模型、权限、命令或其他执行配置。手动和定时的 data 默认为 null。运行列表只读摘要，不批量加载输入；Run 详情可查看来源与完整输入，继续使用原来的状态、结果、日志、文件变化和原生 Session 入口。
+Run 的 `input_json` 单独保存本轮 data，固定 Markdown 不随调用改写。执行提示明确区分任务正文与本轮外部数据；data 从不作为 workspace、Agent、模型、权限、命令或其他执行配置。手动和定时的 data 默认为 null。运行列表只读摘要，不批量加载输入；状态、会话方式、开始时间与耗时分列展示，会话列保留实际新建或继承方式及继承轮次，尚未创建 Run 的派发记录显示“—”。Run 详情可查看来源与完整输入，继续使用原来的状态、结果、文件变化和原生 Session 入口。
+
+Run 详情顶部提供“会话 / 本轮输入 / 产出文件”Tab，默认展示会话。本轮输入以 11px 等宽 Code Block 展示，支持独立滚动和原样复制完整 JSON；产出文件单独展示文件列表、数量和原有打开操作，没有文件时显示空状态。有错误时另显示“详情”Tab。不展示 stdout/stderr 日志，运行日志继续由服务保存。已有 Session 时，顶部提供恢复和复制 ID 的图标按钮；复制不受运行状态限制，恢复继续遵守本机能力及运行互斥规则。会话使用 shadcn Message、Bubble、Message Scroller 和 Prompt Input 组合；切换 Tab 保留会话组件与实时订阅。
 
 排队 Run 真正启动前，才根据前一轮的实际 Session 选择 new/reuse/auto、继承次数和 compact 配置，避免连续请求提前选中旧 Session。本轮输入始终再次明确提供。
 

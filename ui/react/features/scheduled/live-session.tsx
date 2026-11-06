@@ -1,19 +1,15 @@
-import { CircleCheck, CircleX, RefreshCw, Send, Square } from 'lucide-react'
+import { CircleCheck, CircleX, RefreshCw, Square } from 'lucide-react'
 import type { KeyboardEvent } from 'react'
 
-import {
-  Conversation,
-  ConversationContent,
-  ConversationScrollButton,
-} from '@/components/ai-elements/conversation'
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from '@/components/ai-elements/message'
+import { MessageResponse } from '@/components/ai-elements/message'
+import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputSubmit, PromptInputTools } from '@/components/ai-elements/prompt-input'
+import { Bubble, BubbleContent } from '@/components/ui/bubble'
 import { Button } from '@/components/ui/button'
-import { TextArea } from '@/components/ui/input'
+import { MarkdownCodeBlock } from '@/components/ui/code-block'
+import { InputGroupTextarea } from '@/components/ui/input-group'
 import { Loader } from '@/components/ui/loader'
+import { Message, MessageContent, MessageHeader } from '@/components/ui/message'
+import { MessageScrollerProvider, MessageScroller, MessageScrollerViewport, MessageScrollerContent, MessageScrollerItem, MessageScrollerButton } from '@/components/ui/message-scroller'
 import type { DashboardApi } from '@/lib/api/dashboard-api'
 import type { RunRecord, RunStatus } from '@/lib/api/types'
 import { type LiveEntry, useLiveRun } from './live-run'
@@ -43,34 +39,45 @@ export function SessionConversation({
   isAnimating?: boolean
 }) {
   return (
-    <Conversation className="live-session__conversation">
-      <ConversationContent className="live-session__content">
+    <MessageScrollerProvider autoScroll defaultScrollPosition="end">
+      <MessageScroller className="live-session__conversation" role="log" aria-label="会话消息">
+        <MessageScrollerViewport>
+          <MessageScrollerContent className="live-session__content">
         {entries.length ? entries.map((entry) => entry.kind === 'message' ? (
-          <Message from={entry.role} key={`message-${entry.itemId}`}>
+          <MessageScrollerItem key={`message-${entry.itemId}`} messageId={`message-${entry.itemId}`} scrollAnchor={entry.role === 'user'}>
+          <Message align={entry.role === 'user' ? 'end' : 'start'} className="live-session__entry" data-role={entry.role}>
             <MessageContent>
+              <MessageHeader>{entry.role === 'user' ? '你' : 'Agent'}</MessageHeader>
+              <Bubble variant={entry.role === 'user' ? 'muted' : 'ghost'}><BubbleContent>
               {entry.role === 'user' && entry.text.length > 1200 ? (
                 <details>
                   <summary className="live-session__prompt-summary">展开完整指令（{entry.text.length.toLocaleString()} 字符）</summary>
-                  <MessageResponse className="live-session__message">{entry.text}</MessageResponse>
+                  <MessageResponse mode="static" className="live-session__message" components={{ pre: MarkdownCodeBlock }}>{entry.text}</MessageResponse>
                 </details>
               ) : (
-                <MessageResponse className="live-session__message" isAnimating={isAnimating}>
+                <MessageResponse mode={isAnimating ? 'streaming' : 'static'} className="live-session__message" isAnimating={isAnimating} components={{ pre: MarkdownCodeBlock }}>
                   {entry.text}
                 </MessageResponse>
               )}
+              </BubbleContent></Bubble>
             </MessageContent>
           </Message>
+          </MessageScrollerItem>
         ) : (
+          <MessageScrollerItem key={`activity-${entry.itemId}`} messageId={`activity-${entry.itemId}`}>
           <div className="live-session__activity" data-state={entry.state} key={`activity-${entry.itemId}`}>
             {activityIcon(entry.state)}
             <span>{entry.label}</span>
           </div>
+          </MessageScrollerItem>
         )) : (
           <div className="live-session__empty">{emptyText}</div>
         )}
-      </ConversationContent>
-      <ConversationScrollButton />
-    </Conversation>
+          </MessageScrollerContent>
+        </MessageScrollerViewport>
+        <MessageScrollerButton aria-label="滚动到最新消息" />
+      </MessageScroller>
+    </MessageScrollerProvider>
   )
 }
 
@@ -113,17 +120,20 @@ export function LiveSession({
       />
 
       {live.resetNotice ? <p className="live-session__notice">{live.resetNotice}</p> : null}
-      <div className="live-session__composer">
-        <TextArea
+      <PromptInput className="live-session__composer" onSubmit={(event) => { event.preventDefault(); if (live.canSteer) void live.steer() }}>
+        <PromptInputBody>
+        <InputGroupTextarea
           aria-label="追加指令"
           placeholder="补充约束或修正当前方向…"
           value={live.draft}
           onChange={(event) => live.setDraft(event.currentTarget.value)}
           onKeyDown={onComposerKeyDown}
         />
+        </PromptInputBody>
         {live.controlError ? <p className="live-session__error" role="alert">{live.controlError}</p> : null}
-        <div className="live-session__composer-actions">
+        <PromptInputFooter className="live-session__composer-actions">
           <span>⌘/Ctrl + Enter</span>
+          <PromptInputTools>
           <Button
             disabled={!live.canStop}
             isPending={live.stopping}
@@ -133,17 +143,14 @@ export function LiveSession({
           >
             <Square aria-hidden="true" />停止
           </Button>
-          <Button
+          <PromptInputSubmit
             disabled={!live.canSteer}
-            isPending={live.submitting}
+            status={live.submitting ? 'submitted' : 'ready'}
             size="sm"
-            variant="primary"
-            onClick={() => void live.steer()}
-          >
-            <Send aria-hidden="true" />发送
-          </Button>
-        </div>
-      </div>
+          />
+          </PromptInputTools>
+        </PromptInputFooter>
+      </PromptInput>
     </section>
   )
 }

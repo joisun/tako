@@ -106,8 +106,15 @@ export function cadenceSummary(cadence: ScheduleCadence | null) {
   return `${summary} · ${days} ${windows}`
 }
 
+export function isScheduleActive(schedule: ScheduleRecord) {
+  return schedule.enabled && (schedule.schedule_enabled !== false || schedule.external_enabled === true)
+}
+
 export function sortSchedules(schedules: ScheduleRecord[]) {
   return [...schedules].sort((left, right) => {
+    const leftActive = isScheduleActive(left)
+    const rightActive = isScheduleActive(right)
+    if (leftActive !== rightActive) return leftActive ? -1 : 1
     const leftUnread = (left.unread_run_count ?? 0) > 0
     const rightUnread = (right.unread_run_count ?? 0) > 0
     if (leftUnread !== rightUnread) return leftUnread ? -1 : 1

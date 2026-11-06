@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 
-import { DialogClose, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DialogClose, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
@@ -63,7 +63,6 @@ export function RunReviewDrawer({
         <DialogClose render={<Button className="ui-dialog__close" isIconOnly variant="quiet" aria-label="关闭" />}><X /></DialogClose>
         <DialogHeader>
           <DialogTitle>{currentSchedule?.title ?? '执行记录'}</DialogTitle>
-          <DialogDescription>运行记录、产出与可恢复 Session</DialogDescription>
         </DialogHeader>
 
         {history.isPending ? <div className="run-review-drawer__state" aria-busy="true">正在读取执行记录…</div> : null}

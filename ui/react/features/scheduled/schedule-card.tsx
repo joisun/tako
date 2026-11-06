@@ -16,6 +16,7 @@ import {
   cadenceSummary,
   compactDateTime,
   isActiveRun,
+  isScheduleActive,
   relativeTime,
   runStatusLabel,
 } from './schedule-format'
@@ -39,6 +40,7 @@ export function ScheduleCard({
   onEdit?: (schedule: ScheduleRecord) => void
   onReview?: (schedule: ScheduleRecord) => void
 }) {
+  const inactive = !isScheduleActive(schedule)
   const execution = schedule.current_execution
   const runActive = isActiveRun(schedule)
   const runStoppable = runActive && execution?.kind === 'run'
@@ -54,7 +56,7 @@ export function ScheduleCard({
     : '查看执行记录'
 
   return (
-    <li className="schedule-row" data-enabled={schedule.enabled} data-schedule-id={schedule.id}>
+    <li className="schedule-row" data-enabled={schedule.enabled} data-inactive={inactive} data-schedule-id={schedule.id}>
       <button
         type="button"
         className="schedule-row__identity"
