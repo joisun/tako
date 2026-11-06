@@ -434,6 +434,16 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     },
     progress(id, input) { const value = store.progress(id, input); changed(); return value },
     requestAction, createTask, control, start, close, copyRoom,
+    async createGuidedRoom(input) {
+      if(input.existing_id)return store.room(input.existing_id)
+      const existing=store.roomForRequest(input.request_key)
+      if(existing)return store.room(existing.id)
+      const workspaces=input.workspace?[await canonicalWorkspace(input.workspace)]:[]
+      const id=randomUUID(),directory=memoryRoot?await store.memory.bind(join(memoryRoot,id),id):null
+      const value=store.createRoom({id,title:input.title,request_key:input.request_key,instructions:input.instructions,
+        memory_directory:directory,workspace:workspaces[0]??null,workspaces,initial_members:input.initial_members})
+      changed();return value
+    },
     async createRoom(input) {
       if(typeof input.title!=='string'||!input.title.trim()||input.title.length>120)throw loopError('LOOP_INPUT_INVALID','请输入团队名称')
       const workspaces=input.workspaces!==undefined ? await canonicalWorkspaces(input.workspaces) : input.workspace ? [await canonicalWorkspace(input.workspace)] : []
@@ -449,7 +459,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       const directory=memory_directory?await store.memory.bind(memory_directory,id):null
 
       const initial_member={ name: 'Leader', runtime_id: 'codex', instructions: 'Lead this room from the user’s request to a verified delivery. Delegate concrete work, reconcile results, identify blockers and communicate progress.', profile: { id:'builtin:leader', name:'Leader', source: { kind: 'builtin', label: 'UnderControl Leader' }, description: '承接目标、分派成员、跟进进度与交付' } }
-      const value=store.createRoom({...input,id,memory_directory:directory,workspace:workspaces[0]??null,workspaces,initial_member})
+      const value=store.createRoom({...input,id,memory_directory:directory,workspace:workspaces[0]??null,workspaces,initial_member,initial_members:undefined})
       changed();return store.room(value.id)
     },
     async deleteRoom(id){if(store.room(id).config?.deleted_at)return store.room(id);await dissolveRoom(id);const value=store.hideRoom(id);changed();return value},

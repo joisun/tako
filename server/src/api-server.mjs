@@ -385,6 +385,7 @@ export function createApiServer({
   messaging = null,
   schedulerService = null,
   collaboration = null,
+  guidedTeams = null,
   marketplace = null,
   scheduledRunLogs = null,
   runtimeRegistry = null,
@@ -405,7 +406,7 @@ export function createApiServer({
       const url = new URL(request.url, requestOrigin)
       const pathname = url.pathname.replace(/^\/api\/v1\/actions(?=\/|$)/, '/api/v1/schedules')
       if (await handleMarketplaceRequest({request,response,url,marketplace})) return
-      if (await handleCollaborationRequest({ request, response, url, collaboration })) return
+      if (await handleCollaborationRequest({ request, response, url, collaboration, guidedTeams })) return
       const previewResource = pathname.match(/^\/run-files\/([a-f0-9]{48})\/(.*)$/)
       const readingPreview = previewResource && ['GET', 'HEAD'].includes(request.method)
       if (readingPreview && runService?.readPreview) {

@@ -1,6 +1,6 @@
 import { readJson, sendJson } from './http-utils.mjs'
 
-export async function handleCollaborationRequest({ request, response, url, collaboration }) {
+export async function handleCollaborationRequest({ request, response, url, collaboration, guidedTeams }) {
   if (!collaboration) return false
   const pathname = url.pathname.replace(/^\/api\/v1\/teams(?=\/|$|-runtime)/,'/api/v1/rooms')
   if (!pathname.startsWith('/api/v1/rooms') && !pathname.startsWith('/api/v1/loop-') && !pathname.startsWith('/api/v1/execution-resources') && !pathname.startsWith('/api/v1/agent-catalog')) return false
@@ -15,11 +15,22 @@ export async function handleCollaborationRequest({ request, response, url, colla
     }
     sendJson(response,200,value);return true
   }
-  const body = async () => {
+  const body = async (limit = 48 * 1024) => {
     if (!String(request.headers['content-type']).toLowerCase().startsWith('application/json')) throw Object.assign(new Error('需要 JSON 请求'), { code: 'CONTENT_TYPE_REQUIRED', statusCode: 415 })
-    const input = await readJson(request, { limit: 48 * 1024 })
+    const input = await readJson(request, { limit })
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw Object.assign(new Error('请求内容须为对象'), { code: 'LOOP_INPUT_INVALID', statusCode: 400 })
     return input
+  }
+  const plannerTool=pathname.match(/^\/api\/v1\/rooms\/guided-plans\/([a-f0-9-]{36})\/tools\/(search_agents|get_agent_definition)$/)
+  if(plannerTool&&request.method==='POST'&&guidedTeams)return send(await guidedTeams.tool(plannerTool[1],plannerTool[2],await body(),String(request.headers.authorization??'').replace(/^Bearer /,'')))
+  const guided=pathname.match(/^\/api\/v1\/rooms\/guided-plans(?:\/([a-f0-9-]{36})(?:\/(cancel|create|refine))?)?$/)
+  if(guided){
+    if(!guidedTeams)throw Object.assign(new Error('引导式创建尚未就绪'),{code:'GUIDED_UNAVAILABLE',statusCode:503})
+    if(!guided[1]&&request.method==='POST')return send({plan:guidedTeams.start(await body())})
+    if(guided[1]&&!guided[2]&&request.method==='GET')return send({plan:guidedTeams.get(guided[1])})
+    if(guided[2]==='cancel'&&request.method==='POST'){await body();return send({plan:guidedTeams.cancel(guided[1])})}
+    if(guided[2]==='create'&&request.method==='POST')return send(await guidedTeams.create(guided[1],await body(1024*1024)))
+    if(guided[2]==='refine'&&request.method==='POST')return send({plan:guidedTeams.refine(guided[1],await body(1024*1024))})
   }
   if(pathname==='/api/v1/agent-catalog/sources'&&request.method==='GET')return send(collaboration.catalogSources())
   if (pathname === '/api/v1/agent-catalog' && request.method === 'GET') return send(await collaboration.catalog(url.searchParams.get('source') ?? 'local',{refresh:url.searchParams.get('refresh')==='1'}))

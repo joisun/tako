@@ -12,6 +12,28 @@ Teams 的 Codex 进程统一使用完整访问，不再按 Leader、讨论、实
 
 团队有未结束工作时不能更换项目或 Leader；可更换资料备份目录以处理磁盘问题，保留旧资料。交付后更换设置，下一条消息使用新设置建立内部任务，保留先前交付记录。
 
+## 引导式创建
+
+新建团队可选择“引导式创建”：输入需求及可选项目目录，由现有 Runtime 生成团队草案。草案可调整名称、任务理解、验收要求，以及成员的定义、职责、头像、客户端、模型和 effort。第一位成员担任 Leader；可增删其他成员，人数由所需专业职责决定，不设置组队人数上限。原有手动创建、复制房间和目录恢复入口保留。
+
+规划 Agent 通过只读 search_agents 工具主动搜索全部已启用 Marketplace 来源的 Agent 池，再用 get_agent_definition 读取候选原文，确认专业能力与职责匹配。本地文件及安装状态不是检索范围或排序优先条件；搜索按页返回，可继续检索，不把最初一组候选当成全部角色池。界面与原生 Session 均可查看实际搜索词、匹配结果和定义读取记录。协调 Leader 或充分搜索后仍缺失的专业职责可生成专用角色，明确标记“按需求生成”。外部定义保留原文、来源、版本和许可证，生成时不安装。确认创建时才安装选中的市场定义，并复核本地内容及模型能力；不覆盖本地修改。规划客户端仅进行只读组队，业务执行仍使用 Teams 原有权限。Claude 成员继续受既有讨论与审阅范围约束。
+
+“仅创建”事务内保存团队和全部成员，不启动工作；“创建并开始”再把原始需求与组队阶段的用户补充交给现有 Leader 消息入口。重试沿用请求标识，不重复生成、建队或启动。方案及原生 Session 引用保存在现有数据库的 loop_team_plans；刷新保留当前浏览器的编辑草案，服务重启将未完成规划标为中断，等待用户重新生成。原生规划执行最多五分钟，同时只运行一个规划，最多接收四项；这些限制不改变已有 Teams 的业务调度。
+
+生成方案后可继续补充意见，并把已编辑方案作为下一轮基线。保留历轮沟通、来源和原始版本；调整中保留当前草案，失败或取消不会清空。新增但未填完整的职责允许交给规划 Agent 补全，确认创建时仍要求完整有效的配置。每轮规划独立保存，原生 Session ID 可追溯；对话上下文由应用传入，不声称复用了同一个原生 Session。此流程用于确认创建之前，不自动替换已创建团队的成员或会话。
+
+接口使用现有本地管理端口：
+
+| 方法与路径 | 输入或结果 |
+|---|---|
+| POST /api/v1/teams/guided-plans | request_key、requirements、可选 workspace、runtime_id、model、effort；立即返回 plan，不等待模型完成 |
+| GET /api/v1/teams/guided-plans/:id | 状态、实际阶段、草案、候选来源与原生 Session 引用 |
+| POST /api/v1/teams/guided-plans/:id/refine | request_key、feedback 和用户已编辑的 draft；返回新的规划版本，保留原方案 |
+| POST /api/v1/teams/guided-plans/:id/tools/search_agents | 本轮临时凭据限定的只读 Agent 池搜索；query、可选 source_id、offset、limit |
+| POST /api/v1/teams/guided-plans/:id/tools/get_agent_definition | 本轮临时凭据限定的定义读取；agent_id |
+| POST /api/v1/teams/guided-plans/:id/cancel | 停止尚未完成的规划 |
+| POST /api/v1/teams/guided-plans/:id/create | 编辑后的 title、summary、acceptance、members，confirm=true，start 控制是否开始；返回现有 room |
+
 ## Agent 定义来源
 
 成员选择器通过 `agent-catalog.mjs` 读取本地全局定义及组合层注入的 Marketplace 托管安装。市场发现、安装与更新统一在 Teams 的全局 Agent 管理中，详见 [Marketplace](agent-marketplace.md)。原目录 API 保留以下来源供既有调用方使用：

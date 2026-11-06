@@ -1,5 +1,6 @@
 import type {MarketSource,MarketCatalog,MarketDefinition,InstalledAgent,AgentUpdate,AgentReview,MarketplaceMutation,AgentSessionContext,AgentRuntimeAdapter} from './marketplace-types'
 import type { RoomBoard, RoomWorkItem, RoomRuntime, RoomMemberDefinition, LoopAvatar, LoopAttachment } from './loop-types'
+import type { GuidedPlan,GuidedRequest,GuidedCreation,GuidedRefinement } from './guided-types'
 import type { AgentDefinition, AgentCatalog, AgentCatalogSource, LoopRoom, LoopRoomDetail, LoopMember, LoopTaskInput, LoopTaskDetail } from './loop-types'
 import type {
   DashboardMeta,
@@ -64,6 +65,11 @@ interface ServerErrorPayload {
 }
 
 export interface DashboardApi {
+  startGuidedPlan(input:GuidedRequest):Promise<{plan:GuidedPlan}>
+  guidedPlan(id:string):Promise<{plan:GuidedPlan}>
+  refineGuidedPlan(id:string,input:GuidedRefinement):Promise<{plan:GuidedPlan}>
+  cancelGuidedPlan(id:string):Promise<{plan:GuidedPlan}>
+  createGuidedTeam(id:string,input:GuidedCreation):Promise<{room:LoopRoomDetail}>
   reviseLoopTask(id: string, input: { goal: string; acceptance: string; expected_revision: number }): Promise<{ task: LoopTaskDetail }>
   reconcileLoopRun(id: string): Promise<{ run: unknown }>
   rooms(): Promise<{ rooms: LoopRoom[] }>
@@ -275,6 +281,11 @@ export function createDashboardApi({
     agentCatalog: (source,options) => request(`/api/v1/agent-catalog?source=${encodeURIComponent(source)}${options?.refresh?'&refresh=1':''}`, { requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
     agentDefinition: (id, runtime) => request(`/api/v1/agent-catalog/definition?id=${encodeURIComponent(id)}&runtime=${encodeURIComponent(runtime)}`, { requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
     configureRoom: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}`, { method: 'PATCH', body }),
+    startGuidedPlan:body=>request('/api/v1/teams/guided-plans',{method:'POST',body}),
+    guidedPlan:id=>request('/api/v1/teams/guided-plans/'+encodeURIComponent(id)),
+    refineGuidedPlan:(id,body)=>request('/api/v1/teams/guided-plans/'+encodeURIComponent(id)+'/refine',{method:'POST',body}),
+    cancelGuidedPlan:id=>request('/api/v1/teams/guided-plans/'+encodeURIComponent(id)+'/cancel',{method:'POST',body:{}}),
+    createGuidedTeam:(id,body)=>request('/api/v1/teams/guided-plans/'+encodeURIComponent(id)+'/create',{method:'POST',body,requestTimeoutMs:RUNTIME_TIMEOUT_MS}),
     createRoom: (title, workspace, options) => request('/api/v1/teams', { method: 'POST', body: { title, workspace, ...options } }),
     copyRoom: (id,body) => request(`/api/v1/teams/${encodeURIComponent(id)}/copy`,{method:'POST',body}),
     syncRoomMemory:id=>request(`/api/v1/teams/${encodeURIComponent(id)}/memory-sync`,{method:'POST',body:{}}),

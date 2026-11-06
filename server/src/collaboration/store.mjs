@@ -75,6 +75,7 @@ export function createCollaborationStore({ database: db, clock = () => new Date(
     const id = input.id ?? createId()
     db.prepare('INSERT INTO loop_rooms(id,title,created_at,config_json) VALUES(?,?,?,?)').run(id, title, now(), JSON.stringify({ creation_request_key:input.request_key??null, leader_id: null, workspace: input.workspace ?? input.workspaces?.[0] ?? null, workspaces: input.workspaces ?? (input.workspace ? [input.workspace] : []), memory_directory: input.memory_directory ?? null, instructions: input.instructions ?? '' }))
     if(input.initial_member)addMember(id,input.initial_member)
+    for(const member of input.initial_members??[])addMember(id,member)
     return room(id)
   }
   function copyRoom(sourceId,input) {

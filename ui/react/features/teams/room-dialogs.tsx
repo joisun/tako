@@ -9,10 +9,13 @@ import { SegmentedControl } from '@/components/ui/segmented-control'
 import type { DashboardApi } from '@/lib/api/dashboard-api'
 import { MemberRuntimeFields } from './member-runtime-fields'
 import { AvatarEditor } from './member-identity'
+import { GuidedTeamCreation } from './guided-team-creation'
 import type { AgentDefinition,LoopAvatar,LoopRoom,LoopRoomDetail, LoopMember } from '@/lib/api/loop-types'
 
 export function RoomSetupDialog({ api, room, copyFrom, onClose, onSaved }: { api:DashboardApi; room?:LoopRoomDetail; copyFrom?:LoopRoom; onClose:()=>void; onSaved:(id?:string)=>void }) {
-  const [pending,setPending]=useState(false),[error,setError]=useState(''),[mode,setMode]=useState('new'),[requestKey]=useState(()=>crypto.randomUUID())
+  const [pending,setPending]=useState(false),[error,setError]=useState(''),[mode,setMode]=useState(()=>!room&&!copyFrom&&new URLSearchParams(window.location.search).get('team_create')==='guided'?'guided':'new'),[requestKey]=useState(()=>crypto.randomUUID())
+  function changeMode(value:string){setMode(value);const url=new URL(window.location.href);if(value==='guided')url.searchParams.set('team_create','guided');else url.searchParams.delete('team_create');window.history.replaceState(window.history.state,'',url)}
+  function close(){const url=new URL(window.location.href);url.searchParams.delete('team_create');window.history.replaceState(window.history.state,'',url);onClose()}
   async function submit(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();if(pending)return
     const data=new FormData(event.currentTarget),memory_directory=String(data.get('memory_directory')??'').trim()
@@ -26,19 +29,20 @@ export function RoomSetupDialog({ api, room, copyFrom, onClose, onSaved }: { api
       }else if(copyFrom)result=await api.copyRoom(copyFrom.id,{title:String(data.get('title')),request_key:requestKey})
       else if(mode==='restore')result=await api.restoreRoom({source_directory:String(data.get('source_directory')).trim(),...storage})
       else result=await api.createRoom(String(data.get('title')),undefined,{request_key:requestKey})
-      onSaved(result.room.id);onClose()
+      onSaved(result.room.id);close()
     }catch(cause){setError(cause instanceof Error?cause.message:'保存失败');setPending(false)}
   }
-  return <Dialog open onOpenChange={open=>{if(!open&&!pending)onClose()}}><DialogContent className="room-dialog room-theme" showCloseButton={!pending}><form onSubmit={submit}>
+  if(!room&&!copyFrom&&mode==='guided')return <GuidedTeamCreation api={api} onBack={()=>changeMode('new')} onClose={close} onSaved={onSaved}/>
+  return <Dialog open onOpenChange={open=>{if(!open&&!pending)close()}}><DialogContent className="room-dialog room-theme" showCloseButton={!pending}><form onSubmit={submit}>
     <DialogHeader><DialogTitle>{room?'团队设置':copyFrom?'复制房间':mode==='restore'?'恢复团队':'新建团队'}</DialogTitle><DialogDescription>{copyFrom?'沿用成员及其配置，聊天与任务从空白开始。':'直接在对话中说明目标。'}</DialogDescription></DialogHeader>
     <DialogBody className="room-form"><fieldset disabled={pending} className="room-setup-fields">
-      {!room&&!copyFrom?<SegmentedControl label="团队创建方式" value={mode} onValueChange={setMode} options={[{value:'new',label:'新建'},{value:'restore',label:'从目录恢复'}]}/>:null}
+      {!room&&!copyFrom?<SegmentedControl label="团队创建方式" value={mode} onValueChange={changeMode} options={[{value:'new',label:'手动创建'},{value:'guided',label:'引导式创建'},{value:'restore',label:'从目录恢复'}]}/>:null}
       {!room&&mode==='new'?<label className="room-field"><span>团队名称</span><Input name="title" required maxLength={120} autoFocus defaultValue={copyFrom?`${copyFrom.title.slice(0,117)} 副本`:undefined}/></label>:null}
       {!room&&mode==='restore'?<label className="room-field"><span>团队资料来源目录</span><Input name="source_directory" required placeholder="/path/to/saved-room"/><small>保留来源资料，恢复后先核对执行状态。</small></label>:null}
       {room||mode==='restore'?<details className="room-storage-settings"><summary>资料存储（可选）</summary><label className="room-field"><span>自定义资料目录</span><Input name="memory_directory" defaultValue={room?.config?.memory_directory??''} placeholder="留空使用 UnderControl 默认存储"/><small>用于资料备份与迁移，留空由 UnderControl 管理。</small></label></details>:null}
       </fieldset>{error?<p role="alert" className="room-error">{error}</p>:null}</DialogBody>
 
-    <DialogFooter><Button onClick={onClose} disabled={pending}>取消</Button><Button type="submit" variant="primary" isPending={pending}>{room?'保存':copyFrom?'复制房间':mode==='restore'?'恢复团队':'创建团队'}</Button></DialogFooter>
+    <DialogFooter><Button onClick={close} disabled={pending}>取消</Button><Button type="submit" variant="primary" isPending={pending}>{room?'保存':copyFrom?'复制房间':mode==='restore'?'恢复团队':'创建团队'}</Button></DialogFooter>
   </form></DialogContent></Dialog>
 }
 

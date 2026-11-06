@@ -26,6 +26,8 @@ Teams 成员跨职责延续同一任务中的原生会话，委派可明确产�
 
 Teams 左侧“Agent 管理”统一管理本地与 Marketplace 定义，仍在 view=teams 范围。支持 Agency Agents、ECC 及自定义 GitHub 来源、真实 Markdown 详情、托管安装、版本与本地修改检查、逐行更新审核及备份卸载。成员区 + 改为先搜索本地角色，再配置名字、头像、客户端、模型和 effort。安装角色可沿用 Teams 执行；独立 Session 创建尚未接入，界面明确禁用。详见 [Agent Marketplace](docs/agent-marketplace.md)。
 
+新建团队支持“引导式创建”：描述需求，由 Agent 主动搜索已启用市场的 Agent 池并读取专业定义，按需求覆盖职责，不预设人数；可继续补充意见、调整方案，再选择“仅创建”或“创建并开始”。生成方案不建队、不安装角色、不执行业务任务，确认后才使用现有 Teams 流程。详见[引导式创建](docs/agent-loop.md#引导式创建)。
+
 ## Quick start
 
 要求 macOS 或提供 systemd 用户服务的 Linux、Node.js 24+、`curl`、`tar`，以及 `sha256sum` 或 `shasum`。

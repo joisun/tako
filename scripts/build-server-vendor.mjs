@@ -47,9 +47,9 @@ export async function buildServerVendor({
       await rm(temporaryPath, { force: true }).catch(() => undefined)
     }
   }
-  await build({
-    entryPoints: [join(projectRoot, 'mcp', 'src', 'loop-server.mjs')],
-    outfile: join(projectRoot, 'server', 'vendor', 'loop-server.mjs'),
+  for (const name of ['loop-server', 'team-planner-server']) await build({
+    entryPoints: [join(projectRoot, 'mcp', 'src', name + '.mjs')],
+    outfile: join(projectRoot, 'server', 'vendor', name + '.mjs'),
     bundle: true, format: 'esm', platform: 'node', target: 'node24',
     legalComments: 'inline', minify: true,
   })

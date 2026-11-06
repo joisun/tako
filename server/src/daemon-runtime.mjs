@@ -1,3 +1,4 @@
+import { createGuidedTeamPlanner } from './collaboration/guided-planner.mjs'
 import { createActionTriggerServer } from './action-trigger-server.mjs'
 import { createAgentMarketplace } from './agent-marketplace/service.mjs'
 import { createTeamPartTiming } from './team-part-timing.mjs'
@@ -156,6 +157,7 @@ export async function startDaemon({
     count: 0,
   }
   let executionDatabase = null
+  let guidedTeams = null
   let marketplace = null
   let collaboration = null
   let schedulerStore = null
@@ -241,7 +243,8 @@ export async function startDaemon({
     schedulerClosed = true
     try {
       await schedulerClock?.close()
-      await collaboration?.close()
+      await guidedTeams?.close()
+    await collaboration?.close()
       await marketplace?.close()
       await runService?.shutdown()
       await schedulerMonitor?.close()
@@ -320,15 +323,22 @@ export async function startDaemon({
       })
       marketplace = createAgentMarketplace({database:executionDatabase,dataDirectory,clock,onChange:change=>hub.publish(change)})
       await marketplace.recover()
+      const agentCatalog = createAgentCatalog({additionalLocalDefinitions:()=>marketplace.teamDefinitions()})
+      const teamExecute = createAgentExecution({ registry: collaborationRegistry, supervisor, clock })
       collaboration = createCollaborationRuntime({
         hydrateRunParts:createTeamPartTiming(),
-        catalog: createAgentCatalog({additionalLocalDefinitions:()=>marketplace.teamDefinitions()}), memoryRoot:join(dataDirectory,'rooms','memory'), workspaceRoot:join(dataDirectory,'rooms','workspaces'),
+        catalog: agentCatalog, memoryRoot:join(dataDirectory,'rooms','memory'), workspaceRoot:join(dataDirectory,'rooms','workspaces'),
         store: createCollaborationStore({ database: executionDatabase, clock }), resources,
         registry: collaborationRegistry,
-        executeAgent: createAgentExecution({ registry: collaborationRegistry, supervisor, clock }),
+        executeAgent: teamExecute,
         logs: createRunLogs({ root: join(dataDirectory, 'rooms', 'logs') }),
         onChange: change => hub.publish(change),
       })
+      guidedTeams = createGuidedTeamPlanner({ database:executionDatabase, catalog:agentCatalog, marketplace,
+        executeAgent:teamExecute, memberRuntime:collaboration.memberRuntime,
+        logs:createRunLogs({root:join(dataDirectory,'rooms','planning-logs')}),
+        workspaceRoot:join(dataDirectory,'rooms','planning'),createRoom:collaboration.createGuidedRoom,
+        postMessage:collaboration.postMessage,clock })
       schedulerService = createScheduleService({
         definitions: schedulerDefinitions,
         runtimeRegistry,
@@ -473,6 +483,7 @@ export async function startDaemon({
       messaging,
       schedulerService,
       collaboration,
+      guidedTeams,
       marketplace,
       scheduledRunLogs,
       runtimeRegistry,
@@ -487,6 +498,7 @@ export async function startDaemon({
       schedulerService.setTriggerBaseUrl?.(triggerAddress.url)
     }
     const address = await api.listen()
+    guidedTeams?.setBaseUrl('http://127.0.0.1:' + address.port)
     await collaboration?.start(`http://127.0.0.1:${address.port}`)
     return {
       address,

@@ -365,6 +365,10 @@ Teams 对话按动作首次观察时间合并文字、工具、公开摘要和�
 
 结果通过当前 Task 的精确 source_run_id 读取完整已保存公开正文，避免 UI 可见而其他成员只收到尾声。续接输入保存结果事件游标，仅补充新结果与有界索引；未改变的定义不重复注入。reply 与完成通知合并交接，仅恢复需要继续原工作的实际请求者，不为每条完成确认再次调度 Leader。Leader 的 wait 不阻断未结束成员：排队或运行中的成员存在时 Task 保持 active，结果继续被接收；确实只剩用户输入时才进入 waiting。显式暂停、取消和修订的凭据撤销保持。conversation 恢复时保留未启动指派并更新其 generation，与恢复后的 Task 一致；不重建其 Run ID 或重跑已完成记录。Teams Codex 完整访问与角色调度分开，保留全局 hooks 和真实目录锁；Codex Skills/integrations 及未显式指定的网络策略继承客户端配置，不额外关闭。Teams 原生成功不强制 submit_result，公开答复可按 Run ID 读取并返回委派者，不伪造结构化验证。conversation 不再按默认 24 轮或 600 秒截断，旧固定阶段和 Schedule 的显式限制保留。
 
+### Teams 引导式创建
+
+collaboration/guided-planner.mjs 通过共享 createAgentExecution 执行只读组队；guided-candidates.mjs 索引已启用 Marketplace 来源的完整目录。原生规划 Agent 经 team-planner-server.mjs 的 search_agents / get_agent_definition 主动搜索与读取专业角色；临时凭据限于活动规划，记录真实搜索轨迹，结束后失效。本地定义不参与新规划检索；已存在的旧方案继续保留快照兼容。规划状态、草案、候选快照及原生 Session ID 保存在同一个 executionDatabase 的 loop_team_plans，不创建独立执行器。取消会中止原生执行，重启不自动重跑。确认阶段重新校验客户端模型、effort 和定义版本，通过既有 Marketplace 安装已审核快照，createGuidedRoom 在现有事务中保存全部成员。仅创建不启动 Run，开始工作复用 postConversationMessage；请求标识分别保护规划、建队和首条消息的重试。refine 为每轮沟通保存 parent_id、revision、用户已编辑基线、对话及工具轨迹，幂等请求不重复生成；不限制成员人数。浏览器暂存可编辑草案及未提交意见，调整时保留旧草案，成功才替换。现有 Teams 创建对话框提供入口，保留原来的手动、复制与恢复流程。规划 MCP 与现有 Loop MCP 一同打包为 server/vendor 下的独立文件，发布版不依赖 node_modules。
+
 ### Teams Agent 管理与 Marketplace
 
 全局 Agent 配置位于 view=teams&team_view=agents，由 App 将 MarketplaceView 注入 TeamsView 组合；feature 之间不互相导入。成员 + 仅选择本地角色，再配置团队身份。发现、安装、更新、来源和全局定义删除与成员添加/移出分离。
