@@ -24,7 +24,7 @@ function portValue(value, field) {
 }
 
 export function resolveDashboardDevConfig({ env = process.env } = {}) {
-  const port = portValue(env.UNDERCONTROL_DEV_PORT ?? 43128, 'UNDERCONTROL_DEV_PORT')
+  const port = portValue(env.UNDERCONTROL_DEV_PORT ?? 43130, 'UNDERCONTROL_DEV_PORT')
   const upstream = new URL(env.UNDERCONTROL_DEV_UPSTREAM ?? 'http://127.0.0.1:43127')
   if (upstream.protocol !== 'http:' || upstream.hostname !== LOOPBACK) {
     throw new Error('UNDERCONTROL_DEV_UPSTREAM must be an HTTP loopback URL')
@@ -54,8 +54,10 @@ const reloadClient = `<script data-undercontrol-dev-reload>
 
 export function injectDashboardReloadClient(html) {
   if (html.includes('data-undercontrol-dev-reload')) return html
-  if (!html.includes('</body>')) throw new Error('Dashboard HTML is missing </body>')
-  return html.replace('</body>', `${reloadClient}\n</body>`)
+  // Bundled libraries can contain </body> inside JavaScript strings.
+  const bodyEnd = html.lastIndexOf('</body>')
+  if (bodyEnd === -1) throw new Error('Dashboard HTML is missing </body>')
+  return html.slice(0, bodyEnd) + reloadClient + '\n' + html.slice(bodyEnd)
 }
 
 function sendJson(response, statusCode, body) {

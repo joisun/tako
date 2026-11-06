@@ -533,7 +533,9 @@ npm run dev:ui:react
 
 前端采用 Kibo UI 源码组合组件、shadcn 组件约定和 Base UI 单一交互底层；Motion 统一动效，Geist Sans/Mono 随包离线加载。组件与依赖维护规则见 [架构文档](docs/architecture.md#frontend-component-architecture) 和 [组件来源](ui/react/components/registry/README.md)。
 
-打开 <http://127.0.0.1:43128>。`ui/react` 变化会自动 rebuild/refresh，默认 API 来自 `43127`；后端变更需要重启对应服务。API v5 前端不能代理旧版服务；隔离开发时用 `UNDERCONTROL_DEV_PORT` 和 `UNDERCONTROL_DEV_UPSTREAM` 指向独立端口。该页面的 mutation 会修改所连接服务的数据。
+打开 <http://127.0.0.1:43130>。`ui/react` 变化会自动 rebuild/refresh，默认 API 来自 `43127`；`43128` 保留给 HTTP Trigger。后端变更需要重启对应服务。API v5 前端不能代理旧版服务；隔离开发时用 `UNDERCONTROL_DEV_PORT` 和 `UNDERCONTROL_DEV_UPSTREAM` 指向独立端口。该页面的 mutation 会修改所连接服务的数据。
+
+多个会话共用开发入口时，在主目录启动一次 `npm run dev:ui:react`，前端改动保存后会自动编译并整页刷新。各自 worktree 的改动需同步到共享主目录后才能在此入口看到，不会自动混合不同分支。
 
 发布前验证：
 
