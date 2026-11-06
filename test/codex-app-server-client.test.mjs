@@ -314,3 +314,18 @@ test('legacy Codex session search and history methods report unsupported capabil
     await assert.rejects(pending, { code: 'RUNTIME_PROTOCOL_METHOD_UNAVAILABLE' })
   }
 })
+
+test('active writer conflicts are distinguished from other protocol errors', async (t) => {
+  for (const [error, expected] of [
+    [{ code: -32600, message: 'thread 01a19a06-ab2e-7163-ac35-ffe634515f0a already has an active writer' }, 'RUNTIME_SESSION_IN_USE'],
+    [{ code: -32600, message: 'thread missing was not found' }, 'RUNTIME_PROTOCOL_ERROR'],
+    [{ code: -32603, message: 'thread private-thread already has an active writer' }, 'RUNTIME_PROTOCOL_ERROR'],
+  ]) {
+    const child = fakeChildProcess()
+    const client = createCodexAppServerClient({ executable: '/bin/codex', cwd: '/tmp', spawnImpl: () => child })
+    t.after(() => client.close())
+    const pending = client.request('thread/resume', { threadId: 'private-thread' })
+    child.stdout.write(JSON.stringify({ id: 1, error }) + '\n')
+    await assert.rejects(pending, { code: expected })
+  }
+})

@@ -253,6 +253,10 @@ function protocolError(code) {
 }
 
 function protocolFailureCode(value) {
+  if (value?.code === -32600 && typeof value.message === 'string'
+    && /^thread \S+ already has an active writer$/.test(value.message)) {
+    return 'RUNTIME_SESSION_IN_USE'
+  }
   if (value?.code === -32601 || (value?.code === -32600
     && typeof value.message === 'string'
     && /^Invalid request: unknown variant `thread\/(?:items\/list|turns\/list|search|searchOccurrences)`/.test(value.message))) {

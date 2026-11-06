@@ -511,6 +511,7 @@ tail -n 100 ~/.config/undercontrol/logs/undercontrol.ndjson
 - Runtime 为 `unavailable`：运行对应 CLI 的 `--version` 后重新打开 editor 或调用 `POST /api/v1/runtimes/refresh`；失败结果不会被长期缓存。registry 会自动补充 Homebrew、fnm/nvm/mise 等 GUI-missing toolchain directories，也可显式配置 `CODEX_BIN` / `codex_path`。
 - Model 使用 fallback：手动运行解析到的 `codex debug models`；fallback 不会阻止保存或 Run。
 - Run 失败：在 Run Review 查看 stable error code、退出码、provider 错误详情与 stdout/stderr。模型在地区不可用时显示 `RUNTIME_MODEL_UNAVAILABLE` 和 provider 返回的原文；已有 Session ID 可点击后在 Terminal 继续对话。
+- 继承会话时出现 `RUNTIME_SESSION_IN_USE`：该会话已由其他 Codex 客户端持有写入权。退出对应终端或客户端中的会话后再重跑；UnderControl 不会强制接管，也不会自动改为新建会话。
 - 历史对话不可用：确认对应 `thread_id` 仍存在于本机 Codex session inventory；UnderControl 不保存第二份 transcript，因此 session 被 Codex 清理后只显示 Run `final_message`。
 - Action definition 不可用：按页面给出的 source path 修复 YAML、duplicate UUID、unknown field、cadence 或 symlink 问题；watcher 会自动重试。
 - 插件仍显示旧 Task 工具：更新插件后新开 agent conversation。当前不再自动记录 Task 或要求 hooks trust。

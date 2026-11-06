@@ -269,6 +269,8 @@ Action Markdown 与 CRUD API 的可选 `fast_mode` 为 boolean 或 null，仅 Co
 
 ### Codex 临时失败恢复
 
+Codex 返回 `thread <id> already has an active writer`（JSON-RPC -32600）时映射为 `RUNTIME_SESSION_IN_USE`。Run 以失败结束，界面提示退出占用会话的客户端后重跑；此错误不属于模型/网络瞬态重试，不接管其他客户端，也不回退新建会话。
+
 codex-interactive-session 在已确认的 turn/completed.failed 后读取 error.message 与 codexErrorInfo，必要时使用同轮 error 通知补全诊断，不再将所有 provider 失败折叠为 RUNTIME_PROCESS_FAILED。容量不足和限流使用独立错误码；未知失败仍保留泛化错误。
 
 同一个存活的 app-server、Thread 和 Run 中最多新增 3 个恢复 Turn，延迟 10/30/90 秒并增加最多 20% jitter。恢复输入只请求继续未完成工作，保留原 model、effort、serviceTier、workspace、sandbox 和已确认文件变更。RunService 仍只启动一次、持有一个 completion；原 occurrence 防重与 single-active-run 约束不变。重试期间不写终态、不重置任务总超时，也不重新提交初始 prompt。实时流复用 activity_started/completed 和递增 Turn revision，日志只记录有上限的 provider 错误与重试元数据。

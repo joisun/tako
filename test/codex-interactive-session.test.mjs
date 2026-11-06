@@ -380,3 +380,27 @@ test('workspace network policy reaches thread creation and canceled sessions rem
     assert.equal((await completion).session_id, 'private-thread')
   }
 })
+
+test('a busy inherited session fails without starting a turn or silently creating another session', async () => {
+  const client = fakeClient()
+  const request = client.request.bind(client)
+  client.request = async (method, params) => {
+    if (method !== 'thread/resume') return request(method, params)
+    client.requests.push({ method, params })
+    throw Object.assign(new Error('RUNTIME_SESSION_IN_USE'), { code: 'RUNTIME_SESSION_IN_USE' })
+  }
+  const factory = createCodexInteractiveSessionFactory({ createClient: () => client })
+  const session = factory.create({
+    launch: { executable: '/bin/codex' },
+    run: { ...RUN, resume_session_id: 'occupied-thread' },
+    signal: new AbortController().signal,
+    emit() {}, onSpawn() {},
+  })
+  const result = await session.start()
+  assert.equal(result.status, 'failed')
+  assert.equal(result.error_code, 'RUNTIME_SESSION_IN_USE')
+  assert.equal(client.closed, true)
+  assert.equal(session.steerable, false)
+  assert.deepEqual(client.requests.map(({ method }) => method), ['initialize', 'thread/resume'])
+  assert.equal(client.requests[1].params.threadId, 'occupied-thread')
+})
