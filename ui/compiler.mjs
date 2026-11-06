@@ -72,6 +72,7 @@ export async function compileReactDashboard({
     target: ['es2022'],
     outdir: 'out',
     loader: {
+      '.png': 'dataurl',
       '.woff': 'dataurl',
       '.woff2': 'dataurl',
       '.ttf': 'dataurl',

@@ -1,6 +1,6 @@
 import type { PropsWithChildren, ReactNode } from 'react'
 
-import { TAKO_BRAND_NAME } from '@/branding'
+import { TAKO_BRAND_NAME, TAKO_BRAND_MARK } from '@/branding'
 import type { DashboardConnectionState } from '@/lib/events/dashboard-event-source'
 import type { DashboardView } from '@/lib/preferences/dashboard-preferences'
 import { ConnectionStatus } from './connection-status'
@@ -25,6 +25,7 @@ export function AppShell({
     <div className="app-shell">
       <header className="app-shell__header">
         <div className="app-shell__brand">
+          <img src={TAKO_BRAND_MARK} width={24} height={24} alt="" aria-hidden="true" />
           <h1>{TAKO_BRAND_NAME}</h1>
         </div>
         <div className="app-shell__navigation-zone">

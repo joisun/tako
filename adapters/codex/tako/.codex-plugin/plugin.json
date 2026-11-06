@@ -33,6 +33,8 @@
       "Create or trigger an Action.",
       "Find suitable agents for a professional team."
     ],
-    "websiteURL": "https://github.com/joisun/tako"
+    "websiteURL": "https://github.com/joisun/tako",
+    "composerIcon": "./assets/tako-icon.png",
+    "logo": "./assets/tako-icon.png"
   }
 }

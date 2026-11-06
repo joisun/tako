@@ -82,6 +82,8 @@
 /* The application has one typography and spacing rhythm, across both tabs. */
 .app-shell { grid-template-rows: 44px minmax(0, 1fr); }
 .app-shell__header { padding-inline: 16px; background: var(--surface-1); }
+.app-shell__brand { display: flex; align-items: center; gap: 7px; }
+.app-shell__brand img { display: block; object-fit: contain; flex-shrink: 0; }
 .app-shell__brand h1 { font-size: 14px; font-weight: 750; letter-spacing: .04em; }
 .app-shell__mark { width: 24px; height: 24px; }
 .app-shell__main { background: var(--surface-0); }

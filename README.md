@@ -1,4 +1,9 @@
-# TAKO
+<h1>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="ui/assets/tako-lockup-white.png">
+  <img src="ui/assets/tako-lockup-ink.png" alt="TAKO" width="320">
+</picture>
+</h1>
 
 **Your AI Agent Crew**
 

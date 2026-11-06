@@ -1,0 +1,63 @@
+{
+  "mode": "built-in image_gen",
+  "selected_direction": "first displayed Quiet Octopus concept",
+  "assets": {
+    "tako-lockup-ink.png": {
+      "path": "ui/assets/tako-lockup-ink.png",
+      "width": 2172,
+      "height": 724,
+      "bytes": 628388,
+      "sha256": "fe5ed946c0ee45121b58554bfbd9e87db5f721faa06a5a3f326eae8a23af151b"
+    },
+    "tako-icon.png": {
+      "path": "ui/assets/tako-icon.png",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 1174607,
+      "sha256": "1f74517cf36a422952e1b4310cd7b1c82215c72775242572fe8f84f5d2ce4f57"
+    },
+    "tako-mark.png": {
+      "path": "ui/assets/tako-mark.png",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 710740,
+      "sha256": "b44607a420c2ece9f122435c54b531247a7acadc77432266ae34452be0050a99"
+    },
+    "tako-lockup-white.png": {
+      "path": "ui/assets/tako-lockup-white.png",
+      "width": 2172,
+      "height": 724,
+      "bytes": 592228,
+      "sha256": "60f53a898b8b3e3160eb7b5a2ad31a1404dd10f48985bb30de7cdb6f46fb2103"
+    }
+  },
+  "sources": {
+    "selected-direction.png": "User-selected first displayed result; copied without changing its pixels."
+  },
+  "reproduction_briefs": [
+    {
+      "asset": "tako-mark.png",
+      "reference": "selected-direction.png",
+      "prompt": "Preserve the selected rounded octopus silhouette, three visible rounded arm tips on each side and two vertical rounded eye cutouts. Export an isolated purple mark on genuine alpha transparency. Keep proportions and optical balance; no added facial features or props."
+    },
+    {
+      "asset": "tako-icon.png",
+      "reference": "tako-mark.png",
+      "prompt": "Preserve the approved silhouette in white on a full square purple background, with balanced clear space, two eye openings showing purple, no text or extra elements."
+    },
+    {
+      "asset": "tako-lockup-ink.png",
+      "reference": [
+        "tako-mark.png",
+        "selected-direction.png"
+      ],
+      "prompt": "Compose the approved purple symbol and bold uppercase TAKO wordmark in ink for light backgrounds, optically centered, preserving the selected typography, letter spacing and silhouette, on genuine transparency."
+    },
+    {
+      "asset": "tako-lockup-white.png",
+      "reference": "tako-lockup-ink.png",
+      "prompt": "Change only the existing horizontal lockup to white, preserving silhouette, typography, spacing and negative-space cutouts; genuine alpha transparency for use on dark backgrounds."
+    }
+  ],
+  "note": "Reproduction briefs summarise the submitted prompts. PNG source assets; no SVG/vector master is claimed. No raster pixels were edited in local scripts. Browser rendering was used to inspect alpha composition and small sizes."
+}
