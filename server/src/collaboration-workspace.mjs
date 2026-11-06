@@ -33,7 +33,7 @@ export async function prepareCollaborationWorkspace({workspace,requestKey,execut
   }
   const inventory=(await git(['worktree','list','--porcelain'])).split('\n\n').map(block=>Object.fromEntries(block.split('\n').map(line=>{const i=line.indexOf(' ');return i<0?[line,true]:[line.slice(0,i),line.slice(i+1)]})))
   const suffix=createHash('sha256').update(requestKey).digest('hex').slice(0,16)
-  const worktree=join(root,'.worktree',`undercontrol-loop-${suffix}`)
+  const worktree=join(root,'.worktree',`tako-loop-${suffix}`)
   async function ensureParent(){
     await mkdir(join(root,'.worktree'),{recursive:true})
     if(await realpath(join(root,'.worktree'))!==resolve(root,'.worktree'))throw invalid('LOOP_WORKTREE_UNSAFE','worktree 父目录不能是符号链接')
@@ -49,7 +49,7 @@ export async function prepareCollaborationWorkspace({workspace,requestKey,execut
     return result(worktree,requestedBranch)
   }
   if(executionMode!=='isolated')throw invalid('LOOP_EXECUTION_MODE_INVALID','项目执行方式无效')
-  const branch=`undercontrol/loop-${suffix}`,assigned=inventory.find(item=>item.worktree===worktree||item.branch===`refs/heads/${branch}`)
+  const branch=`tako/loop-${suffix}`,assigned=inventory.find(item=>item.worktree===worktree||item.branch===`refs/heads/${branch}`)
   if(assigned&&(assigned.worktree!==worktree||assigned.branch!==`refs/heads/${branch}`))throw invalid('LOOP_WORKTREE_CONFLICT','协作分支或 worktree 已分配给其他路径')
   const start=requestedBranch??'HEAD'
   const commit=await git(['rev-parse','--verify','--end-of-options',`${start}^{commit}`]).catch(()=>{throw invalid('LOOP_BRANCH_NOT_FOUND','所选起点引用不存在；不会改用 HEAD')})

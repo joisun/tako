@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -11,9 +11,8 @@ export async function buildAdapters({
 } = {}) {
   const outputs = []
   for (const host of ['codex', 'claude']) {
-    const pluginRoot = resolve(projectRoot, 'adapters', host, 'undercontrol')
+    const pluginRoot = resolve(projectRoot, 'adapters', host, 'tako')
     await mkdir(resolve(pluginRoot, 'assets'), { recursive: true })
-    await copyFile(resolve(projectRoot, 'ui/assets/undercontrol.png'), resolve(pluginRoot, 'assets/undercontrol.png'))
     const outfile = resolve(pluginRoot, 'dist', 'mcp-server.mjs')
     const temporaryOutfile = `${outfile}.${process.pid}.${crypto.randomUUID()}.tmp`
     await mkdir(resolve(pluginRoot, 'dist'), { recursive: true })

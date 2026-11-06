@@ -13,7 +13,7 @@ import type { GuidedDraft,GuidedMember,GuidedPlan } from '@/lib/api/guided-types
 import { AvatarEditor } from './member-identity'
 import { MemberRuntimeFields } from './member-runtime-fields'
 
-const STORAGE='undercontrol.guided-team-draft'
+const STORAGE='tako.guided-team-draft'
 interface SavedDraft {feedback:string;reviewPlanId:string|null;requirements:string;workspace:string;runtime:'codex'|'claude';model:string|null;effort:string|null;planId:string|null;draft:GuidedDraft|null;requestKey:string;requestBody:string}
 function restored():SavedDraft {
   const empty:SavedDraft={feedback:'',reviewPlanId:null,requirements:'',workspace:'',runtime:'codex',model:null,effort:null,planId:null,draft:null,requestKey:crypto.randomUUID(),requestBody:''}

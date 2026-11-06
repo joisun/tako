@@ -5,14 +5,14 @@ import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 
 export function createTeamPlannerToolServer({ env = process.env, fetchImpl = fetch } = {}) {
-  const server = new McpServer({ name: 'undercontrol_team_planner', version: '1.0.0' }, {
+  const server = new McpServer({ name: 'tako_team_planner', version: '1.0.0' }, {
     instructions: 'Search the enabled Agent Marketplace pool for professional roles and read candidate definitions before recommending them. These tools only read catalogs; they cannot install agents, create teams or execute business work.',
   })
   async function call(tool, input) {
-    const base = new URL(env.UNDERCONTROL_TEAM_PLAN_URL)
+    const base = new URL(env.TAKO_TEAM_PLAN_URL)
     if (base.protocol !== 'http:' || !['127.0.0.1', '[::1]'].includes(base.hostname)) throw new Error('Team planning tools require a local service URL')
-    const response = await fetchImpl(new URL('/api/v1/teams/guided-plans/' + encodeURIComponent(env.UNDERCONTROL_TEAM_PLAN_ID) + '/tools/' + tool, base), {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.UNDERCONTROL_TEAM_PLAN_TOKEN },
+    const response = await fetchImpl(new URL('/api/v1/teams/guided-plans/' + encodeURIComponent(env.TAKO_TEAM_PLAN_ID) + '/tools/' + tool, base), {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + env.TAKO_TEAM_PLAN_TOKEN },
       body: JSON.stringify(input), signal: AbortSignal.timeout(90000),
     })
     const value = await response.json()

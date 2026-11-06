@@ -1,6 +1,6 @@
 # Architecture
 
-本文描述 UnderControl 当前必须保持的系统边界。面向用户的安装、使用与排障入口见 [`README.md`](../README.md)。历史 specs 和 job logs 记录决策过程，不代表现行 runtime contract。
+本文描述 TAKO 当前必须保持的系统边界。面向用户的安装、使用与排障入口见 [`README.md`](../README.md)。历史 specs 和 job logs 记录决策过程，不代表现行 runtime contract。
 
 ## System shape
 
@@ -18,7 +18,7 @@ macOS `launchd` 与 Linux `systemd --user` 均只管理一个 `daemon` 常驻服
 
 ## Host service lifecycle
 
-`server/control.mjs` 按真实平台选择 macOS LaunchAgent 或 `server/control/systemd.mjs`，Windows 不进入安装路径。Linux controller 写入用户级 `undercontrol.service`，确认 Node.js 24、用户 manager、端口占用与预构建资产；启用后只重启一次服务。ExecStart 固定为可信 Node 与 daemon 绝对路径，禁用 shell/环境展开，转义 systemd 百分号 specifier 与路径引号。unit 固定 HOME、与 Node executable 一致的 PATH，以及显式 CODEX_HOME，不持久化 API key。日志和 unit 使用用户私有权限。卸载停止并禁用本 unit，删除 unit 后 reload manager；数据和日志保留，不调用 sudo、不改系统 unit 或 lingering。
+`server/control.mjs` 按真实平台选择 macOS LaunchAgent 或 `server/control/systemd.mjs`，Windows 不进入安装路径。Linux controller 写入用户级 `tako.service`，确认 Node.js 24、用户 manager、端口占用与预构建资产；启用后只重启一次服务。ExecStart 固定为可信 Node 与 daemon 绝对路径，禁用 shell/环境展开，转义 systemd 百分号 specifier 与路径引号。unit 固定 HOME、与 Node executable 一致的 PATH，以及显式 CODEX_HOME，不持久化 API key。日志和 unit 使用用户私有权限。卸载停止并禁用本 unit，删除 unit 后 reload manager；数据和日志保留，不调用 sudo、不改系统 unit 或 lingering。
 
 installer 按 Darwin/Linux 选择不同命名的自包含 archive，校验平台对应的 SHA256 后再切换 current；runtime 本身为同一份跨平台 JavaScript，Node.js 由用户安装。Linux 优先使用 sha256sum，macOS 可使用 shasum。两平台均检查 Node.js 24+、服务配置及预构建入口；健康检查固定走本机地址，展示地址可使用server_public_url。服务卸载失败时不继续删除程序文件。CI 同时运行 macos-latest 和 ubuntu-latest；Release 输出两种 service archive 和原有 adapter archive。
 
@@ -26,9 +26,9 @@ installer 按 Darwin/Linux 选择不同命名的自包含 archive，校验平台
 
 Release分为macOS构建、Ubuntu安装验证和发布三个job。Ubuntu下载macOS产生的原始archive、installer及SHA256SUMS，在临时HOME中实际安装并直接启动随机端口的daemon，检查版本、Dashboard及SSE，不调用systemd安装。publish依赖Linux验证成功。运行入口server/daemon.mjs读取相邻package.json并注入config.packageVersion，作为/api/v1/meta的service_version；已安装runtime不应返回source。
 
-Linux 按 Web 服务使用，不启动浏览器、桌面终端或 tmux；`undercontrol open` 仅返回配置的公开访问地址，未配置时返回本机地址。默认可通过 SSH loopback 转发访问，也可显式配置原生网络访问。terminalLauncher.supported=false 时 providers 的 resume=false，settings 返回 local_actions_supported=false。Sessions 不显示终端启动按钮，Actions 保留 Session ID 复制并禁用服务器本机文件打开操作，终端选择设置不出现；桌面操作 API 仍返回 typed unsupported。macOS 操作保持原有实现。状态读取通过已有 Codex Unix socket；没有共享服务器时只标记状态不可用，不启动任何 daemon 或使用进程反查。
+Linux 按 Web 服务使用，不启动浏览器、桌面终端或 tmux；`tako open` 仅返回配置的公开访问地址，未配置时返回本机地址。默认可通过 SSH loopback 转发访问，也可显式配置原生网络访问。terminalLauncher.supported=false 时 providers 的 resume=false，settings 返回 local_actions_supported=false。Sessions 不显示终端启动按钮，Actions 保留 Session ID 复制并禁用服务器本机文件打开操作，终端选择设置不出现；桌面操作 API 仍返回 typed unsupported。macOS 操作保持原有实现。状态读取通过已有 Codex Unix socket；没有共享服务器时只标记状态不可用，不启动任何 daemon 或使用进程反查。
 
-server_listen_host只接受127.0.0.1或0.0.0.0，省略时沿用server_host，默认仍只监听本机。0.0.0.0不要求server_public_url或客户端白名单；旧server_allowed_clients字段不再参与配置解析或访问检查。serverBaseUrl与UNDERCONTROL_SERVER_URL保持loopback，供CLI/MCP及controller健康检查使用。可选serverPublicUrl只用于CLI展示和打开访问地址。createApiServer直接提供页面、API和SSE，不按客户端IP、Host或Origin拦截；请求URL及文件预览跳转地址根据当前请求的Host生成。开发gateway同样不做Host和Origin拦截，仍仅监听loopback并代理到本机daemon。JSON类型、字段、消息大小及文件路径校验保持有效，Dashboard API不增加CORS响应头。
+server_listen_host只接受127.0.0.1或0.0.0.0，省略时沿用server_host，默认仍只监听本机。0.0.0.0不要求server_public_url或客户端白名单；旧server_allowed_clients字段不再参与配置解析或访问检查。serverBaseUrl与TAKO_SERVER_URL保持loopback，供CLI/MCP及controller健康检查使用。可选serverPublicUrl只用于CLI展示和打开访问地址。createApiServer直接提供页面、API和SSE，不按客户端IP、Host或Origin拦截；请求URL及文件预览跳转地址根据当前请求的Host生成。开发gateway同样不做Host和Origin拦截，仍仅监听loopback并代理到本机daemon。JSON类型、字段、消息大小及文件路径校验保持有效，Dashboard API不增加CORS响应头。
 
 ## Non-negotiable invariants
 
@@ -84,7 +84,7 @@ Registry list 只验证 executable availability，不探测登录态。登录态
 
 ## Actions 定义与调用
 
-Actions 升级 Schedule。新定义写 undercontrol/action；旧 undercontrol/schedule 读取不改写，enabled 映射为定时开关，默认关闭外部调用；编辑后保留 ID、路径和正文写为新格式。schedule 可为 null，enabled/schedule_enabled/external_enabled 独立。secret 安全生成并明文写 external_secret，仅管理详情可读，不进入快照、提示词、运行输入或日志。定义继续通过原有 watcher、原子写入与 etag 维护。
+Actions 升级 Schedule。新定义写 tako/action；旧 tako/schedule 读取不改写，enabled 映射为定时开关，默认关闭外部调用；编辑后保留 ID、路径和正文写为新格式。schedule 可为 null，enabled/schedule_enabled/external_enabled 独立。secret 安全生成并明文写 external_secret，仅管理详情可读，不进入快照、提示词、运行输入或日志。定义继续通过原有 watcher、原子写入与 etag 维护。
 
 同 daemon 默认在 127.0.0.1:43128 独立监听 POST /actions/:id/trigger，仅接受 {secret,data}。先检查体积、格式与密钥，再持久创建 Run，202 只代表已接收。输入 JSON 独立保存，不覆盖运行配置。外部端口不挂载管理、会话或文件路由；沿用现有访问方式，不新增 Host/Origin 拦截。配置、错误码、API/MCP 与外部工具分工详见 [Actions](actions.md)。
 
@@ -92,7 +92,7 @@ Actions 升级 Schedule。新定义写 undercontrol/action；旧 undercontrol/sc
 
 Run 创建事务保存不含 external_secret 的任务快照和独立 input_json。启动前根据前一轮实际结果确定 session_mode、session_mode_reason、resume_session_id 和 inherit_run_number；这样队列中的连续请求可继承刚结束的一轮。默认 new；reuse/auto 匹配同 Action、runtime 和 workspace 的最近原生会话。max_inherit_runs 默认 20，首次新建不计入；统计实际记录了同原生 Session 的继承执行，达到上限后换新会话。
 
-auto 的成功 final_message 末尾标记 `<!-- undercontrol:next-session=new|reuse -->` 决定下一轮；失败或缺失默认 reuse，上限优先。RunService 注入协议但不修改 Markdown 正文。Codex 选择 thread/start 或 thread/resume，OpenCode 选择新建 session 或获取原 session；恢复失败不降级新建。UnderControl 不再提供或注入自动压缩阈值，也不主动读取 Runtime 的压缩配置。旧定义的 `auto_compact_token_limit` 只读识别并忽略，保存时不再写出；排队和历史 Run 的快照不改写，CLI 与交互式执行路径都不再应用旧阈值。Codex 原生配置及模型默认压缩机制保持自身行为。
+auto 的成功 final_message 末尾标记 `<!-- tako:next-session=new|reuse -->` 决定下一轮；失败或缺失默认 reuse，上限优先。RunService 注入协议但不修改 Markdown 正文。Codex 选择 thread/start 或 thread/resume，OpenCode 选择新建 session 或获取原 session；恢复失败不降级新建。TAKO 不再提供或注入自动压缩阈值，也不主动读取 Runtime 的压缩配置。旧定义的 `auto_compact_token_limit` 只读识别并忽略，保存时不再写出；排队和历史 Run 的快照不改写，CLI 与交互式执行路径都不再应用旧阈值。Codex 原生配置及模型默认压缩机制保持自身行为。
 
 ```text
 queued
@@ -141,7 +141,7 @@ Codex adapter 在 spawn 前用同一 executable、cwd 与 child environment 执�
 
 ## Terminal conversation read
 
-Completed Run history does not create a UnderControl transcript store:
+Completed Run history does not create a TAKO transcript store:
 
 ```text
 Dashboard ──GET /runs/:id/conversation──▶ RunService
@@ -220,11 +220,11 @@ Definitions directory 切换是一个受控迁移：验证目标、迁移/合并
 
 ## Dashboard views and timeline interaction
 
-Production `daemon` 读取 `ui/dist/react.html`，脚本与样式内嵌。品牌图使用 `ui/assets/undercontrol.png`（豪猪宝宝“刺刺”原图），由同源 `/undercontrol.png` 路由提供，供导航与 favicon 共用，favicon 由页面入口设置；生产服务缓存一小时，页面图像 URL 携带品牌版本参数以避免换图后仍显示旧缓存，开发服务不缓存。构建 adapter 时将同一文件复制到插件 assets，发布包携带这些图片。`ui/dist/index.html` 继续随 release 打包，仅用于回滚和迁移对照，不参与默认路由；source preview 与 installed runtime 因此使用同一 React entry 和同一 API contract。
+Production `daemon` 读取 `ui/dist/react.html`，脚本与样式内嵌。品牌图使用 `ui/assets/tako.png`（豪猪宝宝“刺刺”原图），由同源 `/tako.png` 路由提供，供导航与 favicon 共用，favicon 由页面入口设置；生产服务缓存一小时，页面图像 URL 携带品牌版本参数以避免换图后仍显示旧缓存，开发服务不缓存。构建 adapter 时将同一文件复制到插件 assets，发布包携带这些图片。`ui/dist/index.html` 继续随 release 打包，仅用于回滚和迁移对照，不参与默认路由；source preview 与 installed runtime 因此使用同一 React entry 和同一 API contract。
 
 顶层导航依次为 Sessions、Actions、Teams；Sessions仅保留Tree。SessionsView持有childPages与按完整引用读取的ancestor元数据，通过collectSessionFamily仅遍历当前根列表可达的子页和父链；切换workspace/branch不会混入其他范围的旧子页或祖先，同一完整引用只展示一次。父会话未在当前页时，由SessionAncestorSource通过共用读取队列补读，加载期间显示读取主会话，失败后明确提示父会话暂不可读取。projectSessionTree只允许真实主会话作为一级节点：有原生父级、登记父级或is_subagent标记的会话不能因父级缺失、冲突或循环而升为一级。会话树连接线贯穿同级节点间距及展开的子树，横向连接各子项；末个同级节点在线条接入标题时收尾，不向其子树延伸祖先竖干。连接线只反映已展示的真实层级，不可点击。选中已读取子会话时按祖先路径自动展开，用户手动折叠不会因状态轮询重新展开。collectSessionRelations合并原生metadata与登记边并按端点去重；indexSessionRelations分别索引parents/children和forkSources/forks，fork永不参与父子树构造，正常fork仍作为独立主会话。标题行合并Subagent/协作标签、子会话及派生Fork数量与来源入口，数量只代表已发现的直接关系。Fork来源显示forked from标题或短ID；Codex created_at可确认时追加at时间，表示新fork会话创建时间，不用复制历史的首条消息或updated_at推算。原生时间来源见[rollout recorder](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/recorder.rs)与[thread summary](https://github.com/openai/codex/blob/main/codex-rs/app-server/src/request_processors/thread_summary.rs)。关系浮层使用Base UI Popover，点击按完整provider/store/session引用读取；Escape关闭并恢复焦点。详情关系面板合并当前已发现的边，支持从来源查看派生Fork。
 
-Cards与List均已退出产品入口。Sessions主布局只含350px侧栏和会话树两栏，列表项仅有title与subtitle，不再提供横向热力条；subtitle从左至右为branch、workspace，共用text-secondary语义色。会话读取复用Base UI Dialog的container portal、keepMounted和modal=false，以右侧悬浮Sheet覆盖页面，不占grid列，不改变列表宽度。Sheet桌面宽640px、窄屏自适应；条目标题按钮的点击区域覆盖整个item，展开、Pin、关系和终端操作保持独立。选中项仅用背景与边框区分，不绘制左侧标记。Sheet具备边框、圆角与投影，打开时聚焦Sheet本身，关闭不恢复标题焦点。右上角X按钮、外侧空白点击或Escape均可关闭；页面外侧仍可操作。关闭保留正文DOM、已读消息和滚动位置，并停止选中时间轴的继续分页；重新打开恢复原阅读位置。窄屏Sheet占据视图并保留右侧minimap。UnderControl 2.0使用统一深色语义变量、本地Geist字体及Motion交互；不改变Session业务规则。
+Cards与List均已退出产品入口。Sessions主布局只含350px侧栏和会话树两栏，列表项仅有title与subtitle，不再提供横向热力条；subtitle从左至右为branch、workspace，共用text-secondary语义色。会话读取复用Base UI Dialog的container portal、keepMounted和modal=false，以右侧悬浮Sheet覆盖页面，不占grid列，不改变列表宽度。Sheet桌面宽640px、窄屏自适应；条目标题按钮的点击区域覆盖整个item，展开、Pin、关系和终端操作保持独立。选中项仅用背景与边框区分，不绘制左侧标记。Sheet具备边框、圆角与投影，打开时聚焦Sheet本身，关闭不恢复标题焦点。右上角X按钮、外侧空白点击或Escape均可关闭；页面外侧仍可操作。关闭保留正文DOM、已读消息和滚动位置，并停止选中时间轴的继续分页；重新打开恢复原阅读位置。窄屏Sheet占据视图并保留右侧minimap。当前界面使用统一深色语义变量、本地Geist字体及Motion交互；不改变Session业务规则。
 
 
 当前对话minimap轨道宽12px，与旧横向条桌面高度一致；图例放在对话标题下的时间行，不挤占轨道。正文隐藏原生滚动条而保持overflow滚动与键盘焦点。minimap使用该会话独立的起止范围，不再使用全局7天或日/时/分切换，不聚合项目曲线。secondHeatCells按真实UTC秒分别统计user、assistant及未知事件，空秒保持稀疏。时间从minimap顶部向底部推进；Canvas以绿色表示用户、紫色表示Agent，同秒或同像素重叠时左右分色，分别保留各角色的最高每秒密度。悬停提示与aria-valuetext包含角色计数。时间索引由SessionDetail唯一持有，列表不挂载TimelineSource、不为每行预读时间点；选中后连续读取原生分页，Sheet收起后暂停。范围、时间标签、颜色图例、当前阅读游标及可视消息时间窗口均在对话中展示。SessionChildrenSource与SessionAncestorSource继续复用最多4并发的sessionReadRequests，不改变父子会话规则。
@@ -241,7 +241,7 @@ Scheduler schema v4 是当前 unified Run ledger。v1–v3 tables 只保留在 m
 
 历史 Task schema 与生成资产只供历史对照；当前不提供 Task import/migrate，不打开旧库，也不启动旧文件重建。Session links schema v1 独立于 Actions schema。
 
-安装或卸载时可以清理由 UnderControl 明确拥有的旧 per-Schedule LaunchAgents；cleanup 必须验证 owner、mode、symlink 和 canonical program path，无法确认的文件 fail closed。
+安装或卸载时可以清理由 TAKO 明确拥有的旧 per-Schedule LaunchAgents；cleanup 必须验证 owner、mode、symlink 和 canonical program path，无法确认的文件 fail closed。
 
 ## Verification gates
 
@@ -347,7 +347,7 @@ Geist Sans/Mono 的拉丁字集 WOFF2 随 esbuild 以 data URL 内嵌，中文�
 
 新任务的 CLI 始终使用服务管理的内部目录。项目执行可选择隔离新分支、继续已有本地分支或明确复用原目录，记录实际目录、分支、起点及 dirty 状态；按实际 resource_scope 原子取得所需目录占用，目录等待不占运行名额。Teams 的 Codex 在新建、恢复线程和每轮执行中使用完整访问，不再按角色限制到工作目录白名单；不修改客户端全局配置、Actions 或旧固定阶段任务。项目绑定可在同一任务显式更新，并保存稳定 Git 管理目录与相对路径；执行前后刷新改名或移动后的分支和 worktree，保留项目顺序与原生会话。Leader 按任务检查真实实现与验证证据，不强制独立验证 Run；未结束成员仍需完成或明确处理。暂停或改目标撤销 Run 凭据，重启不重放已领取的执行。PID 未知或旧进程仍存活时，不释放目录占用。当前 Codex 消息驱动交付已实测，Claude 讨论与审阅适配仍缺少模型侧成功证据，不开放 Claude 实施。
 
-这是 UnderControl 0.17.0 的实现约定，既有安装版需要手动更新。验证范围见[实施验证记录](job/agent-loop/03-phases.md)。
+这些能力自 0.17.0 版本开始提供，既有安装版需要手动更新。验证范围见[实施验证记录](job/agent-loop/03-phases.md)。
 
 
 Teams 成员的 name/avatar 是团队身份，execution_config 保存模型与实际支持的 effort。用户显式 @ 直接派发，无收件人时由 Leader 承接；成员结果交回实际请求者，只有需要协调才通知 Leader。Teams 观察性审查允许并行编辑，实施按声明项目使用排他占用，Leader 统筹不因身份独占项目；depends_on 依赖完成后才派发。公开摘要、工具输入输出及状态保存在 Run.parts，图片/PDF 为服务端路径引用，详见 [Teams](agent-loop.md#成员身份运行内容与生命周期)。loop_schema=7 增加消息关联、投递与处理状态，保留版本 6 的历史成员快照和独立全局定义删除日志。团队成员菜单只移出当前团队；本地 Agent 目录才删除全局定义文件，所有团队成员继续使用定义快照。删除文件先确认 digest，暂存后按 staging/committed 日志恢复或清理；旧成员删除日志继续恢复。解散先停止本团队执行，保留历史，不改变其他团队。
@@ -394,3 +394,7 @@ collaboration/store/reports.mjs 使用 loop_events 保存唯一报告及版本�
 context.mjs 把所有成员的协作约定、稳定角色、当前工作、运行环境及工具语义分别组织。Leader 保留技术判断与验收职责，不重复成员已有工作。progress 仅进入内部事件；send_message 和 submit_result 回执明确通知去向，退出前的接收人只是计划，不是投递成功。
 
 conversation.mjs 的 reportNotification 同时用于工具回执和退出后的交接，Leader 回答问题也使用该路径。报告按稳定 inbox ID 投递到实际请求者，保留其原工作关联；运行中的 Codex 可接收报告引用及有界摘录，全文按 ID 读取。store 的续接输入排除同一原生 Session 已确认收到的结果。Runtime 无此能力时保持待投递状态，不伪造 inject 接口。详见 [提示词与工具通知回执](agent-loop.md#提示词与工具通知回执)。
+
+## TAKO branding and migration
+
+The current identifiers are `TAKO` / `tako`; 0.19.0 uses the TAKO name. Existing Action IDs, inputs, secrets, history and native Session references are preserved. The installation transaction accepts UnderControl and Rillo directories and their existing aliases. Legacy definition and archive formats remain readable; explicit saves use TAKO formats. See [migration contract](migrations/tako-rename.md) and [brand foundation](brand/tako-foundation.md).

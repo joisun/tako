@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 
-import { UnderControlError } from './errors.mjs'
+import { TAKOError } from './errors.mjs'
 
 const EXECUTION_KINDS = new Set(['main', 'subagent'])
 const ACCEPTED_PROVENANCE = new Set([
@@ -12,7 +12,7 @@ const ACCEPTED_PROVENANCE = new Set([
 ])
 
 function fail(code, message, details) {
-  throw new UnderControlError(code, message, details)
+  throw new TAKOError(code, message, details)
 }
 
 function requiredString(value, field, code = 'WORK_INPUT_INVALID') {

@@ -4,13 +4,13 @@ import { access, chmod, mkdir, stat } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { backup, DatabaseSync } from 'node:sqlite'
 
-import { UnderControlError } from './errors.mjs'
+import { TAKOError } from './errors.mjs'
 import { checkSchemaV3Invariants, createSchemaV3, SCHEMA_V3 } from './schema-v3.mjs'
 
 const LEGACY_SCHEMA_VERSION = 2
 
 function fail(code, message, details) {
-  throw new UnderControlError(code, message, details)
+  throw new TAKOError(code, message, details)
 }
 
 function nonEmpty(value) {

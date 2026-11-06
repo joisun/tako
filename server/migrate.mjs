@@ -5,15 +5,15 @@ import { realpathSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import { DatabaseSync, backup as backupDatabase } from 'node:sqlite'
-import { chmod, cp, lstat, mkdir, readFile, readlink, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, cp, lstat, mkdir, readFile, readlink, readdir, rename, rm, realpath, symlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// These names identify installations created before the UnderControl rename. Never use them for new resources.
-export const LEGACY_INSTALLATIONS = ['rillo', 'tasks-recorder', 'task-recorder', 'tasks_recorder', 'task_recorder']
+// These names identify installations created before the TAKO rename. Never use them for new resources.
+export const LEGACY_INSTALLATIONS = ['undercontrol', 'rillo', 'tasks-recorder', 'task-recorder', 'tasks_recorder', 'task_recorder']
 const DATABASE_FILES = ['tasks.sqlite', 'scheduler.sqlite', 'session-links.sqlite', 'session-messages.sqlite', 'session-pins.sqlite']
-const NEW_LAUNCH_LABEL = 'com.joi.undercontrol.daemon'
+const NEW_LAUNCH_LABEL = 'com.joi.tako.daemon'
 const executeFile = promisify(execFile)
 
 async function command(file, args) {
@@ -24,7 +24,7 @@ async function exists(path) { try { return await lstat(path) } catch (error) { i
 function failure(code, message) { return Object.assign(new Error(message), { code }) }
 async function checked(run, file, args) {
   const result = await run(file, args)
-  if (result.code !== 0) throw failure('UNDERCONTROL_MIGRATION_SERVICE_FAILED', `${file} could not complete the service transition`)
+  if (result.code !== 0) throw failure('TAKO_MIGRATION_SERVICE_FAILED', `${file} could not complete the service transition`)
   return result
 }
 async function save(path, state) {
@@ -45,7 +45,7 @@ export async function backupLegacyData(source, destination) {
       for (const name of await readdir(from)) await copyEntry(join(from, name), join(to, name), relativePath ? relativePath + '/' + name : name)
       return
     }
-    if (!stat.isFile()) throw failure('UNDERCONTROL_MIGRATION_UNSAFE_PATH', `Inspect the special file before migrating: ${relativePath}`)
+    if (!stat.isFile()) throw failure('TAKO_MIGRATION_UNSAFE_PATH', `Inspect the special file before migrating: ${relativePath}`)
     await cp(from, to)
   }
   await mkdir(destination, { recursive: true, mode: 0o700 })
@@ -57,12 +57,25 @@ export async function backupLegacyData(source, destination) {
     if (!await exists(path)) continue
     const database = new DatabaseSync(path, { readOnly: true, timeout: 5000 })
     try {
-      if (database.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw failure('UNDERCONTROL_MIGRATION_DATABASE_INVALID', `Database needs recovery before migrating: ${name}`)
+      if (database.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw failure('TAKO_MIGRATION_DATABASE_INVALID', `Database needs recovery before migrating: ${name}`)
       await backupDatabase(database, join(destination, name))
       await chmod(join(destination, name), 0o600)
     } finally { database.close() }
   }
   return { ephemeral }
+}
+
+async function assertNoActiveTeamWork(dataDirectory, config) {
+  if (!dataDirectory) return
+  const path = resolve(dataDirectory, config?.scheduler_database_path ?? 'scheduler.sqlite')
+  if (!await exists(path)) return
+  const database = new DatabaseSync(path, { readOnly: true, timeout: 5000 })
+  try {
+    const hasTable = name => database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)
+    const running = hasTable('loop_runs') && database.prepare("SELECT 1 FROM loop_runs WHERE status IN ('starting','running','stopping','unknown') LIMIT 1").get()
+    const planning = hasTable('loop_team_plans') && database.prepare("SELECT 1 FROM loop_team_plans WHERE json_extract(state_json,'$.status') IN ('queued','running') LIMIT 1").get()
+    if (running || planning) throw failure('TAKO_MIGRATION_ACTIVE_RUNS', 'Finish or reconcile existing team executions and team planning before migrating; service was left running')
+  } finally { database.close() }
 }
 
 export function createInstallationMigration({ homeDirectory = homedir(), platform = process.platform, uid = process.getuid?.(), run = command,
@@ -71,8 +84,8 @@ export function createInstallationMigration({ homeDirectory = homedir(), platfor
   const home = resolve(homeDirectory)
   const domain = `gui/${uid}`
   const logs = platform === 'darwin' ? ['Library', 'Logs'] : ['.local', 'state']
-  const newData = join(home, '.config', 'undercontrol')
-  const newProgram = join(home, '.local', 'share', 'undercontrol')
+  const newData = join(home, '.config', 'tako')
+  const newProgram = join(home, '.local', 'share', 'tako')
 
   async function servicesFor(name) {
     if (platform === 'darwin') {
@@ -82,16 +95,16 @@ export function createInstallationMigration({ homeDirectory = homedir(), platfor
         const path = join(home, 'Library', 'LaunchAgents', label + '.plist')
         if (!await exists(path)) continue
         const loaded = await run('launchctl', ['print', `${domain}/${label}`])
-        if (loaded.code === 0 && !loaded.stdout.includes(path)) throw failure('UNDERCONTROL_MIGRATION_SERVICE_SCOPE', 'Loaded service belongs to another home; it was left running')
+        if (loaded.code === 0 && !loaded.stdout.includes(path)) throw failure('TAKO_MIGRATION_SERVICE_SCOPE', 'Loaded service belongs to another home; it was left running')
         services.push({ label, path, active: loaded.code === 0 })
       }
       return services
     }
-    if (platform !== 'linux') throw failure('UNDERCONTROL_MIGRATION_PLATFORM', 'UnderControl migration supports macOS and Linux')
+    if (platform !== 'linux') throw failure('TAKO_MIGRATION_PLATFORM', 'TAKO migration supports macOS and Linux')
     const label = name + '.service', path = join(home, '.config', 'systemd', 'user', label)
     if (!await exists(path)) return []
     const fragment = await run('systemctl', ['--user', 'show', label, '--property=FragmentPath', '--value'])
-    if (fragment.code === 0 && fragment.stdout.trim() !== path) throw failure('UNDERCONTROL_MIGRATION_SERVICE_SCOPE', 'Existing unit belongs to another home; it was left unchanged')
+    if (fragment.code === 0 && fragment.stdout.trim() !== path) throw failure('TAKO_MIGRATION_SERVICE_SCOPE', 'Existing unit belongs to another home; it was left unchanged')
     const active = await run('systemctl', ['--user', 'is-active', label])
     const enabled = await run('systemctl', ['--user', 'is-enabled', label])
     return [{ label, path, active: active.code === 0, enabled: enabled.code === 0 }]
@@ -103,26 +116,31 @@ export function createInstallationMigration({ homeDirectory = homedir(), platfor
       for (const [from, to, kind] of [
         [join(home, '.config', name), newData, 'data'],
         [join(home, '.local', 'share', name), newProgram, 'program'],
-        [join(home, ...logs, name), join(home, ...logs, 'undercontrol'), 'logs'],
+        [join(home, ...logs, name), join(home, ...logs, 'tako'), 'logs'],
       ]) {
         const stat = await exists(from)
         if (!stat) continue
-        if (stat.isSymbolicLink() && await readlink(from) === to) continue
-        if (!stat.isDirectory() || stat.isSymbolicLink()) throw failure('UNDERCONTROL_MIGRATION_UNSAFE_PATH', `Inspect the legacy ${kind} path before migration: ${from}`)
-        if (await exists(to) || moves.some(move => move.to === to)) throw failure('UNDERCONTROL_MIGRATION_CONFLICT', `Both legacy and UnderControl ${kind} paths exist; no data was merged or overwritten`)
+        if (stat.isSymbolicLink()) {
+          const target = await realpath(from).catch(() => null)
+          const aliases = [to, ...moves.filter(move => move.to === to).map(move => move.from)]
+          const destinations = await Promise.all(aliases.map(path => realpath(path).catch(() => null)))
+          if (target && destinations.includes(target)) continue
+        }
+        if (!stat.isDirectory() || stat.isSymbolicLink()) throw failure('TAKO_MIGRATION_UNSAFE_PATH', `Inspect the legacy ${kind} path before migration: ${from}`)
+        if (await exists(to) || moves.some(move => move.to === to)) throw failure('TAKO_MIGRATION_CONFLICT', `Both legacy and TAKO ${kind} paths exist; no data was merged or overwritten`)
         moves.push({ from, to, kind })
       }
       const wrapper = join(home, '.local', 'bin', name)
       if (await exists(wrapper)) moves.push({ from: wrapper, kind: 'wrapper' })
       services.push(...await servicesFor(name))
     }
-    const newService = platform === 'darwin' ? join(home, 'Library', 'LaunchAgents', NEW_LAUNCH_LABEL + '.plist') : join(home, '.config', 'systemd', 'user', 'undercontrol.service')
-    if ((moves.length || services.length) && await exists(newService)) throw failure('UNDERCONTROL_MIGRATION_CONFLICT', 'UnderControl already has a service registration; resolve the two installations before migrating')
+    const newService = platform === 'darwin' ? join(home, 'Library', 'LaunchAgents', NEW_LAUNCH_LABEL + '.plist') : join(home, '.config', 'systemd', 'user', 'tako.service')
+    if ((moves.length || services.length) && await exists(newService)) throw failure('TAKO_MIGRATION_CONFLICT', 'TAKO already has a service registration; resolve the two installations before migrating')
     const source = moves.find(move => move.kind === 'data')
     let config = null
     if (source) {
       config = JSON.parse(await readFile(join(source.from, 'config.json'), 'utf8'))
-      if (!config || typeof config !== 'object' || Array.isArray(config)) throw failure('UNDERCONTROL_MIGRATION_CONFIG_INVALID', 'The existing configuration is invalid')
+      if (!config || typeof config !== 'object' || Array.isArray(config)) throw failure('TAKO_MIGRATION_CONFIG_INVALID', 'The existing configuration is invalid')
     }
     return { moves, services, config }
   }
@@ -135,25 +153,25 @@ export function createInstallationMigration({ homeDirectory = homedir(), platfor
         if ((await run('launchctl', ['print', `${domain}/${service.label}`])).code !== 0) return
         await new Promise(resolveWait => setTimeout(resolveWait, 100))
       }
-      throw failure('UNDERCONTROL_MIGRATION_SERVICE_STILL_RUNNING', 'Wait for the legacy service to finish unloading before migrating')
+      throw failure('TAKO_MIGRATION_SERVICE_STILL_RUNNING', 'Wait for the legacy service to finish unloading before migrating')
     } else await checked(run, 'systemctl', ['--user', 'disable', '--now', service.label])
   }
 
   async function rollback(journalPath) {
     const state = JSON.parse(await readFile(journalPath, 'utf8'))
-    if (state.home !== home || state.platform !== platform) throw failure('UNDERCONTROL_MIGRATION_SCOPE', 'Migration journal belongs to another installation')
+    if (state.home !== home || state.platform !== platform) throw failure('TAKO_MIGRATION_SCOPE', 'Migration journal belongs to another installation')
     if (['rolled_back', 'committed'].includes(state.status)) return { status: state.status }
     if (platform === 'darwin') {
       const newPlist = join(home, 'Library', 'LaunchAgents', NEW_LAUNCH_LABEL + '.plist')
       if (await exists(newPlist)) {
         const loaded = await run('launchctl', ['print', `${domain}/${NEW_LAUNCH_LABEL}`])
-        if (loaded.code === 0 && !loaded.stdout.includes(newPlist)) throw failure('UNDERCONTROL_MIGRATION_SERVICE_SCOPE', 'New service belongs to another home; rollback did not stop it')
+        if (loaded.code === 0 && !loaded.stdout.includes(newPlist)) throw failure('TAKO_MIGRATION_SERVICE_SCOPE', 'New service belongs to another home; rollback did not stop it')
         if (loaded.code === 0) await checked(run, 'launchctl', ['bootout', `${domain}/${NEW_LAUNCH_LABEL}`])
         await rm(newPlist)
       }
     } else {
-      const newUnit = join(home, '.config', 'systemd', 'user', 'undercontrol.service')
-      if (await exists(newUnit)) { await checked(run, 'systemctl', ['--user', 'disable', '--now', 'undercontrol.service']); await rm(newUnit) }
+      const newUnit = join(home, '.config', 'systemd', 'user', 'tako.service')
+      if (await exists(newUnit)) { await checked(run, 'systemctl', ['--user', 'disable', '--now', 'tako.service']); await rm(newUnit) }
     }
     for (const alias of [...(state.aliases ?? [])].reverse()) {
       const stat = await exists(alias.from)
@@ -169,7 +187,7 @@ export function createInstallationMigration({ homeDirectory = homedir(), platfor
       const current = join(program.from, 'current')
       await rm(current, { force: true }); await symlink(state.oldCurrent, current)
     }
-    await rm(join(home, '.local', 'bin', 'undercontrol'), { force: true })
+    await rm(join(home, '.local', 'bin', 'tako'), { force: true })
     if (platform === 'linux') await checked(run, 'systemctl', ['--user', 'daemon-reload'])
     for (const service of state.services) {
       if (platform === 'darwin') {
@@ -190,17 +208,18 @@ export function createInstallationMigration({ homeDirectory = homedir(), platfor
   async function prepare({ startService = true } = {}) {
     const planned = await plan()
     if (planned.moves.length === 0 && planned.services.length === 0) return { journalPath: null, migrated: false }
-    if (!startService && planned.services.some(service => service.active)) throw failure('UNDERCONTROL_MIGRATION_SERVICE_SWITCH_REQUIRED', 'An active legacy service requires installation with service startup, not --no-start')
+    if (!startService && planned.services.some(service => service.active)) throw failure('TAKO_MIGRATION_SERVICE_SWITCH_REQUIRED', 'An active legacy service requires installation with service startup, not --no-start')
     const baseUrl = `http://127.0.0.1:${planned.config?.server_port ?? 43127}`
     const health = await probe(baseUrl + '/health/live')
-    if (planned.services.some(service => service.active) && (!health || !LEGACY_INSTALLATIONS.includes(health.service))) throw failure('UNDERCONTROL_MIGRATION_STATUS_UNKNOWN', 'Existing service is not healthy enough to verify active work; it was left running')
+    if (planned.services.some(service => service.active) && (!health || !LEGACY_INSTALLATIONS.includes(health.service))) throw failure('TAKO_MIGRATION_STATUS_UNKNOWN', 'Existing service is not healthy enough to verify active work; it was left running')
     if (health && LEGACY_INSTALLATIONS.includes(health.service)) {
-      if (!planned.services.some(service => service.active)) throw failure('UNDERCONTROL_MIGRATION_UNMANAGED_SERVICE', 'Stop the manually launched legacy daemon before migrating')
+      if (!planned.services.some(service => service.active)) throw failure('TAKO_MIGRATION_UNMANAGED_SERVICE', 'Stop the manually launched legacy daemon before migrating')
       const scheduled = await probe(baseUrl + '/api/v1/schedules')
-      if (!Array.isArray(scheduled?.jobs)) throw failure('UNDERCONTROL_MIGRATION_STATUS_UNKNOWN', 'Cannot verify the existing scheduled executions; service was left running')
-      if (scheduled.jobs.some(job => ['queued', 'running'].includes(job.current_execution?.status))) throw failure('UNDERCONTROL_MIGRATION_ACTIVE_RUNS', 'Wait for active scheduled executions to finish before migrating')
+      if (!Array.isArray(scheduled?.jobs)) throw failure('TAKO_MIGRATION_STATUS_UNKNOWN', 'Cannot verify the existing scheduled executions; service was left running')
+      if (scheduled.jobs.some(job => ['queued', 'running'].includes(job.current_execution?.status))) throw failure('TAKO_MIGRATION_ACTIVE_RUNS', 'Wait for active scheduled executions to finish before migrating')
     }
-    const backup = join(home, '.local', 'state', 'undercontrol-migrations', `${Date.now()}-${randomUUID()}`)
+    await assertNoActiveTeamWork(planned.moves.find(move => move.kind === 'data')?.from, planned.config)
+    const backup = join(home, '.local', 'state', 'tako-migrations', `${Date.now()}-${randomUUID()}`)
     await mkdir(backup, { recursive: true, mode: 0o700 })
     const journalPath = join(backup, 'journal.json')
     const state = { home, platform, backup, status: 'preparing', ...planned, completedMoves: [], aliases: [] }
@@ -215,7 +234,7 @@ export function createInstallationMigration({ homeDirectory = homedir(), platfor
           if (!await probe(baseUrl + '/health/live')) { stopped = true; break }
           await new Promise(resolveWait => setTimeout(resolveWait, 100))
         }
-        if (!stopped) throw failure('UNDERCONTROL_MIGRATION_SERVICE_STILL_RUNNING', 'Existing daemon did not stop; migration was not performed')
+        if (!stopped) throw failure('TAKO_MIGRATION_SERVICE_STILL_RUNNING', 'Existing daemon did not stop; migration was not performed')
       }
       const data = planned.moves.find(move => move.kind === 'data')
       if (data) {
@@ -245,7 +264,7 @@ export function createInstallationMigration({ homeDirectory = homedir(), platfor
         if (JSON.stringify(migrated) !== text) await writeFile(join(newData, 'config.json'), JSON.stringify(migrated, null, 2) + '\n', { mode: 0o600 })
       }
       // Immutable Run snapshots and native session cwd values can still contain these paths.
-      for (const move of planned.moves.filter(move => move.to && move.from.split('/').at(-1) === 'rillo')) {
+      for (const move of planned.moves.filter(move => move.to && ['undercontrol','rillo'].includes(move.from.split('/').at(-1)))) {
         state.aliases.push({ from: move.from, to: move.to }); await save(journalPath, state)
         await symlink(move.to, move.from)
       }
@@ -253,14 +272,14 @@ export function createInstallationMigration({ homeDirectory = homedir(), platfor
       state.status = 'prepared'; await save(journalPath, state)
       return { journalPath, migrated: true }
     } catch (error) {
-      try { await rollback(journalPath) } catch (rollbackError) { throw failure('UNDERCONTROL_MIGRATION_ROLLBACK_FAILED', `Migration failed and needs recovery from ${journalPath}: ${rollbackError.message}`) }
+      try { await rollback(journalPath) } catch (rollbackError) { throw failure('TAKO_MIGRATION_ROLLBACK_FAILED', `Migration failed and needs recovery from ${journalPath}: ${rollbackError.message}`) }
       throw error
     }
   }
 
   async function commit(journalPath) {
     const state = JSON.parse(await readFile(journalPath, 'utf8'))
-    if (state.home !== home || state.status !== 'prepared') throw failure('UNDERCONTROL_MIGRATION_STATE', 'Migration is not ready to commit')
+    if (state.home !== home || state.status !== 'prepared') throw failure('TAKO_MIGRATION_STATE', 'Migration is not ready to commit')
     state.status = 'committed'; await save(journalPath, state)
     return { status: state.status, backup: state.backup }
   }
@@ -276,5 +295,5 @@ if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.me
     else if (operation === 'commit' && journalPath) await migration.commit(journalPath)
     else if (operation === 'plan') { const { config, ...summary } = await migration.plan(); process.stdout.write(JSON.stringify(summary, null, 2) + '\n') }
     else throw new Error('Usage: migrate.mjs plan|prepare|rollback <journal>|commit <journal>')
-  } catch (error) { process.stderr.write(`${error.code ?? 'UNDERCONTROL_MIGRATION_FAILED'}: ${error.message}\n`); process.exitCode = 1 }
+  } catch (error) { process.stderr.write(`${error.code ?? 'TAKO_MIGRATION_FAILED'}: ${error.message}\n`); process.exitCode = 1 }
 }

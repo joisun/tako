@@ -1,4 +1,4 @@
-import { UnderControlError } from '../../mcp/src/errors.mjs'
+import { TAKOError } from '../../mcp/src/errors.mjs'
 
 export async function prepareJournalStartup({
   service,
@@ -34,7 +34,7 @@ export async function prepareJournalStartup({
   })
   const replay = await spool.replay(
     (envelope) => service.ingestEvent(envelope),
-    { isPermanentError: (error) => error instanceof UnderControlError },
+    { isPermanentError: (error) => error instanceof TAKOError },
   )
   return {
     recovery,

@@ -1,14 +1,14 @@
 {
-  "name": "undercontrol",
+  "name": "tako",
   "interface": {
-    "displayName": "UnderControl"
+    "displayName": "TAKO"
   },
   "plugins": [
     {
-      "name": "undercontrol",
+      "name": "tako",
       "source": {
         "source": "local",
-        "path": "./adapters/codex/undercontrol"
+        "path": "./adapters/codex/tako"
       },
       "policy": {
         "installation": "AVAILABLE",

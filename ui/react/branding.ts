@@ -1,1 +1,1 @@
-export const UNDERCONTROL_LOGO_URL = '/undercontrol.png?v=porcupine-closeup-2'
+export const TAKO_BRAND_NAME = 'TAKO'

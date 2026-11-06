@@ -2,11 +2,11 @@ import { constants } from 'node:fs'
 import { access, chmod, lstat, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, resolve } from 'node:path'
 
-import { UnderControlError } from '../../mcp/src/errors.mjs'
+import { TAKOError } from '../../mcp/src/errors.mjs'
 import { DEFAULT_RESUME_TERMINAL } from './terminal-launcher.mjs'
 
 function settingsError(code, message, details) {
-  return new UnderControlError(code, message, details)
+  return new TAKOError(code, message, details)
 }
 
 async function readConfig(configPath, readFileImpl) {
@@ -15,7 +15,7 @@ async function readConfig(configPath, readFileImpl) {
     if (!config || typeof config !== 'object' || Array.isArray(config)) throw new TypeError('object required')
     return config
   } catch (error) {
-    throw settingsError('CONFIG_INVALID', `Unable to read UnderControl settings at ${configPath}.`, {
+    throw settingsError('CONFIG_INVALID', `Unable to read TAKO settings at ${configPath}.`, {
       cause: error.message,
     })
   }
@@ -126,7 +126,7 @@ export function createDashboardSettings({
         await renameImpl(temporaryPath, configPath)
       } catch (error) {
         await rmImpl(temporaryPath, { force: true }).catch(() => undefined)
-        throw settingsError('SETTINGS_WRITE_FAILED', 'Unable to save UnderControl settings.', {
+        throw settingsError('SETTINGS_WRITE_FAILED', 'Unable to save TAKO settings.', {
           cause: error.message,
         })
       }

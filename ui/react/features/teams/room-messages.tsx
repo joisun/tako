@@ -28,7 +28,7 @@ function runLabel(run:LoopRun){
 }
 function toolTitle(part:LoopPart){
   if(part.files?.length)return `文件变更 · ${part.files.length} 个文件`
-  const action=part.label?.match(/^(?:(?:undercontrol|rillo)_loop\s*·\s*|mcp__(?:undercontrol|rillo)_loop__)(\w+)$/)?.[1]
+  const action=part.label?.match(/^(?:(?:tako|undercontrol|rillo)_loop\s*·\s*|mcp__(?:tako|undercontrol|rillo)_loop__)(\w+)$/)?.[1]
   if(action==='read_context'){
     try{if(JSON.parse(part.input??'{}').section==='messages')return '读取团队消息'}catch{/* The original input remains readable in the tool detail. */}
     return '读取团队上下文'

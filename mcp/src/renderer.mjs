@@ -9,10 +9,10 @@ import {
 } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { UnderControlError } from './errors.mjs'
+import { TAKOError } from './errors.mjs'
 
-const START_MARKER = '<!-- undercontrol:start -->'
-const END_MARKER = '<!-- undercontrol:end -->'
+const START_MARKER = '<!-- tako:start -->'
+const END_MARKER = '<!-- tako:end -->'
 const LOCK_RETRY_MS = 25
 const LOCK_ATTEMPTS = 40
 
@@ -93,7 +93,7 @@ function taskEndDate(task) {
 function mermaidLine(task) {
   const tags = STATUS_TAGS[task.status]
   if (tags === undefined) {
-    throw new UnderControlError('TASK_STATUS_INVALID', `unsupported task status: ${task.status}`)
+    throw new TAKOError('TASK_STATUS_INVALID', `unsupported task status: ${task.status}`)
   }
   const metadata = tags ? `${tags}, ${task.id}` : task.id
   return `    ${displayTitle(task)} :${metadata}, ${task.start_date}, ${taskEndDate(task)}`
@@ -129,7 +129,7 @@ function generateMermaid(tasks, title) {
 }
 
 function defaultDocument(heading) {
-  return `# ${heading}\n\n此文件由 undercontrol 从 SQLite 自动生成；marker 外内容可手工维护。\n\n${START_MARKER}\n${END_MARKER}\n`
+  return `# ${heading}\n\n此文件由 tako 从 SQLite 自动生成；marker 外内容可手工维护。\n\n${START_MARKER}\n${END_MARKER}\n`
 }
 
 function markerCount(content, marker) {
@@ -137,24 +137,28 @@ function markerCount(content, marker) {
 }
 
 function replaceGeneratedBlock(content, generated, filePath) {
-  const legacyStart = '<!-- rillo:start -->'
-  const legacyEnd = '<!-- rillo:end -->'
-  if (!content.includes(START_MARKER) && markerCount(content, legacyStart) === 1 && markerCount(content, legacyEnd) === 1) {
-    content = content.replace(legacyStart, START_MARKER).replace(legacyEnd, END_MARKER)
+  if (!content.includes(START_MARKER)) {
+    for (const name of ['undercontrol', 'rillo']) {
+      const legacyStart = `<!-- ${name}:start -->`, legacyEnd = `<!-- ${name}:end -->`
+      if (markerCount(content, legacyStart) === 1 && markerCount(content, legacyEnd) === 1) {
+        content = content.replace(legacyStart, START_MARKER).replace(legacyEnd, END_MARKER)
+        break
+      }
+    }
   }
   if (markerCount(content, START_MARKER) !== 1 || markerCount(content, END_MARKER) !== 1) {
-    throw new UnderControlError(
+    throw new TAKOError(
       'PROJECTION_MARKER_INVALID',
-      `${filePath} must contain exactly one undercontrol marker pair`,
+      `${filePath} must contain exactly one tako marker pair`,
       { filePath },
     )
   }
   const start = content.indexOf(START_MARKER)
   const end = content.indexOf(END_MARKER)
   if (start > end) {
-    throw new UnderControlError(
+    throw new TAKOError(
       'PROJECTION_MARKER_INVALID',
-      `${filePath} has reversed undercontrol markers`,
+      `${filePath} has reversed tako markers`,
       { filePath },
     )
   }
@@ -181,7 +185,7 @@ async function acquireLock(lockPath, now) {
     } catch (error) {
       if (error.code !== 'EEXIST') throw error
       if (attempt === LOCK_ATTEMPTS - 1) {
-        throw new UnderControlError(
+        throw new TAKOError(
           'PROJECTION_LOCKED',
           'timed out waiting for the projection render lock',
           { lockPath },
@@ -190,7 +194,7 @@ async function acquireLock(lockPath, now) {
       await delay(LOCK_RETRY_MS)
     }
   }
-  throw new UnderControlError('PROJECTION_LOCKED', 'could not acquire the projection render lock')
+  throw new TAKOError('PROJECTION_LOCKED', 'could not acquire the projection render lock')
 }
 
 async function ignoreMissingUnlink(filePath) {
@@ -204,7 +208,7 @@ async function ignoreMissingUnlink(filePath) {
 export async function renderProjections({ loadSnapshot, outputDir, now = new Date() }) {
   const timestamp = now instanceof Date ? now : new Date(now)
   if (Number.isNaN(timestamp.valueOf())) {
-    throw new UnderControlError('CLOCK_INVALID', 'now must be a valid date')
+    throw new TAKOError('CLOCK_INVALID', 'now must be a valid date')
   }
   await mkdir(outputDir, { recursive: true })
 
@@ -220,7 +224,7 @@ export async function renderProjections({ loadSnapshot, outputDir, now = new Dat
     lockHandle = await acquireLock(lockPath, timestamp)
     const snapshot = await loadSnapshot()
     if (!snapshot || !Array.isArray(snapshot.tasks)) {
-      throw new UnderControlError('SNAPSHOT_INVALID', 'loadSnapshot must return a tasks array')
+      throw new TAKOError('SNAPSHOT_INVALID', 'loadSnapshot must return a tasks array')
     }
 
     const currentTasks = snapshot.tasks.filter(({ status }) => status !== 'done')

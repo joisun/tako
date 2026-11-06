@@ -1,0 +1,21 @@
+{
+  "name": "tako",
+  "displayName": "TAKO",
+  "version": "0.19.0",
+  "description": "Manage agent sessions, automate actions, and coordinate professional agent teams.",
+  "author": {
+    "name": "Joi Sun",
+    "url": "https://github.com/joisun"
+  },
+  "homepage": "https://github.com/joisun/tako",
+  "repository": "https://github.com/joisun/tako",
+  "license": "GPL-2.0-only",
+  "keywords": [
+    "sessions",
+    "claude",
+    "mcp",
+    "dashboard"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

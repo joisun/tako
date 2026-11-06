@@ -1,7 +1,7 @@
 import { access, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
-export const SYSTEMD_UNIT = 'undercontrol.service'
+export const SYSTEMD_UNIT = 'tako.service'
 
 function quote(value) {
   return `"${String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('%', '%%').replaceAll('\n', '\\n').replaceAll('\r', '\\r')}"`
@@ -14,7 +14,7 @@ function pathValue(value) {
 
 export function renderSystemdUnit({ nodePath, daemonPath, workingDirectory, homeDirectory, path, stdoutPath, stderrPath, codexHome }) {
   return `[Unit]
-Description=UnderControl
+Description=TAKO
 After=network.target
 
 [Service]
@@ -36,7 +36,7 @@ WantedBy=default.target
 
 export function createSystemdController({ projectRoot, config, homeDirectory, nodePath = process.execPath, nodeVersion = process.versions.node, env = process.env, unitName = SYSTEMD_UNIT, run, build, probeHealth }) {
   const unitDirectory = join(homeDirectory, '.config', 'systemd', 'user')
-  const logDirectory = join(homeDirectory, '.local', 'state', 'undercontrol')
+  const logDirectory = join(homeDirectory, '.local', 'state', 'tako')
   const paths = {
     unitPath: join(unitDirectory, unitName),
     stdoutPath: join(logDirectory, 'daemon.stdout.log'),
@@ -48,15 +48,15 @@ export function createSystemdController({ projectRoot, config, homeDirectory, no
   async function status() {
     const state = await systemctl(['is-active', unitName], { allowFailure: true })
     const health = await probeHealth(config.serverBaseUrl)
-    return { label: unitName, loaded: state.code === 0, ready: health?.service === 'undercontrol' && health.ready !== false, url: config.serverPublicUrl ?? config.serverBaseUrl, unitPath: paths.unitPath }
+    return { label: unitName, loaded: state.code === 0, ready: health?.service === 'tako' && health.ready !== false, url: config.serverPublicUrl ?? config.serverBaseUrl, unitPath: paths.unitPath }
   }
 
   async function install() {
-    if (Number(nodeVersion.split('.')[0]) < 24) throw new Error('undercontrol daemon requires Node.js 24 or newer')
+    if (Number(nodeVersion.split('.')[0]) < 24) throw new Error('tako daemon requires Node.js 24 or newer')
     const manager = await systemctl(['show-environment'], { allowFailure: true })
     if (manager.code !== 0) throw new Error('A running systemd user manager is required; run this command in a user login session.')
     const health = await probeHealth(config.serverBaseUrl)
-    if (health && health.service !== 'undercontrol') throw new Error(`${config.serverBaseUrl} is occupied by another service`)
+    if (health && health.service !== 'tako') throw new Error(`${config.serverBaseUrl} is occupied by another service`)
     await build()
     await Promise.all([mkdir(unitDirectory, { recursive: true, mode: 0o700 }), mkdir(logDirectory, { recursive: true, mode: 0o700 })])
     const unit = renderSystemdUnit({ ...paths, nodePath, workingDirectory: projectRoot, homeDirectory, codexHome: env.CODEX_HOME, path: [...new Set([dirname(nodePath), join(homeDirectory, '.local', 'bin'), ...(env.PATH ?? '/usr/local/bin:/usr/bin:/bin').split(':')])].join(':') })

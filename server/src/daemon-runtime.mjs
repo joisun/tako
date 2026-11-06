@@ -399,7 +399,7 @@ export async function startDaemon({
     }
     return {
       ok: ready,
-      service: 'undercontrol',
+      service: 'tako',
       api_version: 5,
       live: true,
       ready,

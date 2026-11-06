@@ -1,8 +1,10 @@
-# UnderControl
+# TAKO
 
-<img src="ui/assets/undercontrol.png" alt="UnderControl 吉祥物刺刺" width="96" height="96">
+**Your AI Agent Crew**
 
-UnderControl 是运行在本机的 coding-agent 会话与自动化控制台。Sessions 直接浏览 CLI 保存的会话，按 workspace、分支和时间查找对话，以主子会话树和消息热力时间轴展示，支持侧边 sheet 阅读。侧栏支持 Workspace / Branch 分组，同名分支可以汇总多个项目的会话。每条会话及阅读面板提供 Pin 按钮；顶部 Pinned 入口集中查看待继续的会话，保留目录和分支筛选。Pin 独立于运行状态，关闭或恢复会话不会清除，完成后手动取消。
+One Brain. Many Agents.
+
+TAKO 是运行在本机的 coding-agent 会话与自动化控制台。Sessions 直接浏览 CLI 保存的会话，按 workspace、分支和时间查找对话，以主子会话树和消息热力时间轴展示，支持侧边 sheet 阅读。侧栏支持 Workspace / Branch 分组，同名分支可以汇总多个项目的会话。每条会话及阅读面板提供 Pin 按钮；顶部 Pinned 入口集中查看待继续的会话，保留目录和分支筛选。Pin 独立于运行状态，关闭或恢复会话不会清除，完成后手动取消。
 
 它还支持由 Markdown 定义 Action，按定时、手动或独立 HTTP 接口触发。Actions 是原 Schedule 功能的升级。到期后，常驻的 `daemon` 直接调用本机 code-agent CLI，并把 session ID、结果、文件变更和日志引用写入统一 Run ledger；对话正文仍由本机 agent CLI 持有。
 
@@ -15,13 +17,13 @@ UnderControl 是运行在本机的 coding-agent 会话与自动化控制台。Se
 - runtime registry 已按 multi-CLI contract 设计，后续 runtime 只增加 adapter，不增加第二套调度链路；
 - 所有数据都保存在本机，不需要 cloud account 或 auth token。
 
-**Teams / Agent Loop**：在团队中说明任务，由 Leader 按依赖委派成员、接收结果、安排验证并交付。支持从本地全局定义、ECC 和 Agency Agents 在线目录导入完整角色，市场可切换来源并手动刷新，市场角色先保存到本地，成员可配置别名、离线搭配头像、客户端、经验证的模型及推理强度。显式 @ 直接派发，独立工作按资源和可配置并发执行；结果交回实际请求者，必要时由 Leader 协调。Teams 通过 SSE 接收实时片段；Codex Turn 请求详细公开思考内容，思考时显示当前公开摘要的 shimmer，结束后从时间线移除，支持按原生 Session 去重的 Token 用量及仅路径和状态的文件记录（无 diff）。团队支持工具详情、图片/PDF 路径引用、解散、移出当前团队及本地目录定义删除。通过 `@成员` 选择接收人，无须新任务表单。Teams 提供对话与持久化 Kibo 看板切换，看板自动追踪当前团队的会话目标、委派、执行、阻塞与正式报告，并保留独立的人工记录。创建团队只需名称，任务、项目路径与分支在对话中说明。内部执行目录由服务准备，独立新应用无需先提供项目路径；已有项目根据任务及已有上下文直接准备，无须重复确认或原样粘贴路径；无关成员执行不阻止追加项目，验证方式按任务选择，原生答复不强制调用 submit_result，Teams 不再按默认 24 轮或 10 分钟截断；支持隔离执行、继续已有本地分支或明确复用原目录。消息按文字、工具和成员动作的真实时间交错展示，@ 接收人直接显示在消息正文；消息用途由工具填写，接收人通过正文行内 @ 表达，不另加用途标签。支持成员原生会话续接、执行中 steer 补充消息与报告、投递与答复状态分离、关联问答及版本化正式报告按需读取；所有成员共用协作约定，内部进度不发群聊，工具回执区分通知计划与实际投递；重复完成通知合并，客户端自动续轮独立折叠，并保留带来源的共享决定与摘要。资料存储由 UnderControl 管理，后台备份可用于恢复团队，备份失败不阻断协作；迁移后先暂停核对旧执行，项目代码和客户端原生日志单独迁移。Codex 实际委派、实施、审阅和交付已跑通；Claude 仅开放讨论与审阅，真实模型侧验收尚未完成。导航顺序为 Sessions、Actions、Teams。团队原生会话在 Sessions 按团队名分组，显示成员头像与别名；左侧团队菜单支持“复制房间”，沿用成员及配置创建新的空白团队；同时提供解散和删除，删除后历史会话仍可查阅。详见[架构与接口](docs/agent-loop.md)及[验证记录](docs/job/agent-loop/03-phases.md)。
+**Teams / Agent Loop**：在团队中说明任务，由 Leader 按依赖委派成员、接收结果、安排验证并交付。支持从本地全局定义、ECC 和 Agency Agents 在线目录导入完整角色，市场可切换来源并手动刷新，市场角色先保存到本地，成员可配置别名、离线搭配头像、客户端、经验证的模型及推理强度。显式 @ 直接派发，独立工作按资源和可配置并发执行；结果交回实际请求者，必要时由 Leader 协调。Teams 通过 SSE 接收实时片段；Codex Turn 请求详细公开思考内容，思考时显示当前公开摘要的 shimmer，结束后从时间线移除，支持按原生 Session 去重的 Token 用量及仅路径和状态的文件记录（无 diff）。团队支持工具详情、图片/PDF 路径引用、解散、移出当前团队及本地目录定义删除。通过 `@成员` 选择接收人，无须新任务表单。Teams 提供对话与持久化 Kibo 看板切换，看板自动追踪当前团队的会话目标、委派、执行、阻塞与正式报告，并保留独立的人工记录。创建团队只需名称，任务、项目路径与分支在对话中说明。内部执行目录由服务准备，独立新应用无需先提供项目路径；已有项目根据任务及已有上下文直接准备，无须重复确认或原样粘贴路径；无关成员执行不阻止追加项目，验证方式按任务选择，原生答复不强制调用 submit_result，Teams 不再按默认 24 轮或 10 分钟截断；支持隔离执行、继续已有本地分支或明确复用原目录。消息按文字、工具和成员动作的真实时间交错展示，@ 接收人直接显示在消息正文；消息用途由工具填写，接收人通过正文行内 @ 表达，不另加用途标签。支持成员原生会话续接、执行中 steer 补充消息与报告、投递与答复状态分离、关联问答及版本化正式报告按需读取；所有成员共用协作约定，内部进度不发群聊，工具回执区分通知计划与实际投递；重复完成通知合并，客户端自动续轮独立折叠，并保留带来源的共享决定与摘要。资料存储由 TAKO 管理，后台备份可用于恢复团队，备份失败不阻断协作；迁移后先暂停核对旧执行，项目代码和客户端原生日志单独迁移。Codex 实际委派、实施、审阅和交付已跑通；Claude 仅开放讨论与审阅，真实模型侧验收尚未完成。导航顺序为 Sessions、Actions、Teams。团队原生会话在 Sessions 按团队名分组，显示成员头像与别名；左侧团队菜单支持“复制房间”，沿用成员及配置创建新的空白团队；同时提供解散和删除，删除后历史会话仍可查阅。详见[架构与接口](docs/agent-loop.md)及[验证记录](docs/job/agent-loop/03-phases.md)。
 
 Teams 成员跨职责延续同一任务中的原生会话，委派可明确产物与验收要求，完全相同的未完成指派复用原执行。共享记忆按当前工作筛选，恢复时从已有记录重建有来源的工作进度。Teams 的 Codex 执行使用完整访问，支持任务内更新项目绑定；分支/worktree 改名后按 Git 标识刷新路径，保留成员会话和文件。用户明确的只读要求仍作为任务约束，Claude 当前仅支持讨论与审阅。Actions 与旧固定阶段任务的权限设置保持不变。
 
-当前源码使用 `undercontrol` 命令、插件标识和发布资产名称，GitHub 仓库为 `joisun/undercontrol`。旧版本的配置、定时任务和执行记录由安装脚本迁移，详见[更名与安装迁移](docs/migrations/undercontrol-rename.md)。
+当前源码使用 `tako` 命令、插件标识和发布资产名称，GitHub 仓库为 `joisun/tako`。旧版本的配置、定时任务和执行记录由安装脚本迁移，详见[更名与安装迁移](docs/migrations/tako-rename.md)。
 
-0.18.0 是首个使用 UnderControl 名称的版本。安装器支持迁移原有配置与数据；旧 Release 保留原始资产名称。
+0.19.0 是 TAKO 更名后的版本。0.18.0 及更早 Release 保留当时的名称、安装器与原始资产；不要用旧安装器安装新名称的包。安装本版时使用对应的 TAKO 安装器与资产。
 
 
 Teams 左侧“Agent 管理”统一管理本地与 Marketplace 定义，仍在 view=teams 范围。支持 Agency Agents、ECC 及自定义 GitHub 来源、真实 Markdown 详情、托管安装、版本与本地修改检查、逐行更新审核及备份卸载。成员区 + 改为先搜索本地角色，再配置名字、头像、客户端、模型和 effort。安装角色可沿用 Teams 执行；独立 Session 创建尚未接入，界面明确禁用。详见 [Agent Marketplace](docs/agent-marketplace.md)。
@@ -35,21 +37,21 @@ Teams 左侧“Agent 管理”统一管理本地与 Marketplace 定义，仍在 
 安装 latest GitHub Release：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/joisun/undercontrol/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/joisun/tako/main/install.sh | bash
 ```
 
 安装完成后打开 Dashboard，或检查服务：
 
 ```bash
-undercontrol open
-undercontrol status
+tako open
+tako status
 ```
 
 普通安装不需要 clone repository、`npm install` 或 `npm ci`。更谨慎的固定版本安装方式：
 
 ```bash
-version=v0.18.0
-curl -fsSLO "https://raw.githubusercontent.com/joisun/undercontrol/${version}/install.sh"
+version=v0.19.0
+curl -fsSLO "https://raw.githubusercontent.com/joisun/tako/${version}/install.sh"
 less install.sh
 bash install.sh --version "$version"
 ```
@@ -58,11 +60,11 @@ installer 会在解包前验证 Release 中的 `SHA256SUMS`，但不会探测、
 
 ## Linux Web service
 
-Linux 使用 `systemd --user` 管理一个 `undercontrol.service`，安装、启停、状态和卸载沿用相同的 `undercontrol` 命令，不需要 root。安装时需要可用的用户级 systemd manager；installer 不修改系统服务或用户 lingering 策略。退出登录后是否继续运行取决于该机器的用户 manager 配置。
+Linux 使用 `systemd --user` 管理一个 `tako.service`，安装、启停、状态和卸载沿用相同的 `tako` 命令，不需要 root。安装时需要可用的用户级 systemd manager；installer 不修改系统服务或用户 lingering 策略。退出登录后是否继续运行取决于该机器的用户 manager 配置。
 
-Linux 安装需要 Release 包含 `undercontrol-linux.tar.gz`；macOS 使用 `undercontrol-macos.tar.gz`。两个包均为自包含的 JavaScript runtime 与预构建 Dashboard，不捆绑 Node.js。安装后无需 `npm install`。Linux 日志位于 `~/.local/state/undercontrol/`，用户 unit 位于 `~/.config/systemd/user/undercontrol.service`。
+Linux 安装需要 Release 包含 `tako-linux.tar.gz`；macOS 使用 `tako-macos.tar.gz`。两个包均为自包含的 JavaScript runtime 与预构建 Dashboard，不捆绑 Node.js。安装后无需 `npm install`。Linux 日志位于 `~/.local/state/tako/`，用户 unit 位于 `~/.config/systemd/user/tako.service`。
 
-默认服务仅监听服务器的 `127.0.0.1`。需要直接从网络访问时，在服务器的 `~/.config/undercontrol/config.json` 中配置以下字段，再执行 `undercontrol stop` 和 `undercontrol start`。以下配置允许通过服务器 IP 或已指向该服务的域名访问：
+默认服务仅监听服务器的 `127.0.0.1`。需要直接从网络访问时，在服务器的 `~/.config/tako/config.json` 中配置以下字段，再执行 `tako stop` 和 `tako start`。以下配置允许通过服务器 IP 或已指向该服务的域名访问：
 
 ```json
 {
@@ -72,7 +74,7 @@ Linux 安装需要 Release 包含 `undercontrol-linux.tar.gz`；macOS 使用 `un
 }
 ```
 
-浏览器打开服务器地址，例如 `http://10.10.20.62:43127/`。页面、API 和 SSE 均由 UnderControl 原生提供，无需反向代理。服务不按客户端 IP、Host 或 Origin 拦截请求；`server_public_url` 可选，仅设置 CLI 展示和打开的地址，旧 `server_allowed_clients` 字段不再生效。本机 CLI/MCP 和健康检查继续使用 `127.0.0.1`。默认安装仍只监听本机；通过本地代理访问 `http://undercontrol.local/` 时，无需配置该域名白名单。
+浏览器打开服务器地址，例如 `http://10.10.20.62:43127/`。页面、API 和 SSE 均由 TAKO 原生提供，无需反向代理。服务不按客户端 IP、Host 或 Origin 拦截请求；`server_public_url` 可选，仅设置 CLI 展示和打开的地址，旧 `server_allowed_clients` 字段不再生效。本机 CLI/MCP 和健康检查继续使用 `127.0.0.1`。默认安装仍只监听本机；通过本地代理访问 `http://tako.local/` 时，无需配置该域名白名单。
 
 也可保留默认本机监听，并使用 SSH 转发（以下为默认端口示例，替换登录地址）：
 
@@ -80,7 +82,7 @@ Linux 安装需要 Release 包含 `undercontrol-linux.tar.gz`；macOS 使用 `un
 ssh -N -L 43127:127.0.0.1:43127 user@server
 ```
 
-随后在该电脑打开 `http://127.0.0.1:43127/?view=sessions`。Linux 上的 `undercontrol open` 输出访问地址，不启动服务器上的桌面应用。
+随后在该电脑打开 `http://127.0.0.1:43127/?view=sessions`。Linux 上的 `tako open` 输出访问地址，不启动服务器上的桌面应用。
 
 会话树、正文、搜索、关系与 Actions 均通过 Web 使用。点击对话标题右侧的复制按钮取得 Session ID，然后在服务器上的对应 workspace 与相同 `CODEX_HOME` 下执行：
 
@@ -97,8 +99,8 @@ Service 与 agent adapter 独立安装。只安装你实际使用的 adapter。
 ### Codex
 
 ```bash
-codex plugin marketplace add joisun/undercontrol
-codex plugin add undercontrol@undercontrol
+codex plugin marketplace add joisun/tako
+codex plugin add tako@tako
 ```
 
 安装或更新后新开一个 conversation，使 MCP 工具生效。插件不再安装生命周期记录 hooks。
@@ -106,8 +108,8 @@ codex plugin add undercontrol@undercontrol
 ### Claude Code
 
 ```bash
-claude plugin marketplace add joisun/undercontrol
-claude plugin install undercontrol@undercontrol
+claude plugin marketplace add joisun/tako
+claude plugin install tako@tako
 ```
 
 按 Claude Code 的提示 reload plugin；若出现 MCP approval，只批准 plugin cache 内的 `dist/mcp-server.mjs`。
@@ -116,13 +118,13 @@ claude plugin install undercontrol@undercontrol
 
 ```text
 adapters/
-├── codex/undercontrol/
-└── claude/undercontrol/
+├── codex/tako/
+└── claude/tako/
 ```
 
 ## How it works
 
-UnderControl 只有一个长期运行的 service 和一个写入边界：
+TAKO 只有一个长期运行的 service 和一个写入边界：
 
 ```text
 Sessions
@@ -166,7 +168,7 @@ queued → running → succeeded | failed | timed_out | canceled | interrupted
 8. Dashboard 通过 Run-specific SSE 更新；active Turn 可以追加指令或停止；terminal Run 的历史对话由 runtime adapter 使用可信 Run ID 和 session ID 从 CLI-owned session 按需读取；
 9. 需要继续工作时，terminal Run 可以从可信 snapshot 召回 session。
 
-点击 Run「产出文件」中的文件名，会在浏览器新标签页访问由 undercontrol 提供的临时文件预览，macOS 和 Linux 均支持，也可从另一台电脑访问服务器产物。HTML 可直接运行，并加载产物所在目录内的相对 CSS、JS、图片和数据资源；未识别的入口文件类型按下载处理。macOS 另保留「系统打开」，使用服务所在机器的默认应用打开文件。
+点击 Run「产出文件」中的文件名，会在浏览器新标签页访问由 tako 提供的临时文件预览，macOS 和 Linux 均支持，也可从另一台电脑访问服务器产物。HTML 可直接运行，并加载产物所在目录内的相对 CSS、JS、图片和数据资源；未识别的入口文件类型按下载处理。macOS 另保留「系统打开」，使用服务所在机器的默认应用打开文件。
 
 预览入口必须是该 Run 在 workspace 内记录的、仍存在的普通文件，临时链接有效期30分钟；过期或服务重启后，从运行记录重新点击文件名即可。资源限定在入口文件所在目录，不提供目录列表，拒绝隐藏文件、目录越界和符号链接逃逸；以 `/` 开头的站点根路径不会自动改写，需要产物使用目录内的相对资源路径。HTML 使用独立的沙箱来源，允许脚本交互，不授予 Dashboard 的存储或 API 权限。预览实时读取磁盘文件，不保存产物副本；同名文件被后续任务更新后，旧 Run 的入口也会读取更新后的内容。已删除的文件不可点击，文件缺失或过期会显示原因。
 
@@ -178,7 +180,7 @@ queued → running → succeeded | failed | timed_out | canceled | interrupted
 
 Live Session 断线后自动重连，也可点击“重新连接”；连接恢复会补读任务状态，避免错过结束事件。最近 500 条实时消息保留在窗口内，发送期间继续输入的文字不会被清空。Actions 列表、执行历史和详情会随服务端事件更新，连接恢复后会同步补读。
 
-Live Session 只干预当前 active Turn，不在 Dashboard 内创建第二轮对话。Run 结束后，页面会重新读取 authoritative terminal Run，并通过 Codex 原生分页接口从本机 Codex-owned session 临时取得 user/assistant messages（旧 CLI 回退为有容量上限的 `thread/read`）；UnderControl 不复制或持久化这份 transcript。已结束 Run 可点击 Session ID 在 Terminal 中恢复并继续对话；Session ID 在创建时立即保存，超时、取消、连接异常或服务重启后仍可恢复已创建的会话。历史对话读取失败时可点击“重新读取”。
+Live Session 只干预当前 active Turn，不在 Dashboard 内创建第二轮对话。Run 结束后，页面会重新读取 authoritative terminal Run，并通过 Codex 原生分页接口从本机 Codex-owned session 临时取得 user/assistant messages（旧 CLI 回退为有容量上限的 `thread/read`）；TAKO 不复制或持久化这份 transcript。已结束 Run 可点击 Session ID 在 Terminal 中恢复并继续对话；Session ID 在创建时立即保存，超时、取消、连接异常或服务重启后仍可恢复已创建的会话。历史对话读取失败时可点击“重新读取”。
 
 实时 message、guidance、reasoning 与 tool payload 不写入 SQLite 或普通日志。OpenCode Run 的受限 stdout/stderr 会记录服务诊断、工具标题或脱敏命令摘要，不记录工具参数和输出正文。历史读取只向通过访问检查的 browser 返回可展示的 `userMessage` / `agentMessage`，不返回 reasoning、tool arguments/results 或 command output；本机 Codex session 被删除后，页面明确回退到 Run `final_message`。Run ledger 只保留既有 terminal facts；browser 不接触 runtime `turnId`、executable、argv 或 shell command。Run SSE 是 bounded memory replay，缓冲过期时页面明确 reset，并仍可读取 terminal facts。
 
@@ -240,9 +242,9 @@ Live Session 只干预当前 active Turn，不在 Dashboard 内创建第二轮�
 | `thread_mode: auto` | 首次新建，以后默认继承；本轮成功结果末尾的标记决定下一轮新建还是继承 |
 | `max_inherit_runs: 20` | 同一会话最多继承 20 轮，首次新建不计入；下一轮改为新建并重置计数。可设置 1–10000，自动模式也遵守此上限 |
 
-UnderControl 不配置自动压缩阈值，Codex 自行使用其原生配置与模型默认机制。旧 Markdown 中的 `auto_compact_token_limit` 只在读取时忽略，显式保存时移除；旧 Run 快照保留历史值，执行时不再注入。
+TAKO 不配置自动压缩阈值，Codex 自行使用其原生配置与模型默认机制。旧 Markdown 中的 `auto_compact_token_limit` 只在读取时忽略，显式保存时移除；旧 Run 快照保留历史值，执行时不再注入。
 
-自动模式会在每轮执行 Prompt 中附加控制说明。Agent 在最终结果末尾单独输出 `<!-- undercontrol:next-session=new -->` 或 `<!-- undercontrol:next-session=reuse -->`。标记缺失、无效或本轮失败时默认继承；新建不删除旧会话。任务正文可说明何时需要连续上下文，例如“连续跟进未完成缺陷时继承，已完成完整日报时下一轮新建”。UnderControl 使用已有执行记录保存选择和计数，不写第二份会话正文。运行记录显示本轮实际方式与继承序号，达到上限或自动决策导致的新建有单独标记。
+自动模式会在每轮执行 Prompt 中附加控制说明。Agent 在最终结果末尾单独输出 `<!-- tako:next-session=new -->` 或 `<!-- tako:next-session=reuse -->`。标记缺失、无效或本轮失败时默认继承；新建不删除旧会话。任务正文可说明何时需要连续上下文，例如“连续跟进未完成缺陷时继承，已完成完整日报时下一轮新建”。TAKO 使用已有执行记录保存选择和计数，不写第二份会话正文。运行记录显示本轮实际方式与继承序号，达到上限或自动决策导致的新建有单独标记。
 
 ### 手动压缩接口
 
@@ -319,11 +321,11 @@ macOS 点击 **在终端继续**，使用右上角设置中的恢复终端。Lin
 
 外部接口、secret/data 协议、可选定时、迁移和部署配置详见 [Actions 接入说明](docs/actions.md)。
 
-Action definition 是 source of truth；SQLite 只记录 Run facts。默认目录为 `~/.config/undercontrol/actions`。
+Action definition 是 source of truth；SQLite 只记录 Run facts。默认目录为 `~/.config/tako/actions`。
 
 ```markdown
 ---
-type: undercontrol/action
+type: tako/action
 id: 8b4a8b25-3d1e-4e43-8f5f-9cbef95b9275
 title: Daily repository review
 enabled: true
@@ -404,7 +406,7 @@ OpenCode Run 使用独立、带随机认证密码的 loopback `opencode serve`�
 
 OpenCode 不提供 Codex 的操作系统沙箱，首版必须使用 `sandbox: danger-full-access`，并显式继承 `capabilities: { skills: inherit, integrations: inherit }`。Editor 会展示并要求确认这一权限范围。`fast_mode` 与 `network_access` 不适用于 OpenCode；工具权限仍由本机 OpenCode 配置控制。收到权限询问或交互问题时，任务分别以 `RUNTIME_PERMISSION_REQUIRED` / `RUNTIME_INPUT_REQUIRED` 结束，保留 Session 以便人工继续，不会在后台无限等待。
 
-历史读取最多最近 100 条原生消息、1 MiB 可展示文本，仅包含 user/assistant 文本。OpenCode 自己管理会话持久化；UnderControl 不保存第二份完整对话。本适配仅增加定时任务执行器，不包含 OpenCode 工作记录插件。
+历史读取最多最近 100 条原生消息、1 MiB 可展示文本，仅包含 user/assistant 文本。OpenCode 自己管理会话持久化；TAKO 不保存第二份完整对话。本适配仅增加定时任务执行器，不包含 OpenCode 工作记录插件。
 
 
 filesystem watcher 提供低延迟刷新，周期性 rescan 保证最终收敛。修改 Definitions directory 时，现有 definitions 会在同一个操作中安全迁移并切换 watcher，不需要重启 `daemon`。
@@ -422,13 +424,13 @@ GET  /api/v1/runtimes/:id/models
 ## Data and configuration
 
 ```text
-~/.local/share/undercontrol/
+~/.local/share/tako/
 ├── current -> releases/<version>
 └── releases/<version>/                 # immutable program files
 
-~/.local/bin/undercontrol             # management CLI
+~/.local/bin/tako             # management CLI
 
-~/.config/undercontrol/
+~/.config/tako/
 ├── config.json
 ├── session-links.sqlite                # explicit collaboration links only
 ├── scheduler.sqlite                    # unified Run ledger
@@ -436,14 +438,14 @@ GET  /api/v1/runtimes/:id/models
 │   ├── *.md                            # Action source of truth
 │   ├── .trash/                         # recoverable delete/migration backup
 │   └── logs/                           # bounded per-Run stdout/stderr
-└── logs/undercontrol.ndjson           # privacy-bounded service log
+└── logs/tako.ndjson           # privacy-bounded service log
 
-~/Library/Logs/undercontrol/
+~/Library/Logs/tako/
 ├── daemon.stdout.log
 └── daemon.stderr.log
 ```
 
-会话关系数据库是 `~/.config/undercontrol/session-links.sqlite`；Actions Run ledger 是 `~/.config/undercontrol/actionr.sqlite`。历史 `tasks.sqlite` 与生成文件继续保留，但不再作为运行时数据源。
+会话关系数据库是 `~/.config/tako/session-links.sqlite`；Actions Run ledger 是 `~/.config/tako/actionr.sqlite`。历史 `tasks.sqlite` 与生成文件继续保留，但不再作为运行时数据源。
 
 默认配置：
 
@@ -472,29 +474,29 @@ Otty 使用原生 `agent_session_id` 匹配会话。Ghostty 需要 1.3.0 或以�
 ## Operations
 
 ```bash
-undercontrol open
-undercontrol status
-undercontrol stop
-undercontrol start
-undercontrol scheduler status
+tako open
+tako status
+tako stop
+tako start
+tako scheduler status
 ```
 
 更新 latest Release：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/joisun/undercontrol/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/joisun/tako/main/install.sh | bash
 ```
 
 只卸载 LaunchAgent、保留程序和数据：
 
 ```bash
-undercontrol uninstall
+tako uninstall
 ```
 
-完整卸载程序但保留 `~/.config/undercontrol` 数据：
+完整卸载程序但保留 `~/.config/tako` 数据：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/joisun/undercontrol/main/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/joisun/tako/main/install.sh | bash -s -- --uninstall
 ```
 
 ## Troubleshooting
@@ -504,17 +506,17 @@ curl -fsS http://127.0.0.1:43127/health/ready
 curl -fsS http://127.0.0.1:43127/api/v1/meta
 curl -fsS http://127.0.0.1:43127/api/v1/status
 curl -fsS http://127.0.0.1:43127/api/v1/runtimes
-tail -n 100 ~/Library/Logs/undercontrol/daemon.stderr.log
-tail -n 100 ~/.config/undercontrol/logs/undercontrol.ndjson
+tail -n 100 ~/Library/Logs/tako/daemon.stderr.log
+tail -n 100 ~/.config/tako/logs/tako.ndjson
 ```
 
-- `SERVICE_UNAVAILABLE`：先检查 `undercontrol status` 与 `/health/ready`。
+- `SERVICE_UNAVAILABLE`：先检查 `tako status` 与 `/health/ready`。
 - Dashboard 打不开：检查 `server_port` 是否被占用以及 `daemon.stderr.log`。
 - Runtime 为 `unavailable`：运行对应 CLI 的 `--version` 后重新打开 editor 或调用 `POST /api/v1/runtimes/refresh`；失败结果不会被长期缓存。registry 会自动补充 Homebrew、fnm/nvm/mise 等 GUI-missing toolchain directories，也可显式配置 `CODEX_BIN` / `codex_path`。
 - Model 使用 fallback：手动运行解析到的 `codex debug models`；fallback 不会阻止保存或 Run。
 - Run 失败：在 Run Review 查看 stable error code、退出码、provider 错误详情与 stdout/stderr。模型在地区不可用时显示 `RUNTIME_MODEL_UNAVAILABLE` 和 provider 返回的原文；已有 Session ID 可点击后在 Terminal 继续对话。
-- 继承会话时出现 `RUNTIME_SESSION_IN_USE`：该会话已由其他 Codex 客户端持有写入权。退出对应终端或客户端中的会话后再重跑；UnderControl 不会强制接管，也不会自动改为新建会话。
-- 历史对话不可用：确认对应 `thread_id` 仍存在于本机 Codex session inventory；UnderControl 不保存第二份 transcript，因此 session 被 Codex 清理后只显示 Run `final_message`。
+- 继承会话时出现 `RUNTIME_SESSION_IN_USE`：该会话已由其他 Codex 客户端持有写入权。退出对应终端或客户端中的会话后再重跑；TAKO 不会强制接管，也不会自动改为新建会话。
+- 历史对话不可用：确认对应 `thread_id` 仍存在于本机 Codex session inventory；TAKO 不保存第二份 transcript，因此 session 被 Codex 清理后只显示 Run `final_message`。
 - Action definition 不可用：按页面给出的 source path 修复 YAML、duplicate UUID、unknown field、cadence 或 symlink 问题；watcher 会自动重试。
 - 插件仍显示旧 Task 工具：更新插件后新开 agent conversation。当前不再自动记录 Task 或要求 hooks trust。
 - Resume 不可用：Run 必须有本机 session transcript 与有效 Workspace，并且对应 terminal / CLI 仍可用。
@@ -522,8 +524,8 @@ tail -n 100 ~/.config/undercontrol/logs/undercontrol.ndjson
 ## Develop from source
 
 ```bash
-git clone https://github.com/joisun/undercontrol.git
-cd undercontrol
+git clone https://github.com/joisun/tako.git
+cd tako
 npm ci
 ```
 
@@ -535,7 +537,7 @@ npm run dev:ui:react
 
 前端采用 Kibo UI 源码组合组件、shadcn 组件约定和 Base UI 单一交互底层；Motion 统一动效，Geist Sans/Mono 随包离线加载。组件与依赖维护规则见 [架构文档](docs/architecture.md#frontend-component-architecture) 和 [组件来源](ui/react/components/registry/README.md)。
 
-打开 <http://127.0.0.1:43130>。`ui/react` 变化会自动 rebuild/refresh，默认 API 来自 `43127`；`43128` 保留给 HTTP Trigger。后端变更需要重启对应服务。API v5 前端不能代理旧版服务；隔离开发时用 `UNDERCONTROL_DEV_PORT` 和 `UNDERCONTROL_DEV_UPSTREAM` 指向独立端口。该页面的 mutation 会修改所连接服务的数据。
+打开 <http://127.0.0.1:43130>。`ui/react` 变化会自动 rebuild/refresh，默认 API 来自 `43127`；`43128` 保留给 HTTP Trigger。后端变更需要重启对应服务。API v5 前端不能代理旧版服务；隔离开发时用 `TAKO_DEV_PORT` 和 `TAKO_DEV_UPSTREAM` 指向独立端口。该页面的 mutation 会修改所连接服务的数据。
 
 多个会话共用开发入口时，在主目录启动一次 `npm run dev:ui:react`，前端改动保存后会自动编译并整页刷新。各自 worktree 的改动需同步到共享主目录后才能在此入口看到，不会自动混合不同分支。
 
@@ -618,7 +620,7 @@ Otty 仅在 macOS 且 `resume_terminal` 已选择 otty 时作为最后的 queue 
 | `rejected` | 明确未完成投递，查看 error 与 attempts |
 | `unknown` | 可能已接受，不能换 ID 或通道盲目重发 |
 
-回执保存在 `~/.config/undercontrol/session-messages.sqlite`，只记录内容指纹、目标、原生消息 ID 与通道尝试，不复制对话正文，也不重建 Codex 队列。服务重启将未确认的在途请求标记 unknown。原生消息 ID 可用于核对队列或最近历史；队列中找不到并不代表未接受，证据不足仍保持 unknown。一次请求串行尝试多个通道；同一会话的不同请求也串行，重复 ID 共用原回执。
+回执保存在 `~/.config/tako/session-messages.sqlite`，只记录内容指纹、目标、原生消息 ID 与通道尝试，不复制对话正文，也不重建 Codex 队列。服务重启将未确认的在途请求标记 unknown。原生消息 ID 可用于核对队列或最近历史；队列中找不到并不代表未接受，证据不足仍保持 unknown。一次请求串行尝试多个通道；同一会话的不同请求也串行，重复 ID 共用原回执。
 
 Claude 优先依据带原始输入 UUID 的回复流帧或用户回显确认，不把 stdin 写入成功当作原生接受。长时间排队、旧 CLI 不提供对应确认或断线时，回执可能先为 unknown；连接仍在且后续收到匹配确认时，查询回执可核对为 accepted。仅凭队列文本相同不会确认。Claude 必须支持 `agents --json` 的活动目录核对，否则跳过恢复 worker；不会在旧 CLI 上凭猜测启动第二个进程。
 
@@ -633,11 +635,11 @@ REST 入口为 `/api/v1/session-control/sources`、`capabilities`、`send`、`in
 - `daemon` 默认只监听 `127.0.0.1`；监听 `0.0.0.0` 时，能连接该端口的客户端均可访问。页面、API、SSE 和开发入口不执行客户端 IP、Host 或 Origin 白名单校验；Dashboard API 不增加跨域 CORS 响应头，浏览器自身的跨域规则仍适用。
 - HTTP API 不使用 auth token，也不提供 TLS。网络监听范围由配置及操作系统网络策略决定。
 - Runtime invocation 使用明确 executable、argv array、可信 Workspace 和 `shell: false`。
-- 除 Actions Run 既有的 bounded final_message 外，SQLite 与 UnderControl logs 不保存 prompt、reasoning、assistant message、tool output、token 或 transcript 正文；历史对话只从 CLI-owned session 按需读取并在页面内存中展示。
+- 除 Actions Run 既有的 bounded final_message 外，SQLite 与 TAKO logs 不保存 prompt、reasoning、assistant message、tool output、token 或 transcript 正文；历史对话只从 CLI-owned session 按需读取并在页面内存中展示。
 - 不再安装记录 hooks；外部关系登记不可用时不阻塞终端工作，不建立补传队列。
 - Installer 在执行 runtime 前验证 artifact checksum，并拒绝 archive path traversal。
 - Session Resume 接受原生会话引用，Run Resume 只接受 Run ID；服务重新读取原生数据或 ledger，不接受 browser 提交的 Workspace 或任意 command。
 
 ## License
 
-UnderControl 采用 [GPL-2.0-only](LICENSE)。默认 Dashboard bundle 使用 React 与 React DOM；随 release 打包的 Legacy 回滚界面使用 SVAR React Gantt。第三方许可见 [ui/THIRD_PARTY_NOTICES.md](ui/THIRD_PARTY_NOTICES.md)；service bundle 见 [server/THIRD_PARTY_NOTICES.md](server/THIRD_PARTY_NOTICES.md)。
+TAKO 采用 [GPL-2.0-only](LICENSE)。默认 Dashboard bundle 使用 React 与 React DOM；随 release 打包的 Legacy 回滚界面使用 SVAR React Gantt。第三方许可见 [ui/THIRD_PARTY_NOTICES.md](ui/THIRD_PARTY_NOTICES.md)；service bundle 见 [server/THIRD_PARTY_NOTICES.md](server/THIRD_PARTY_NOTICES.md)。

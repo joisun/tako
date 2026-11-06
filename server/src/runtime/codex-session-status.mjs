@@ -19,7 +19,7 @@ export function createCodexSessionStatus({ dataRoot, createClient = createCodexS
     connecting = (async () => {
       await current.started
       await current.request('initialize', {
-        clientInfo: { name: 'undercontrol-session-status', version: '0.11.1' },
+        clientInfo: { name: 'tako-session-status', version: '0.11.1' },
         capabilities: { experimentalApi: true },
       })
       current.notify('initialized')

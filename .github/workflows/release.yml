@@ -47,10 +47,10 @@ jobs:
           chmod 755 release/install.sh
           cd release
           shasum -a 256 \
-            undercontrol-macos.tar.gz \
-            undercontrol-linux.tar.gz \
-            undercontrol-codex-adapter.tar.gz \
-            undercontrol-claude-adapter.tar.gz \
+            tako-macos.tar.gz \
+            tako-linux.tar.gz \
+            tako-codex-adapter.tar.gz \
+            tako-claude-adapter.tar.gz \
             install.sh > SHA256SUMS
 
       - name: Upload release assets for Linux verification
@@ -97,12 +97,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
-            release/undercontrol-macos.tar.gz \
-            release/undercontrol-linux.tar.gz \
-            release/undercontrol-codex-adapter.tar.gz \
-            release/undercontrol-claude-adapter.tar.gz \
+            release/tako-macos.tar.gz \
+            release/tako-linux.tar.gz \
+            release/tako-codex-adapter.tar.gz \
+            release/tako-claude-adapter.tar.gz \
             release/install.sh \
             release/SHA256SUMS \
             --verify-tag \
             --generate-notes \
-            --title "UnderControl $GITHUB_REF_NAME"
+            --title "TAKO $GITHUB_REF_NAME"

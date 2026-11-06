@@ -87,7 +87,7 @@ export function createGuidedTeamPlanner({ database: db, catalog, marketplace, ex
         source: preview.source_name }
     })
     return [
-      'You are planning a team for UnderControl. This is a planning-only run. Do not implement the user task, modify files, install anything, or contact other agents.',
+      'You are planning a team for TAKO. This is a planning-only run. Do not implement the user task, modify files, install anything, or contact other agents.',
       'Return ONLY one JSON object, without Markdown fences or surrounding commentary. Use Chinese for the title, summary, acceptance, aliases, responsibilities and reasons.',
       'Act as a professional staffing lead. Analyze the business objective, required evidence, workstreams, specialist skills and handoffs BEFORE choosing roles. Team size is determined by coverage of the actual work: there is no target size or member-count limit. Do not minimize headcount, consolidate every specialist into the Leader, or add redundant people merely to inflate the team.',
       'The FIRST member is the Leader, responsible for coordination, dependencies and acceptance. Domain analysis must be owned by suitable professionals, not silently assigned to a generic Leader or backend architect. One specialist may own related work only when their actual definition supports it and the reason explains the fit.',
@@ -129,7 +129,7 @@ export function createGuidedTeamPlanner({ database: db, catalog, marketplace, ex
       entry.pool = await prepareGuidedPool(marketplace); check()
       plan.candidates ??= []; plan.warnings = entry.pool.warnings; plan.phase = 'starting'; save(plan)
       if (!baseUrl) throw loopError('GUIDED_UNAVAILABLE', '规划工具接口尚未就绪', 503)
-      const executionEnv = { UNDERCONTROL_TEAM_PLAN_URL: baseUrl, UNDERCONTROL_TEAM_PLAN_ID: plan.id, UNDERCONTROL_TEAM_PLAN_TOKEN: entry.token }
+      const executionEnv = { TAKO_TEAM_PLAN_URL: baseUrl, TAKO_TEAM_PLAN_ID: plan.id, TAKO_TEAM_PLAN_TOKEN: entry.token }
       const plannerMcp = { command: process.execPath, args: [fileURLToPath(new URL('../../vendor/team-planner-server.mjs', import.meta.url))] }
       const workspace = join(workspaceRoot, plan.id)
       await mkdir(workspace, { recursive: true, mode: 0o700 }); check()
@@ -142,7 +142,7 @@ export function createGuidedTeamPlanner({ database: db, catalog, marketplace, ex
           model: plan.planner.model, reasoning_effort: plan.planner.effort, reasoning_summary: 'detailed',
           capabilities: { skills: 'disabled', integrations: 'disabled' }, timeout_seconds: Math.ceil(timeoutMs / 1000),
           execution_env: executionEnv, planner_mcp: plannerMcp,
-          execution_config: { 'mcp_servers.undercontrol_team_planner': { ...plannerMcp, env_vars: Object.keys(executionEnv), enabled: true, default_tools_approval_mode: 'approve', enabled_tools: ['search_agents', 'get_agent_definition'] } } },
+          execution_config: { 'mcp_servers.tako_team_planner': { ...plannerMcp, env_vars: Object.keys(executionEnv), enabled: true, default_tools_approval_mode: 'approve', enabled_tools: ['search_agents', 'get_agent_definition'] } } },
         nextSequence: () => ++sequence,
         onSpawn(value) { plan.pid = value.pid; save(plan) },
         emit(event) {

@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
 
-import { UnderControlError } from './errors.mjs'
+import { TAKOError } from './errors.mjs'
 
 function fail(code, message, details) {
-  throw new UnderControlError(code, message, details)
+  throw new TAKOError(code, message, details)
 }
 
 function requiredString(value, field) {

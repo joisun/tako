@@ -3,7 +3,7 @@ import { handleCollaborationRequest } from './collaboration-http.mjs'
 import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 
-import { UnderControlError } from '../../mcp/src/errors.mjs'
+import { TAKOError } from '../../mcp/src/errors.mjs'
 import { readJson, sendJson } from './http-utils.mjs'
 import { sendRunFile } from './api-server/run-file-response.mjs'
 
@@ -83,7 +83,7 @@ function statusFor(error) {
     || error.code.startsWith('RUN_')
     || error.code.startsWith('RUNTIME_')
   )) return 400
-  if (error instanceof UnderControlError) return 400
+  if (error instanceof TAKOError) return 400
   return 500
 }
 
@@ -373,7 +373,7 @@ function validateRunControl(action, value) {
 }
 
 export function createApiServer({
-  serviceStatus = async () => ({ ready: true, service: 'undercontrol', api_version: 5 }),
+  serviceStatus = async () => ({ ready: true, service: 'tako', api_version: 5 }),
   hub,
   host = '127.0.0.1',
   port,
@@ -426,24 +426,13 @@ export function createApiServer({
         response.end(dashboardHtml)
         return
       }
-      if (request.method === 'GET' && pathname === '/undercontrol.png') {
-        const logo = await readFile(new URL('../../ui/assets/undercontrol.png', import.meta.url))
-        response.writeHead(200, {
-          'Content-Type': 'image/png',
-          'Content-Length': logo.byteLength,
-          'Cache-Control': 'public, max-age=3600',
-          'X-Content-Type-Options': 'nosniff',
-        })
-        response.end(logo)
-        return
-      }
       if (request.method === 'GET' && pathname === '/favicon.ico') {
         response.writeHead(204, { 'Cache-Control': 'public, max-age=86400' })
         response.end()
         return
       }
       if (request.method === 'GET' && pathname === '/health/live') {
-        sendJson(response, 200, { ok: true, service: 'undercontrol' })
+        sendJson(response, 200, { ok: true, service: 'tako' })
         return
       }
       if (request.method === 'GET' && pathname === '/health/ready') {
@@ -451,12 +440,12 @@ export function createApiServer({
         const ready = check !== null && check.integrityCheck === 'ok'
           && (check.foreignKeyViolations?.length ?? 0) === 0
           && (check.invariantViolations?.length ?? 0) === 0
-        sendJson(response, ready ? 200 : 503, { ok: ready, ready, service: 'undercontrol', check })
+        sendJson(response, ready ? 200 : 503, { ok: ready, ready, service: 'tako', check })
         return
       }
       if (request.method === 'GET' && pathname === '/api/v1/meta') {
         sendJson(response, 200, {
-          service: 'undercontrol',
+          service: 'tako',
           service_version: packageVersion,
           api_version: apiVersion,
           capabilities: {
@@ -474,9 +463,9 @@ export function createApiServer({
         || ['/api/v1/context', '/api/v1/snapshot', '/api/v1/heartbeat', '/api/v1/render', '/api/v1/check'].includes(pathname)
         || (request.method === 'POST' && pathname === '/api/v1/events')
       if (retired) throw httpError('TASKS_RETIRED', 'Tasks recording has been retired. Use Sessions, session_link and session_unlink; existing data files are preserved.', 410)
-      const expectedApiVersion = request.headers['x-undercontrol-api-version']
+      const expectedApiVersion = request.headers['x-tako-api-version']
       if (expectedApiVersion !== undefined && expectedApiVersion !== String(apiVersion)) {
-        throw httpError('API_VERSION_MISMATCH', `UnderControl API v${apiVersion} is required; update the client and service together.`, 409)
+        throw httpError('API_VERSION_MISMATCH', `TAKO API v${apiVersion} is required; update the client and service together.`, 409)
       }
       if (request.method === 'GET' && pathname === '/api/v1/runtimes' && runtimeRegistry) {
         sendJson(response, 200, { runtimes: await runtimeRegistry.list() })

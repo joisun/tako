@@ -6,8 +6,8 @@ import { join, isAbsolute } from 'node:path'
 import { archiveRoomArtifacts, restoreRoomArtifacts } from '../collaboration-artifacts.mjs'
 import { loopError } from './errors.mjs'
 
-const FORMAT='undercontrol-room-v1'
-const LEGACY_FORMAT='rillo-room-v1'
+const FORMAT='tako-room-v1'
+const LEGACY_FORMATS=['undercontrol-room-v1','rillo-room-v1']
 const roomTables=['loop_rooms','loop_members','loop_tasks','loop_runs','loop_messages','loop_inbox','loop_events','loop_boards','loop_work_items','loop_memories']
 const scope = table => ['loop_rooms'].includes(table) ? 'id' : ['loop_runs','loop_inbox','loop_events'].includes(table) ? 'task_id' : 'room_id'
 const roomExpression=(table,prefix)=>['loop_runs','loop_inbox','loop_events'].includes(table)?`(SELECT room_id FROM loop_tasks WHERE id=${prefix}.task_id)`:`${prefix}.${scope(table)}`
@@ -33,8 +33,12 @@ export function createRoomMemory({db,clock}) {
     const current=leases.get(path)
     if(current){if(current.roomId!==roomId)throw loopError('LOOP_MEMORY_DIRECTORY_IN_USE','一个记忆目录只能保存一个团队',409);return}
     // An OS-backed SQLite write lock is released on crashes, without PID guesses or expiring leases.
-    const legacyLock=join(path,'.rillo-lock.sqlite')
-    const lockPath=await stat(legacyLock).then(()=>legacyLock,error=>{if(error.code==='ENOENT')return join(path,'.undercontrol-lock.sqlite');throw error});let lock
+    let lockPath=join(path,'.tako-lock.sqlite')
+    for(const filename of ['.rillo-lock.sqlite','.undercontrol-lock.sqlite']){
+      const candidate=join(path,filename)
+      if(await stat(candidate).then(()=>true,error=>{if(error.code==='ENOENT')return false;throw error})){lockPath=candidate;break}
+    }
+    let lock
     try {
       lock=new DatabaseSync(lockPath)
       chmodSync(lockPath,0o600)
@@ -88,7 +92,7 @@ export function createRoomMemory({db,clock}) {
     let archive
     try{const file=await open(join(source,'room.json'),'r');try{if((await file.stat()).size>256*1024*1024)throw new Error('oversize');archive=JSON.parse(await file.readFile('utf8'))}finally{await file.close()}}catch{throw loopError('LOOP_MEMORY_ARCHIVE_INVALID','无法读取团队资料')}
     const data=archive.data
-    if(![FORMAT,LEGACY_FORMAT].includes(archive.format)||!data||createHash('sha256').update(JSON.stringify(data)).digest('hex')!==archive.sha256||roomTables.some(table=>!Array.isArray(data[table]))||data.loop_rooms.length!==1)throw loopError('LOOP_MEMORY_ARCHIVE_INVALID','团队资料格式或校验值无效')
+    if(![FORMAT,...LEGACY_FORMATS].includes(archive.format)||!data||createHash('sha256').update(JSON.stringify(data)).digest('hex')!==archive.sha256||roomTables.some(table=>!Array.isArray(data[table]))||data.loop_rooms.length!==1)throw loopError('LOOP_MEMORY_ARCHIVE_INVALID','团队资料格式或校验值无效')
     if(roomTables.some(table=>data[table].some(row=>!row||typeof row!=='object'||Array.isArray(row))))throw loopError('LOOP_MEMORY_ARCHIVE_INVALID','资料包含无效记录')
     const roomId=data.loop_rooms[0].id
     const target=await directory(memory_directory||default_root&&join(default_root,roomId))

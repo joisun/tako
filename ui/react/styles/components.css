@@ -6,7 +6,7 @@
 .ui-button[data-variant='quiet']:hover { background: var(--surface-2); color: var(--text-primary); }
 .ui-button[data-variant='link']:hover { text-decoration: underline; }
 .ui-button[data-variant='primary'] { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
-.ui-button[data-variant='primary']:hover { background: #d4d4d4; }
+.ui-button[data-variant='primary']:hover { background: var(--brand-primary-hover); }
 .ui-button[data-variant='danger'] { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--surface-1)); border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
 .ui-button[data-variant='warning'] { color: var(--warning); }
 .ui-button[data-size='xs'] { gap: 4px; padding-inline: 7px; font-size: 11px; }
@@ -82,7 +82,7 @@
 /* The application has one typography and spacing rhythm, across both tabs. */
 .app-shell { grid-template-rows: 44px minmax(0, 1fr); }
 .app-shell__header { padding-inline: 16px; background: var(--surface-1); }
-.app-shell__brand h1 { font-size: 13px; font-weight: 650; letter-spacing: -.035em; }
+.app-shell__brand h1 { font-size: 14px; font-weight: 750; letter-spacing: .04em; }
 .app-shell__mark { width: 24px; height: 24px; }
 .app-shell__main { background: var(--surface-0); }
 .segmented-control { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface-1); }

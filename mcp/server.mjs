@@ -5,6 +5,6 @@ import { startSessionMcp } from './src/session-server.mjs'
 try {
   await startSessionMcp()
 } catch (error) {
-  process.stderr.write(`undercontrol failed to start: ${error.stack ?? error}\n`)
+  process.stderr.write(`tako failed to start: ${error.stack ?? error}\n`)
   process.exitCode = 1
 }

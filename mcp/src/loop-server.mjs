@@ -5,14 +5,14 @@ import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 
 export function createLoopToolServer({ env = process.env, fetchImpl = fetch } = {}) {
-  const server = new McpServer({ name: 'undercontrol_loop', version: '1.0.0' }, {
+  const server = new McpServer({ name: 'tako_loop', version: '1.0.0' }, {
     instructions: 'Tools are scoped to this execution, task input version and role. Teams preserve the public native answer; submit_result is optional for structured reporting. Legacy phase tasks still require it as specified by their prompt. Use ask for a new question, linked reply for its answer and announce for information only. Plain mentions do not dispatch work. Progress is internal; accepted reports need no completion ping. Do not change credentials or call another task.',
   })
   async function call(action, input = {}) {
-    const base = new URL(env.UNDERCONTROL_LOOP_URL)
+    const base = new URL(env.TAKO_LOOP_URL)
     if (!['127.0.0.1', '[::1]'].includes(base.hostname) || base.protocol !== 'http:') throw new Error('Run tools require a loopback service URL')
-    const response = await fetchImpl(new URL(`/api/v1/loop-runs/${encodeURIComponent(env.UNDERCONTROL_LOOP_RUN)}/tools/${action}`, base), {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.UNDERCONTROL_LOOP_TOKEN}` },
+    const response = await fetchImpl(new URL(`/api/v1/loop-runs/${encodeURIComponent(env.TAKO_LOOP_RUN)}/tools/${action}`, base), {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.TAKO_LOOP_TOKEN}` },
       body: JSON.stringify(input), signal: AbortSignal.timeout(10000),
     })
     const value = await response.json()

@@ -120,7 +120,7 @@ export interface DashboardSettingsResponse {
 }
 
 export interface DashboardMeta {
-  service: 'undercontrol'
+  service: 'tako'
   service_version: string
   api_version: string
   capabilities: {

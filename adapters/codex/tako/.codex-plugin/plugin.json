@@ -1,0 +1,38 @@
+{
+  "name": "tako",
+  "version": "0.19.0",
+  "description": "Manage agent sessions, automate actions, and coordinate professional agent teams.",
+  "author": {
+    "name": "Joi Sun",
+    "url": "https://github.com/joisun"
+  },
+  "homepage": "https://github.com/joisun/tako",
+  "repository": "https://github.com/joisun/tako",
+  "license": "GPL-2.0-only",
+  "keywords": [
+    "sessions",
+    "codex",
+    "mcp",
+    "dashboard"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "TAKO",
+    "shortDescription": "Your AI Agent Crew",
+    "longDescription": "Manage agent sessions, automate actions, and coordinate professional agent teams.",
+    "developerName": "Joi Sun",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Find a previous session by keyword.",
+      "Create or trigger an Action.",
+      "Find suitable agents for a professional team."
+    ],
+    "websiteURL": "https://github.com/joisun/tako"
+  }
+}

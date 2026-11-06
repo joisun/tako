@@ -6,12 +6,12 @@ set -eu
 release_directory="$(cd "$1" && pwd)"
 expected_version="${2#v}"
 case "$(uname -s)" in
-  Linux) service_asset=undercontrol-linux.tar.gz ;;
-  Darwin) service_asset=undercontrol-macos.tar.gz ;;
+  Linux) service_asset=tako-linux.tar.gz ;;
+  Darwin) service_asset=tako-macos.tar.gz ;;
   *) printf 'Unsupported verification platform\n' >&2; exit 1 ;;
 esac
 
-smoke_root="$(mktemp -d "${TMPDIR:-/tmp}/undercontrol-release-smoke.XXXXXX")"
+smoke_root="$(mktemp -d "${TMPDIR:-/tmp}/tako-release-smoke.XXXXXX")"
 smoke_home="$smoke_root/home"
 runtime_pid=''
 cleanup() {
@@ -28,13 +28,13 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
-mkdir -p "$smoke_home/.config/undercontrol"
+mkdir -p "$smoke_home/.config/tako"
 
 tar -tzf "$release_directory/$service_asset" > "$smoke_root/entries" 2> "$smoke_root/tar-errors"
 [ ! -s "$smoke_root/tar-errors" ] || { cat "$smoke_root/tar-errors" >&2; exit 1; }
 awk -F/ '{ for (i = 1; i <= NF; i++) if ($i ~ /^\._/ || $i == ".DS_Store") exit 1 }' "$smoke_root/entries"
 
-smoke_port="$(node --input-type=module - "$smoke_home/.config/undercontrol/config.json" <<'NODE'
+smoke_port="$(node --input-type=module - "$smoke_home/.config/tako/config.json" <<'NODE'
 import { writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 const servers = [createServer(), createServer()]
@@ -45,18 +45,18 @@ console.log(server_port)
 await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve))))
 NODE
  )"
-cp "$smoke_home/.config/undercontrol/config.json" "$smoke_root/config-before.json"
-env HOME="$smoke_home" UNDERCONTROL_RELEASE_BASE_URL="file://$release_directory" \
+cp "$smoke_home/.config/tako/config.json" "$smoke_root/config-before.json"
+env HOME="$smoke_home" TAKO_RELEASE_BASE_URL="file://$release_directory" \
   bash "$release_directory/install.sh" --version "v$expected_version" --no-start
-cmp "$smoke_root/config-before.json" "$smoke_home/.config/undercontrol/config.json"
+cmp "$smoke_root/config-before.json" "$smoke_home/.config/tako/config.json"
 
-runtime_root="$smoke_home/.local/share/undercontrol/current"
+runtime_root="$smoke_home/.local/share/tako/current"
 node - "$runtime_root/package.json" "$expected_version" <<'NODE'
 const {readFileSync}=require('node:fs')
 const manifest=JSON.parse(readFileSync(process.argv[2],'utf8'))
 if(manifest.version!==process.argv[3])throw new Error('Installed package version mismatch')
 NODE
-if find "$smoke_home/.local/share/undercontrol/releases" \( -name '._*' -o -name '.DS_Store' \) -print | read -r _metadata; then
+if find "$smoke_home/.local/share/tako/releases" \( -name '._*' -o -name '.DS_Store' \) -print | read -r _metadata; then
   printf 'Installed runtime contains macOS metadata\n' >&2
   exit 1
 fi

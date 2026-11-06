@@ -189,7 +189,7 @@ export function migrateSchedulerV4({
       const columns = db.prepare('PRAGMA table_info(scheduled_runs_v4)').all().map(({ name }) => name).join(', ')
       db.exec(`INSERT INTO scheduled_runs (${columns}) SELECT ${columns} FROM scheduled_runs_v4; DROP TABLE scheduled_runs_v4;`)
       // v4 did not mark a Run running until spawn; a queued record could already be launching.
-      db.prepare("UPDATE scheduled_runs SET status = 'interrupted', finished_at = ?, updated_at = ?, error_code = 'UNDERCONTROL_UPGRADED' WHERE status = 'queued'").run(timestamp, timestamp)
+      db.prepare("UPDATE scheduled_runs SET status = 'interrupted', finished_at = ?, updated_at = ?, error_code = 'TAKO_UPGRADED' WHERE status = 'queued'").run(timestamp, timestamp)
       db.exec('COMMIT')
       return { migrated: true, reason: 'upgraded_v5' , runs: db.prepare('SELECT count(*) AS count FROM scheduled_runs').get().count }
     }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { UnderControlError } from './errors.mjs'
+import { TAKOError } from './errors.mjs'
 
 export const V3_TASK_LIFECYCLES = Object.freeze([
   'planned',
@@ -15,7 +15,7 @@ const TASK_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const EVENT_ACTORS = new Set(['agent', 'user', 'hook', 'importer'])
 
 function fail(code, message, details) {
-  throw new UnderControlError(code, message, details)
+  throw new TAKOError(code, message, details)
 }
 
 function requiredString(value, field) {

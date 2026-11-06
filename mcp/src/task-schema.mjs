@@ -1,9 +1,9 @@
-import { UnderControlError } from './errors.mjs'
+import { TAKOError } from './errors.mjs'
 
 export const SCHEMA_VERSION = 2
 
 function fail(code, message, details) {
-  throw new UnderControlError(code, message, details)
+  throw new TAKOError(code, message, details)
 }
 
 function hasColumn(db, table, column) {

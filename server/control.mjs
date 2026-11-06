@@ -12,7 +12,7 @@ import { createSystemdController } from './control/systemd.mjs'
 import { resolveAppConfig } from '../mcp/src/config.mjs'
 import { cleanupLegacyScheduleLaunchAgents } from './src/scheduler/legacy-launchd-cleanup.mjs'
 
-export const LAUNCH_AGENT_LABEL = 'com.joi.undercontrol.daemon'
+export const LAUNCH_AGENT_LABEL = 'com.joi.tako.daemon'
 
 function escapeXml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({
@@ -88,7 +88,7 @@ export function createInstallBuildStep({
   env = process.env,
   run = runCommand,
 }) {
-  if (env.UNDERCONTROL_PREBUILT === '1') {
+  if (env.TAKO_PREBUILT === '1') {
     const dashboardPath = join(projectRoot, 'ui', 'dist', 'react.html')
     return async () => {
       try {
@@ -114,7 +114,7 @@ export function createDaemonController({
   cleanupLegacySchedules = cleanupLegacyScheduleLaunchAgents,
 }) {
   const launchAgentsDirectory = join(homeDirectory, 'Library', 'LaunchAgents')
-  const logDirectory = join(homeDirectory, 'Library', 'Logs', 'undercontrol')
+  const logDirectory = join(homeDirectory, 'Library', 'Logs', 'tako')
   const paths = {
     plistPath: join(launchAgentsDirectory, `${LAUNCH_AGENT_LABEL}.plist`),
     stdoutPath: join(logDirectory, 'daemon.stdout.log'),
@@ -144,10 +144,10 @@ export function createDaemonController({
 
   async function install() {
     if (Number(nodeVersion.split('.')[0]) < 24) {
-      throw new Error('undercontrol daemon requires Node.js 24 or newer')
+      throw new Error('tako daemon requires Node.js 24 or newer')
     }
     const health = await probeHealth(config.serverBaseUrl)
-    if (health && health.service !== 'undercontrol') {
+    if (health && health.service !== 'tako') {
       throw new Error(`${config.serverBaseUrl} is occupied by another service`)
     }
     const legacyCleanup = await cleanupLegacySchedules({
@@ -184,7 +184,7 @@ export function createDaemonController({
     return {
       label: LAUNCH_AGENT_LABEL,
       loaded: launchd.code === 0,
-      ready: health?.service === 'undercontrol' && health.ready !== false,
+      ready: health?.service === 'tako' && health.ready !== false,
       url: config.serverPublicUrl ?? config.serverBaseUrl,
       plistPath: paths.plistPath,
     }
@@ -225,7 +225,7 @@ export async function runControlCommand(command = 'status', {
   run = runCommand,
 } = {}) {
   if (!['darwin', 'linux'].includes(platform)) {
-    throw new Error('undercontrol supports macOS and Linux with systemd')
+    throw new Error('tako supports macOS and Linux with systemd')
   }
   if (!['install', 'start', 'stop', 'status', 'uninstall'].includes(command)) {
     throw new Error('usage: npm run daemon -- install|start|stop|status|uninstall')

@@ -217,7 +217,7 @@ function createSession({
       if (settled) return completion
       onSpawn({ pid: spawned.pid })
       await client.request('initialize', {
-        clientInfo: { name: 'undercontrol', title: 'UnderControl', version: 'source' },
+        clientInfo: { name: 'tako', title: 'TAKO', version: 'source' },
       })
       const threadConfig = capabilities.skills === 'disabled'
         ? skillsThreadConfig(await client.request('skills/list', {

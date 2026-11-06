@@ -100,7 +100,7 @@ export function createCodexRuntimeDefinition({
       try {
         await client.started
         await client.request('initialize', {
-          clientInfo: { name: 'undercontrol', title: 'UnderControl', version: 'source' },
+          clientInfo: { name: 'tako', title: 'TAKO', version: 'source' },
         })
         try {
           return await readConversationPages(client, threadId)

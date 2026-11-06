@@ -11,7 +11,7 @@ export function createClaudeRuntimeDefinition() {
     fallbackModels: [{ id: 'default', displayName: 'Default (CLI config)', reasoningLevels: [] }],
     async buildExecutionInvocation({ launch, spec }) {
       if (spec.sandbox_mode !== 'read-only') throw runtimeError('LOOP_WRITE_UNSUPPORTED', 'Claude 实施权限尚未通过验证；请选择 Codex 实施，Claude 可参与讨论与审阅')
-      const toolServer = spec.planner_mcp ? 'undercontrol_team_planner' : 'undercontrol_loop'
+      const toolServer = spec.planner_mcp ? 'tako_team_planner' : 'tako_loop'
       const mcp = spec.planner_mcp ?? spec.loop_mcp
       const allowedTools = spec.planner_mcp ? ['search_agents','get_agent_definition'] : ['read_context','submit_result','request_action','report_progress','send_message','remember']
       const args = ['--print', '--verbose', '--output-format', 'stream-json', '--permission-mode', 'dontAsk',

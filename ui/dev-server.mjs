@@ -23,10 +23,10 @@ try {
       sourceRoots: [reactSourceRoot],
     } : {}),
   })
-  process.stderr.write(`UnderControl ${entry} source Dashboard: ${runtime.address.url}\n`)
+  process.stderr.write(`TAKO ${entry} source Dashboard: ${runtime.address.url}\n`)
   process.stderr.write(`Live daemon upstream: ${config.upstream.origin}\n`)
   process.stderr.write(
-    'Warning: Dashboard mutations update your real local UnderControl data.\n',
+    'Warning: Dashboard mutations update your real local TAKO data.\n',
   )
   let stopping = false
   async function stop() {
@@ -37,6 +37,6 @@ try {
   process.once('SIGINT', () => { stop().finally(() => process.exit(0)) })
   process.once('SIGTERM', () => { stop().finally(() => process.exit(0)) })
 } catch (error) {
-  process.stderr.write(`UnderControl Dashboard dev server failed: ${error.message}\n`)
+  process.stderr.write(`TAKO Dashboard dev server failed: ${error.message}\n`)
   process.exitCode = 1
 }

@@ -12,7 +12,7 @@ function loopbackOrigin(value) {
     || url.search !== ''
     || url.hash !== ''
   ) {
-    throw new TypeError('undercontrol service URL must be an http://127.0.0.1 origin')
+    throw new TypeError('tako service URL must be an http://127.0.0.1 origin')
   }
   return url.origin
 }

@@ -101,7 +101,7 @@ export function createAgentMarketplace({database,dataDirectory,adapter,clock=()=
       const definitions=[],errors=[]
       for(const row of (await installed())){
         if(row.is_modified||row.is_missing||row.operation_error){errors.push({source:row.definition.name,message:'托管定义已修改、丢失或操作未完成，请在 Marketplace 检查'});continue}
-        const saved=store.get(row.id),definition={name:row.definition.name,description:row.definition.description,instructions:saved.definition.instructions,model:null,tools:[],skills:[],source:{kind:'managed',label:'UnderControl 托管 · '+row.definition.source_name,path:row.local_path,format:'instructions',digest:row.definition.digest,origin:{id:row.definition_id,revision:row.installed_version,url:row.definition.url,license:row.definition.license},license:row.definition.license,revision:row.installed_version}}
+        const saved=store.get(row.id),definition={name:row.definition.name,description:row.definition.description,instructions:saved.definition.instructions,model:null,tools:[],skills:[],source:{kind:'managed',label:'TAKO 托管 · '+row.definition.source_name,path:row.local_path,format:'instructions',digest:row.definition.digest,origin:{id:row.definition_id,revision:row.installed_version,url:row.definition.url,license:row.definition.license},license:row.definition.license,revision:row.installed_version}}
         definitions.push({id:'managed:'+row.id,slug:'marketplace-'+row.id,name:definition.name,description:definition.description,runtimes:['codex','claude'],variants:{codex:definition,claude:definition}})
       }
       return{definitions,errors}

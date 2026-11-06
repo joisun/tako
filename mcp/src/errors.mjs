@@ -1,7 +1,7 @@
-export class UnderControlError extends Error {
+export class TAKOError extends Error {
   constructor(code, message, details = undefined) {
     super(message)
-    this.name = 'UnderControlError'
+    this.name = 'TAKOError'
     this.code = code
     this.details = details
   }

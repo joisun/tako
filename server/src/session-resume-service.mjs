@@ -1,9 +1,9 @@
 import { isAbsolute } from 'node:path'
 
-import { UnderControlError } from '../../mcp/src/errors.mjs'
+import { TAKOError } from '../../mcp/src/errors.mjs'
 
 function resumeError(code, message, details) {
-  return new UnderControlError(code, message, details)
+  return new TAKOError(code, message, details)
 }
 
 function scheduledRunTarget(run) {

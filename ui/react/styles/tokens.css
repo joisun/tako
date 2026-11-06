@@ -17,7 +17,10 @@
   --accent: #ededed;
   --accent-strong: #ffffff;
   --accent-contrast: #0a0a0a;
-  --focus: #6ba9ff;
+  --brand-primary: #6d4aff;
+  --brand-primary-hover: #5b3be0;
+  --brand-foreground: #b8a5ff;
+  --focus: var(--brand-foreground);
   --danger: #ff7676;
   --success: #58ca95;
   --warning: #f2be62;
@@ -47,8 +50,8 @@
   --card-foreground: var(--text-primary);
   --popover: var(--surface-raised);
   --popover-foreground: var(--text-primary);
-  --primary: var(--text-primary);
-  --primary-foreground: var(--surface-0);
+  --primary: var(--brand-primary);
+  --primary-foreground: #ffffff;
   --secondary: var(--surface-2);
   --secondary-foreground: var(--text-primary);
   --muted: var(--surface-2);

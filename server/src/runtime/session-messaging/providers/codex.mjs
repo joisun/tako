@@ -18,7 +18,7 @@ export function createCodexMessageProvider({ dataRoot = process.env.CODEX_HOME ?
       const next = createClient({ dataRoot: root, allowedMethods: METHODS })
       try {
         await next.started
-        await next.request('initialize', { clientInfo: { name: 'undercontrol-session-control', version: '0.16.1' }, capabilities: { experimentalApi: true } })
+        await next.request('initialize', { clientInfo: { name: 'tako-session-control', version: '0.16.1' }, capabilities: { experimentalApi: true } })
         next.notify('initialized')
         if (closed) throw unavailable()
         client = next

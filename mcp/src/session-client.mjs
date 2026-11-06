@@ -1,15 +1,15 @@
-import { UnderControlError } from './errors.mjs'
+import { TAKOError } from './errors.mjs'
 
 export const API_VERSION = 5
 
 function localOrigin(value) {
   let url
   try { url = new URL(value) } catch {
-    throw new UnderControlError('CONFIG_INVALID', 'UnderControl service URL is invalid.')
+    throw new TAKOError('CONFIG_INVALID', 'TAKO service URL is invalid.')
   }
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1'
     || url.username || url.password || !['', '/'].includes(url.pathname) || url.search || url.hash) {
-    throw new UnderControlError('CONFIG_INVALID', 'UnderControl service URL must be an http://127.0.0.1 origin.')
+    throw new TAKOError('CONFIG_INVALID', 'TAKO service URL must be an http://127.0.0.1 origin.')
   }
   return url.origin
 }
@@ -23,20 +23,20 @@ export function createSessionClient({ baseUrl, fetchImpl = globalThis.fetch, tim
         method,
         headers: {
           Accept: 'application/json',
-          'X-UnderControl-API-Version': String(API_VERSION),
+          'X-TAKO-API-Version': String(API_VERSION),
           ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
       })
     } catch {
-      throw new UnderControlError('SERVICE_UNAVAILABLE', 'UnderControl service is unavailable. Run `undercontrol status` or install the service.')
+      throw new TAKOError('SERVICE_UNAVAILABLE', 'TAKO service is unavailable. Run `tako status` or install the service.')
     }
     const result = await response.json().catch(() => {
-      throw new UnderControlError('SERVICE_RESPONSE_INVALID', 'UnderControl service returned invalid JSON.')
+      throw new TAKOError('SERVICE_RESPONSE_INVALID', 'TAKO service returned invalid JSON.')
     })
     if (!response.ok) {
-      throw new UnderControlError(result?.error?.code ?? 'SERVICE_REQUEST_FAILED', result?.error?.message ?? `HTTP ${response.status}`, result?.error?.details)
+      throw new TAKOError(result?.error?.code ?? 'SERVICE_REQUEST_FAILED', result?.error?.message ?? `HTTP ${response.status}`, result?.error?.details)
     }
     return result
   }
@@ -44,7 +44,7 @@ export function createSessionClient({ baseUrl, fetchImpl = globalThis.fetch, tim
   async function compatibleRequest(path, options) {
     const meta = await request('/api/v1/meta', { signal: options?.signal })
     if (meta.api_version !== API_VERSION) {
-      throw new UnderControlError('API_VERSION_MISMATCH', `UnderControl API v${API_VERSION} is required (service reports ${meta.api_version ?? 'unknown'}). Update the client and service together.`)
+      throw new TAKOError('API_VERSION_MISMATCH', `TAKO API v${API_VERSION} is required (service reports ${meta.api_version ?? 'unknown'}). Update the client and service together.`)
     }
     return request(path, options)
   }
@@ -66,7 +66,7 @@ export function createSessionClient({ baseUrl, fetchImpl = globalThis.fetch, tim
     const path = sessionPath(filters, 'messages')
     if (mode === 'page') return compatibleRequest(queryPath(path, filters))
     if (filters.query || filters.at || filters.limit !== undefined) {
-      throw new UnderControlError('SESSION_BROWSER_INPUT_INVALID', 'head, tail and all cannot be combined with query, at or limit; use count instead.')
+      throw new TAKOError('SESSION_BROWSER_INPUT_INVALID', 'head, tail and all cannot be combined with query, at or limit; use count instead.')
     }
     const scope = JSON.stringify([filters.provider, filters.store_id, filters.session_id, mode])
     let cursor = null
@@ -79,7 +79,7 @@ export function createSessionClient({ baseUrl, fetchImpl = globalThis.fetch, tim
           || !Number.isSafeInteger(saved.offset) || saved.offset < 0 || saved.offset > 1000) throw new Error()
         cursor = saved.cursor
         offset = saved.offset
-      } catch { throw new UnderControlError('SESSION_BROWSER_INPUT_INVALID', 'History cursor is invalid for this session and mode.') }
+      } catch { throw new TAKOError('SESSION_BROWSER_INPUT_INVALID', 'History cursor is invalid for this session and mode.') }
     }
     const continuation = (nativeCursor, position) => 'history:' + Buffer.from(JSON.stringify({ scope, cursor: nativeCursor, offset: position })).toString('base64url')
     const messages = []
@@ -90,7 +90,7 @@ export function createSessionClient({ baseUrl, fetchImpl = globalThis.fetch, tim
     const deadline = Date.now() + 25_000
     for (let pageNumber = 0; pageNumber < 50; pageNumber += 1) {
       if (Date.now() >= deadline) return result(continuation(cursor, offset), true)
-      if (visited.has(cursor)) throw new UnderControlError('SESSION_BROWSER_READ_FAILED', 'History pagination repeated a cursor.')
+      if (visited.has(cursor)) throw new TAKOError('SESSION_BROWSER_READ_FAILED', 'History pagination repeated a cursor.')
       visited.add(cursor)
       let page
       try {
@@ -99,7 +99,7 @@ export function createSessionClient({ baseUrl, fetchImpl = globalThis.fetch, tim
         if (Date.now() >= deadline) return result(continuation(cursor, offset), true)
         throw error
       }
-      if (page.order !== (mode === 'tail' ? 'desc' : 'asc')) throw new UnderControlError('SESSION_BROWSER_UNSUPPORTED', 'Update the UnderControl service before using head, tail or all history modes.')
+      if (page.order !== (mode === 'tail' ? 'desc' : 'asc')) throw new TAKOError('SESSION_BROWSER_UNSUPPORTED', 'Update the TAKO service before using head, tail or all history modes.')
       session = page.session
       truncated ||= page.truncated === true
       const rows = mode === 'tail' ? [...page.messages].reverse() : page.messages
