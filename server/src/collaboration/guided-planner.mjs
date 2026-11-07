@@ -14,7 +14,7 @@ function text(value, label, maximum) {
   return value.trim()
 }
 
-export function createGuidedTeamPlanner({ database: db, catalog, marketplace, executeAgent, memberRuntime, logs, workspaceRoot, createRoom, postMessage, clock = () => new Date(), timeoutMs = 300_000 }) {
+export function createGuidedTeamPlanner({ database: db, catalog, marketplace, executeAgent, memberRuntime, logs, workspaceRoot, createRoom, postMessage, clock = () => new Date(), timeoutMs = 600_000 }) {
   db.exec('CREATE TABLE IF NOT EXISTS loop_team_plans(id TEXT PRIMARY KEY,request_key TEXT NOT NULL UNIQUE,state_json TEXT NOT NULL)')
   const active = new Map()
   let stopping = false, creationQueue = Promise.resolve(), baseUrl = null
@@ -114,7 +114,7 @@ export function createGuidedTeamPlanner({ database: db, catalog, marketplace, ex
   async function execute(id, entry) {
     const plan = read(id)
     entry.plan = plan; entry.token = randomBytes(32).toString('hex'); entry.searches = 0
-    let handle, timer, timedOut = false
+    let handle, timer, completedDraft = null, timedOut = false
     const check = () => { if (entry.controller.signal.aborted) throw loopError('GUIDED_CANCELED', '已停止生成') }
     try {
       plan.status = 'running'; plan.phase = 'catalog'; save(plan)
@@ -147,16 +147,27 @@ export function createGuidedTeamPlanner({ database: db, catalog, marketplace, ex
         onSpawn(value) { plan.pid = value.pid; save(plan) },
         emit(event) {
           if (entry.controller.signal.aborted) return
+          const payload = event.payload
+          if (event.type === 'assistant_delta' && payload.state === 'completed'
+            && payload.origin !== 'hook' && (!payload.phase || payload.phase === 'final_answer') && entry.searches) {
+            try { completedDraft = parseDraft(payload.text, plan, statuses) } catch { /* Keep waiting for a valid final proposal. */ }
+            // A validated proposal completes planning; stop before Hook continuations repeat it.
+            if (completedDraft) { entry.controller.abort(); return }
+          }
           const previousSession = plan.session_id, previousPhase = plan.phase
           if (event.type === 'session') plan.session_id = event.payload.session_id
           if (['thinking', 'assistant_delta', 'turn_started'].includes(event.type)) plan.phase = 'generating'
           if (plan.session_id !== previousSession || plan.phase !== previousPhase) save(plan)
         },
       })
-      check()
-      if (result.status !== 'succeeded') throw loopError(result.error_code ?? 'GUIDED_EXECUTION_FAILED', result.final_message || '规划客户端执行失败，请重试')
-      if (!entry.searches) throw loopError('GUIDED_SEARCH_REQUIRED', '规划未搜索 Agent 池，请重试')
-      plan.draft = parseDraft(result.final_message, plan, statuses); plan.status = 'ready'; plan.phase = 'review'
+      if (!completedDraft) {
+        check()
+        if (result.status !== 'succeeded') throw loopError(result.error_code ?? 'GUIDED_EXECUTION_FAILED', result.final_message || '规划客户端执行失败，请重试')
+        if (!entry.searches) throw loopError('GUIDED_SEARCH_REQUIRED', '规划未搜索 Agent 池，请重试')
+        const report = result.formal_messages?.findLast(message => message.origin !== 'hook' && (!message.phase || message.phase === 'final_answer'))
+        completedDraft = parseDraft(report?.text ?? result.final_message, plan, statuses)
+      }
+      plan.draft = completedDraft; plan.status = 'ready'; plan.phase = 'review'
       plan.messages.push({ role: 'assistant', content: plan.draft.message, revision: plan.revision })
       plan.usage = result.usage ?? null
     } catch (error) {

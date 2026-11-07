@@ -367,7 +367,7 @@ Teams 对话按动作首次观察时间合并文字、工具、公开摘要和�
 
 ### Teams 引导式创建
 
-collaboration/guided-planner.mjs 通过共享 createAgentExecution 执行只读组队；guided-candidates.mjs 索引已启用 Marketplace 来源的完整目录。原生规划 Agent 经 team-planner-server.mjs 的 search_agents / get_agent_definition 主动搜索与读取专业角色；临时凭据限于活动规划，记录真实搜索轨迹，结束后失效。本地定义不参与新规划检索；已存在的旧方案继续保留快照兼容。规划状态、草案、候选快照及原生 Session ID 保存在同一个 executionDatabase 的 loop_team_plans，不创建独立执行器。取消会中止原生执行，重启不自动重跑。确认阶段重新校验客户端模型、effort 和定义版本，通过既有 Marketplace 安装已审核快照，createGuidedRoom 在现有事务中保存全部成员。仅创建不启动 Run，开始工作复用 postConversationMessage；请求标识分别保护规划、建队和首条消息的重试。refine 为每轮沟通保存 parent_id、revision、用户已编辑基线、对话及工具轨迹，幂等请求不重复生成；不限制成员人数。浏览器暂存可编辑草案及未提交意见，调整时保留旧草案，成功才替换。现有 Teams 创建对话框提供入口，保留原来的手动、复制与恢复流程。规划 MCP 与现有 Loop MCP 一同打包为 server/vendor 下的独立文件，发布版不依赖 node_modules。
+collaboration/guided-planner.mjs 通过共享 createAgentExecution 执行只读组队；guided-candidates.mjs 索引已启用 Marketplace 来源的完整目录。原生规划 Agent 经 team-planner-server.mjs 的 search_agents / get_agent_definition 主动搜索与读取专业角色；临时凭据限于活动规划，记录真实搜索轨迹，结束后失效。本地定义不参与新规划检索；已存在的旧方案继续保留快照兼容。规划状态、草案、候选快照及原生 Session ID 保存在同一个 executionDatabase 的 loop_team_plans，不创建独立执行器。收到完整正式方案事件后立即校验并结束只读规划，不等待 Hook 续轮，也不从有长度限制的 final_message 摘要解析方案；结果回读优先使用 formal_messages 原文。未完成的规划最多运行十分钟。取消会中止原生执行，重启不自动重跑。确认阶段重新校验客户端模型、effort 和定义版本，通过既有 Marketplace 安装已审核快照，createGuidedRoom 在现有事务中保存全部成员。仅创建不启动 Run，开始工作复用 postConversationMessage；请求标识分别保护规划、建队和首条消息的重试。refine 为每轮沟通保存 parent_id、revision、用户已编辑基线、对话及工具轨迹，幂等请求不重复生成；不限制成员人数。浏览器暂存可编辑草案及未提交意见，调整时保留旧草案，成功才替换。现有 Teams 创建对话框提供入口，保留原来的手动、复制与恢复流程。规划 MCP 与现有 Loop MCP 一同打包为 server/vendor 下的独立文件，发布版不依赖 node_modules。
 
 ### Teams Agent 管理与 Marketplace
 
