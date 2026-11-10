@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 
 const LOOPBACK = '127.0.0.1'
 const DEV_RELOAD_PATH = '/__tako_dev/reload'
-const HTML_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self' data:; frame-ancestors 'none'"
+const HTML_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'none'"
 const hopByHopHeaders = new Set([
   'connection',
   'keep-alive',

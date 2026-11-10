@@ -1,5 +1,5 @@
 // shadcn/ui Prompt Input composition. Tiptap is the custom Input Group control.
-// Browser uploads/drop handling are omitted: the product references files on its server.
+// File selection, clipboard and drop events are owned by the Teams composer.
 import { forwardRef,type ComponentProps } from 'react'
 import { ArrowUp,LoaderCircle } from 'lucide-react'
 import {InputGroup,InputGroupAddon,InputGroupButton} from '@/components/ui/input-group'

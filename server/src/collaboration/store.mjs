@@ -131,6 +131,10 @@ export function createCollaborationStore({ database: db, clock = () => new Date(
       definition_deletions:db.prepare('SELECT member_id,state FROM loop_definition_deletions WHERE room_id=?').all(id),
       members: db.prepare('SELECT * FROM loop_members WHERE room_id=? ORDER BY rowid').all(id).map(decode),
       tasks: db.prepare('SELECT * FROM loop_tasks WHERE room_id=? ORDER BY rowid DESC LIMIT 100').all(id).map(decode),
+      artifact_runs:db.prepare(`SELECT r.id,r.task_id,r.member_id,r.phase,r.stage,r.status,r.revision,r.generation,r.attempt,r.pid,r.session_id,r.error_code,r.created_at,r.finished_at,r.submission_json,r.action_json,r.member_snapshot_json
+        FROM loop_runs r JOIN loop_tasks t ON t.id=r.task_id WHERE t.room_id=?
+        AND (json_array_length(r.submission_json,'$.artifacts')>0 OR json_array_length(r.action_json,'$.artifacts')>0)
+        ORDER BY r.rowid DESC LIMIT 100`).all(id).map(row=>({...decode(row),parts:null,result:null})),
       messages: roomMessages(id) }
   }
   function postMessage(roomId, input) {

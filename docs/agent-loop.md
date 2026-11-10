@@ -274,13 +274,19 @@ Teams 左侧的全局“Agent 管理 / 本地 Agent”提供“删除定义”�
 
 定义删除与目录本地读取、导入串行。文件先暂存，SQLite 日志写入 committed 后清理；中断时，staging 恢复原文件，committed 继续删除。清理失败保留日志，目录读取返回可重试错误，不伪装为空目录。启动恢复失败不阻断其他团队。旧版成员与定义一起删除的历史日志继续按原提交结果恢复，并保留团队“重试清理”入口；新操作不再生成这类日志。全局定义删除失败保留管理列表并显示错误，成功刷新本地目录；成员配置独立在加入弹窗中，失败保留别名和运行选项。文件删除只在隔离 HOME 验证，开发验收不删除用户真实全局定义。
 
-## 服务器文件路径引用
+## 会话附件与交付文件
 
-输入框的回形针填写服务器上的绝对路径或 ~/ 路径，不上传浏览器文件；支持 PNG、JPEG、WebP、GIF、PDF，每文件最多 20MB、每消息最多 8 个。服务验证文件签名、真实路径和 SHA256，发送时重新读取校验；执行前内容改变会明确失败，不静默读取新内容。图片通过 Codex localImage 原生输入传递。
+输入框支持文件选择、粘贴图片与拖拽文件；支持 PNG、JPEG、WebP、GIF、PDF，每文件最多 20 MiB、每消息最多 8 个。纯图片剪贴板添加附件，混合文字/图片的剪贴板保留文字粘贴。图片显示缩略图，文件可移除；上传失败可重试，上传完成前不能发送，发送失败保留正文和附件，只有附件的消息也能发送。现有 Tiptap Mention 与 Command/Ctrl+Enter 保留。
+
+浏览器发送文件字节到 TAKO 本机服务，服务按团队、内容 SHA256 和文件名保存只读副本，同名不同内容互不覆盖。服务验证文件签名、声明类型和摘要，消息发送及执行前重新校验；内容改变会明确失败，不静默读取新内容。图片通过 Codex localImage 原生输入传递。已有服务器绝对路径或 ~/ 路径引用 API 仍可使用。
 
 PDF 使用 unpdf / PDF.js 在受限 Worker 中提取文本，最多 200 页、120,000 字符、10 秒，限制 Worker 内存。上下文先提供前 8,000 字符，可用 read_context(section=attachment,source_message_id,attachment_index,offset) 每次读取 12,000 字符。无文本扫描件不宣称已经 OCR；字体缺失可能限制提取。Claude 通过共享文本及其受限 Read 能力读取文件，不宣称已完成原生多媒体模型验收。
 
-文件路径、digest 和 PDF 文本随团队资料保存；原始引用文件不复制或上传，迁移机器后须另行准备原文件。预览只通过当前团队已保存的消息引用读取，不接受 GET 任意路径，返回 nosniff 和 sandbox。文件不存在或已改变时保留错误，不能展示为成功。
+文件路径、digest 和 PDF 文本随团队资料保存；浏览器上传的文件保存在托管附件目录，跨机器迁移时须一并搬运该目录，旧路径引用则须另行准备原文件。消息提交时服务重新读取和提取附件，不信任客户端提供的文本。预览只通过当前团队已保存的消息引用读取，不接受 GET 任意路径，返回 nosniff 和 sandbox。文件不存在或已改变时保留错误，不能展示为成功。
+
+Agent 可通过 `submit_result.artifacts`，或 Leader 的 `request_action(action=deliver,artifacts=[...])` 登记交付文件，后者无需另发重复报告。普通相对路径指向 Task 内部执行目录，项目文件使用 project:N/path。对话在对应 Run 末尾显示文件卡片，可预览 Markdown、图片、PDF 或文本源码，并下载原文件。读取必须匹配团队、Run 和已登记引用，优先使用校验通过的归档快照，没有快照时读取路径校验后的当前文件；已登记快照损坏时明确报错。文本预览最多 128 KiB，下载保留完整字节。HTML/SVG 按源码展示。历史消息里仅出现文件路径且未登记 artifacts 时，不根据正文猜测或开放磁盘文件。
+
+团队响应中的 artifact_runs 保留最近 100 个已登记产物的 Run 元信息，不重复携带原生片段或凭据。切换到新任务后，旧消息仍关联原 Run 的文件；只有原生答复而没有独立保存消息的旧交付，按该 Run 的真实时间保留文件入口。缺少原生片段时间戳的历史执行也展示已登记文件。
 
 新增接口：
 
@@ -291,7 +297,9 @@ PDF 使用 unpdf / PDF.js 在受限 Worker 中提取文本，最多 200 页、12
 - DELETE /api/v1/teams/:room：解散并保留历史。
 - POST /api/v1/teams/:room/definition-cleanup：重试持久化删除日志中的恢复/清理。
 - POST /api/v1/teams/:room/attachments：验证文件路径并读取元信息。
+- POST /api/v1/teams/:room/attachments/upload：接收原始图片/PDF 字节；Content-Type 声明文件类型，X-File-Name 为 URI 编码的文件名，返回已有附件元信息。
 - GET /api/v1/teams/:room/attachments/:message/:index：读取已持久化消息的文件引用。
+- GET /api/v1/teams/:room/artifacts/:run?reference=...：读取已登记产物；preview=1 返回有界预览元信息和文本，download=1 下载原文件。
 
 路由参考最新 [Multica Squads](https://github.com/multica-ai/multica/blob/c321e49098cd1a3e01714a179c0bfca78c510e0f/apps/docs/content/docs/squads.mdx) 和 [Mentioning agents](https://github.com/multica-ai/multica/blob/c321e49098cd1a3e01714a179c0bfca78c510e0f/apps/docs/content/docs/mentioning-agents.mdx)：显式提及直接路由、无明确收件人回退 Leader、共享事实与成员独立会话。TAKO 的资源锁、依赖阻塞和持久化由自身实现，不将 Multica 的全部并发能力等同于已经接入。
 
@@ -299,7 +307,7 @@ PDF 使用 unpdf / PDF.js 在受限 Worker 中提取文本，最多 200 页、12
 
 产品导航为 Sessions、Actions、Teams。新页面使用 view=teams、team=<ID>、team_view=conversation|kanban；旧 view=rooms、room、room_view 链接会读取并规范为新 URL。新接口使用 /api/v1/teams 和 /api/v1/teams-runtime。旧 /api/v1/rooms 接口作为已有客户端与资料的兼容入口继续读取，不另建一套服务；数据库 loop_rooms、room_id、tako-room-v1 导出格式和已安装的数据目录保持原状，避免仅为界面更名搬动用户数据。
 
-Teams 对话使用 shadcn MessageScrollerProvider / Viewport / Content / Item / Button，进入团队定位最新消息。在底部时跟随新增内容，手动上翻后保留阅读位置；点击“滚动到最新消息”或本次消息发送成功后恢复跟随。历史用户消息只登记稳定 messageId，不标为新回合 scrollAnchor，避免状态占位替换为真实回复时误跳到旧消息。发送失败保留草稿与阅读位置。PromptInput / Body / Header / Footer / Tools / Submit 负责输入容器、服务器路径附件和提交状态；编辑内容仍使用现有 Tiptap 稳定 ID Mention，不添加浏览器上传或第二套聊天传输。
+Teams 对话使用 shadcn MessageScrollerProvider / Viewport / Content / Item / Button，进入团队定位最新消息。在底部时跟随新增内容，手动上翻后保留阅读位置；点击“滚动到最新消息”或本次消息发送成功后恢复跟随。历史用户消息只登记稳定 messageId，不标为新回合 scrollAnchor，避免状态占位替换为真实回复时误跳到旧消息。发送失败保留草稿与阅读位置。PromptInput / Body / Header / Footer / Tools / Submit 负责输入容器、附件和提交状态；编辑内容仍使用现有 Tiptap 稳定 ID Mention。文件选择、粘贴和拖拽共用本机上传入口，沿用现有消息传输。
 
 Message / MessageContent / MessageResponse 展示正文。文字、公开摘要、工具动作、真实指派/回复以及失败按各自时间合并，不再把整轮内容挂在 Run 创建时间或统一折叠为执行过程。仅连续同作者且同 Run 的相邻动作共用作者头，其他成员插入后会分开，不移动动作以维持整轮分组。对话中的思考仅以当前成员的临时实时摘要展示，完成后移除；Tool 显示真实输入输出和状态，Task 用于实际协作执行记录。InlineCitation 仅用于真实 HTTP(S) 来源链接，并支持悬停查看来源，不生成虚假引用。Agent / AgentHeader / AgentContent / AgentInstructions / AgentTools 用于成员定义及目录预览，声明的工具不等同于运行权限。
 
@@ -307,7 +315,7 @@ Message / MessageContent / MessageResponse 展示正文。文字、公开摘要�
 
 正文、思考和工具按真实事件顺序交错显示。普通动作直接展示无边框 Trace 行，不再套“已执行 N 条命令”分组。工具参数及结果默认收起，失败保留明确状态，用户可用键盘展开；思考时每位当前成员仅显示一条带 shadcn shimmer 的实时摘要，采用当前公开 reasoning 的首个非空文本行并随增量更新，不使用固定 Thinking 文本；尚未返回摘要时暂显“正在思考…”，不编造内容。摘要过长时单行省略，悬停可读该行完整内容，不增加历史思考按钮；进入工具、回复或终止状态后立即移除。公开 reasoning 原记录仍保留，但不占据会话时间线或留下空作者行。减少动态效果时停止 shimmer。工具的手动展开在后续增量与执行结束时保持。客户端自动续轮仍单独折叠。Token 用量移入作者行的用量按钮，取消和中断显示可读状态，原错误码留作诊断；回复及广播不再加独立徽章，实际收件人仍通过稳定 ID 行内显示。用户消息右侧显示，不重复姓名和头像；代码块使用单层背景及复制操作。
 
-Teams 展示层使用官方 [shadcn/ui AI Elements](https://ui.shadcn.com/docs/ai-elements) Base UI 组合：Message、Bubble、Message Scroller、Input Group、Code Block、Trace 及 shimmer utility。Message Scroller 为每个显示组登记稳定 messageId，进入团队定位末尾，手动阅读历史时不强拉到底。输入框以 Tiptap 作为 Input Group 的自定义 control，保留 Mention、路径引用、失败草稿和 Command/Ctrl+Enter。Streamdown 仅负责 Markdown 解析，Schedule 和 Sessions 的旧渲染路径保持；成员定义、来源及附件的现有业务适配仍复用。组件来源、许可和剩余迁移范围见 `ui/react/components/registry/README.md`，不增加新的运行时或替换 Tiptap Mention。
+Teams 展示层使用官方 [shadcn/ui AI Elements](https://ui.shadcn.com/docs/ai-elements) Base UI 组合：Message、Bubble、Message Scroller、Input Group、Code Block、Trace 及 shimmer utility。Message Scroller 为每个显示组登记稳定 messageId，进入团队定位末尾，手动阅读历史时不强拉到底。输入框以 Tiptap 作为 Input Group 的自定义 control，保留 Mention、失败草稿和 Command/Ctrl+Enter，支持图片/PDF 选择、粘贴及拖拽上传。Streamdown 仅负责 Markdown 解析，Schedule 和 Sessions 的旧渲染路径保持；成员定义、来源及附件的现有业务适配仍复用。组件来源、许可和剩余迁移范围见 `ui/react/components/registry/README.md`，不增加新的运行时或替换 Tiptap Mention。
 
 状态由 Run.status、native Session ID 和实际消息部分决定：启动、等待执行、工具调用、思考、回复和待核对分别显示。已收到原生 Session ID、文本或工具内容的执行不会继续声称“正在连接”。
 

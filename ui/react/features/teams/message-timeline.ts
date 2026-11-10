@@ -5,7 +5,7 @@ export function isPartStreaming(run:LoopRun,part:LoopPart){
   return (run.status==='running'||run.status==='starting')&&part.state==='running'&&latest?.id===part.id&&latest.type===part.type
 }
 export type TeamTimelineEvent={id:string;at:string;author:string;run:LoopRun|null;recipients?:string[]} & (
-  {kind:'message';message:LoopMessage}|{kind:'part';part:LoopPart}|{kind:'result';submission:LoopSubmission}|{kind:'status'}|{kind:'error'}
+  {kind:'message';message:LoopMessage}|{kind:'part';part:LoopPart}|{kind:'result';submission:LoopSubmission}|{kind:'files'}|{kind:'status'}|{kind:'error'}
 )
 export function activitySections(events:TeamTimelineEvent[]){
   const sections:TeamTimelineEvent[][]=[]
@@ -43,7 +43,7 @@ function resultRecipients(run:LoopRun,task:LoopTaskDetail|undefined){
   return run.routing?.reply_expected&&parent&&parent.member_id!==run.member_id?[parent.member_id]:[]
 }
 export function messageTimeline(room:LoopRoomDetail,task?:LoopTaskDetail){
-  const runs=new Map(task?.runs.map(run=>[run.id,run])??[])
+  const runs=new Map([...(room.artifact_runs??[]),...(task?.runs??[])].map(run=>[run.id,run]))
   const hidden=new Set<LoopPart>(),suppressedMessages=new Set<string>(),reportParts=new Map<LoopPart,string[]>(),reportMessages=new Map<string,string[]>(),reports:TeamTimelineEvent[]=[]
   for(const run of task?.runs??[]){
     const parts=run.parts??[],recipients=resultRecipients(run,task),submission=run.submission??run.result?.submission
@@ -79,6 +79,11 @@ export function messageTimeline(room:LoopRoomDetail,task?:LoopTaskDetail){
     const missing=visible.filter(part=>!Number.isFinite(Date.parse(part.created_at??'')))
     if(missing.length)untimed.push({...run,parts:missing})
     if(run.error_code&&run.finished_at)events.push({id:run.id+':error',at:run.finished_at,author:run.member_id,run,kind:'error'})
+  }
+  for(const run of runs.values()){
+    if(!(run.submission?.artifacts.length||run.action?.artifacts?.length)||events.some(event=>event.run?.id===run.id)||untimed.some(value=>value.id===run.id))continue
+    const at=run.finished_at??run.created_at
+    if(at&&Number.isFinite(Date.parse(at)))events.push({id:'files:'+run.id,at,author:run.member_id,run,kind:'files'})
   }
   events.sort((a,b)=>a.at.localeCompare(b.at)||(a.run?.id&&a.run.id===b.run?.id&&a.kind==='part'&&b.kind==='part'?(a.part.sequence??0)-(b.part.sequence??0):0))
   const groups:TeamTimelineGroup[]=[]

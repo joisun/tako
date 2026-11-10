@@ -7,6 +7,11 @@ const required = (value, label, max = 20000) => {
   if (typeof value !== 'string' || !value.trim() || value.length > max || value.includes('\0')) throw loopError('LOOP_INPUT_INVALID', `${label}无效`)
   return value.trim()
 }
+function userText(input){
+  if(typeof input.text!=='string'||input.text.length>20000||input.text.includes('\0')||!input.text.trim()&&!input.attachments?.length)throw loopError('LOOP_INPUT_INVALID','消息需要文字或已校验的附件')
+  return input.text.trim()
+}
+const attachmentSummary=input=>`附件：${input.attachments.map(value=>value.name).join('、')}`
 export function createConversationOperations({ db, clock, createId, communication,reports }) {
   const now = () => new Date(clock()).toISOString()
   const task = id => { const row = db.prepare('SELECT * FROM loop_tasks WHERE id=?').get(id); if (!row) throw loopError('LOOP_NOT_FOUND', '任务不存在', 404); return { ...row, config: parse(row.config_json) } }
@@ -63,7 +68,7 @@ export function createConversationOperations({ db, clock, createId, communicatio
     db.prepare('UPDATE loop_inbox SET consumed_by=? WHERE id=? AND consumed_by IS NULL').run(candidate.id, routing.inbox_id)
   }
   function routeUser(current, input) {
-    const mentions = mentionIds(current.room_id, input.mentions), value = required(input.text, '消息'), key = required(input.request_key, '请求标识', 128)
+    const mentions = mentionIds(current.room_id, input.mentions), value = userText(input), key = required(input.request_key, '请求标识', 128)
     const message = insertMessage(current, 'user', value, key, mentions)
     const attachments=input.attachments??[]
     const existingAttachments=parse(db.prepare('SELECT attachments_json FROM loop_messages WHERE id=?').get(message.id).attachments_json)
@@ -71,7 +76,7 @@ export function createConversationOperations({ db, clock, createId, communicatio
     if (!message.created) return { task_id: current.id, message_id: message.id }
     db.prepare('UPDATE loop_messages SET attachments_json=? WHERE id=?').run(JSON.stringify(attachments),message.id)
     for(const memberId of mentions.length ? mentions : [current.config.leader]) {
-      inbox(current, memberId, { messageId: message.id, reason: 'user_message', key: `user:${message.id}:${memberId}`, intent:memberId===current.config.leader?'lead':'discuss', assignment:value,message_kind:'user' })
+      inbox(current, memberId, { messageId: message.id, reason: 'user_message', key: `user:${message.id}:${memberId}`, intent:memberId===current.config.leader?'lead':'discuss', assignment:value||attachmentSummary(input),message_kind:'user' })
       ensureRun(current, memberId, { immediate: true })
     }
     event(current.id, null, 'user_message', { message_id: message.id, mentions })
@@ -87,7 +92,7 @@ export function createConversationOperations({ db, clock, createId, communicatio
       if (existing.room_id !== roomId) throw loopError('LOOP_IDEMPOTENCY_CONFLICT', '请求标识已用于其他团队', 409)
       return routeUser(existing, input)
     }
-    const goal = required(input.text, '消息'), id = createId(), timestamp = now()
+    const goal = userText(input)||attachmentSummary(input), id = createId(), timestamp = now()
     const config = { workflow: 'conversation', leader: target.config.leader_id, coordinator: target.config.leader_id,
       participants: roster.map(member => member.id),
       source_workspace: target.config.workspace, source_workspaces:target.config.workspaces??(target.config.workspace?[target.config.workspace]:[]), resources:workspace.resources??[{source_workspace:target.config.workspace,workspace:workspace.workspace,branch:workspace.branch}], branch: workspace.branch, room_instructions: target.config.instructions ?? '', allow_write: true }
@@ -210,7 +215,7 @@ export function createConversationOperations({ db, clock, createId, communicatio
     if (input.action === 'deliver') {
       if (openWorkers(current).length||communication.rows(current.id).some(row=>row.revision===current.revision&&['ask','delegate','verify'].includes(row.payload.message_kind)&&!communication.isClosed(row))) throw loopError('LOOP_DELIVERY_PENDING', '仍有成员执行未完成', 409)
     }
-    const action = { action: input.action, reason }
+    const action = { action: input.action, reason,...(input.action==='deliver'&&input.artifacts!==undefined?{artifacts:input.artifacts}:{}) }
     if (candidate.action && JSON.stringify(candidate.action) !== JSON.stringify(action)) throw loopError('LOOP_ACTION_CONFLICT', '本次执行已提交不同的阶段决定', 409)
     db.prepare('UPDATE loop_runs SET action_json=? WHERE id=?').run(JSON.stringify(action), candidate.id)
     return { accepted: true }

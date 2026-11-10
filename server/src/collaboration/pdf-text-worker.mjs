@@ -10,4 +10,4 @@ try{
     text+=`\n[第 ${page} 页]\n`+content.items.map(item=>item.str+(item.hasEOL?'\n':' ')).join('')
   }
   parentPort.postMessage({text:text.slice(0,120000),truncated:text.length>=120000,total_pages:pdf.numPages})
-}catch(error){parentPort.postMessage({error:error.message??'PDF 无法读取'})}finally{await pdf?.destroy()}
+}catch(error){parentPort.postMessage({error:error.message??'PDF 无法读取'})}finally{await pdf?.loadingTask.destroy()}

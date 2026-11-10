@@ -24,6 +24,7 @@ export interface LoopRun {
   error_code: string | null; created_at: string; finished_at: string | null
   routing?: { intent: string; write_access: boolean; assignment?: string; expected_output?:string|null;acceptance?:string|null;inbox_id?:string;source_message_id?:string|null;reply_expected?:boolean; parent_run_id?: string | null } | null
   timing?:RunTiming;submission?:LoopSubmission|null;parts?:LoopPart[]|null;member_snapshot?:LoopMember|null
+  action?:{action:string;reason:string;artifacts?:string[]}|null
   result: { final_message?: string | null; submission?: LoopSubmission | null;usage?:LoopUsage|null;file_changes?:{path:string;kind:string}[] } | null
 }
 export interface LoopTask {
@@ -40,8 +41,9 @@ export interface LoopTaskDetail extends LoopTask {
 export type LoopMessageIntent = 'delegate' | 'verify' | 'ask' | 'reply' | 'announce'
 export interface LoopMessage { id: string; sequence: number; task_id: string | null; run_id: string | null; author: string; text: string; created_at: string; intent?:LoopMessageIntent|null;reply_to_message_id?:string|null;assignment_id?:string|null; mentions?: string[] | null;author_snapshot?:LoopMember|null;attachments?:LoopAttachment[]|null }
 export interface LoopAttachment {path:string;name:string;media_type:string;size:number;digest:string;text?:string;truncated?:boolean}
+export interface LoopArtifactPreview {name:string;media_type:string;size:number;text?:string;truncated?:boolean}
 export interface LoopRoom { id: string; title: string; created_at: string; config?: { dissolved_at?:string|null;deleted_at?:string|null;leader_id: string | null; workspace: string | null; workspaces?:string[]; memory_directory?:string|null; instructions?: string } | null }
-export interface LoopRoomDetail extends LoopRoom { definition_deletions?:{member_id:string;state:string}[]; memory_sync?:{revision:number;exported_revision:number;last_error:string|null}; members: LoopMember[]; tasks: LoopTask[]; messages: LoopMessage[] }
+export interface LoopRoomDetail extends LoopRoom { definition_deletions?:{member_id:string;state:string}[]; memory_sync?:{revision:number;exported_revision:number;last_error:string|null}; members: LoopMember[]; tasks: LoopTask[]; messages: LoopMessage[];artifact_runs?:LoopRun[] }
 export interface LoopTaskInput {
   title: string; goal: string; acceptance: string; workspace: string; coordinator: string; implementer: string; verifier: string
   participants: string[]; request_key: string; timeout_seconds?: number; max_runs?: number

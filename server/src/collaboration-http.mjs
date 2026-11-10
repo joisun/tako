@@ -1,4 +1,7 @@
 import { readJson, sendJson } from './http-utils.mjs'
+import { readRoomAttachmentUpload } from './collaboration/attachments.mjs'
+import { previewCollaborationArtifact } from './collaboration-artifacts.mjs'
+import { pipeline } from 'node:stream/promises'
 
 export async function handleCollaborationRequest({ request, response, url, collaboration, guidedTeams }) {
   if (!collaboration) return false
@@ -46,6 +49,27 @@ export async function handleCollaborationRequest({ request, response, url, colla
   if(cleanup&&request.method==='POST'){await body();return send({room:await collaboration.retryDefinitionDeletion(cleanup[1])})}
   const memory=pathname.match(/^\/api\/v1\/rooms\/([a-zA-Z0-9-]+)\/memory-sync$/)
   if(memory&&request.method==='POST'){await body();await collaboration.flushMemory(memory[1]);return send({room:collaboration.room(memory[1])})}
+  const upload=pathname.match(/^\/api\/v1\/rooms\/([a-zA-Z0-9-]+)\/attachments\/upload$/)
+  if(upload&&request.method==='POST'){
+    collaboration.room(upload[1])
+    return send({attachment:await collaboration.uploadAttachment(upload[1],await readRoomAttachmentUpload(request))})
+  }
+  const artifact=pathname.match(/^\/api\/v1\/rooms\/([a-zA-Z0-9-]+)\/artifacts\/([a-zA-Z0-9-]+)$/)
+  if(artifact&&request.method==='GET'){
+    const resource=await collaboration.artifactContent(artifact[1],artifact[2],url.searchParams.get('reference'))
+    try{
+      if(url.searchParams.get('preview')==='1'){
+        response.setHeader('X-Content-Type-Options','nosniff')
+        response.setHeader('Content-Security-Policy',"sandbox; default-src 'none'")
+        return send({artifact:await previewCollaborationArtifact(resource)})
+      }
+      const disposition=url.searchParams.get('download')==='1'?'attachment':'inline',filename=encodeURIComponent(resource.name).replace(/['()*]/g,char=>'%'+char.charCodeAt(0).toString(16))
+      response.writeHead(200,{'Content-Type':resource.media_type,'Content-Length':resource.size,'X-Content-Type-Options':'nosniff','Cache-Control':'no-store','Content-Security-Policy':"sandbox; default-src 'none'",'Referrer-Policy':'no-referrer','Content-Disposition':`${disposition}; filename*=UTF-8''${filename}`})
+      if(!resource.size)response.end()
+      else await pipeline(resource.handle.createReadStream({autoClose:false,start:0,end:resource.size-1}),response)
+      return true
+    }finally{await resource.handle.close().catch(()=>{})}
+  }
   const attachment=pathname.match(/^\/api\/v1\/rooms\/([a-zA-Z0-9-]+)\/attachments(?:\/([a-zA-Z0-9-]+)\/(\d+))?$/)
   if(attachment){
     if(!attachment[2]&&request.method==='POST')return send({attachment:await collaboration.attachment(attachment[1],await body())})
@@ -83,7 +107,8 @@ export async function handleCollaborationRequest({ request, response, url, colla
     if (request.method === 'PATCH' && !room[2]) return send({ room: await collaboration.configureRoom(room[1], await body()) })
     if (request.method === 'GET' && !room[2]) return send({ room: collaboration.room(room[1]) })
     if (request.method === 'POST' && room[2] === 'members') return send({ member: await collaboration.addMember(room[1], await body()) })
-    if (request.method === 'POST' && room[2] === 'messages') return send({ message: await collaboration.postMessage(room[1], await body()) })
+    // Returned PDF attachments include bounded extracted text; validation rereads the actual files.
+    if (request.method === 'POST' && room[2] === 'messages') return send({ message: await collaboration.postMessage(room[1], await body(8*1024*1024)) })
     if (request.method === 'POST' && room[2] === 'tasks') return send({ task: await collaboration.createTask(room[1], await body()) })
   }
   const stream=pathname.match(/^\/api\/v1\/loop-tasks\/([a-zA-Z0-9-]+)\/events$/)

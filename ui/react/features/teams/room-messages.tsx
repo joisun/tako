@@ -12,8 +12,10 @@ import {InlineCitationLink} from '@/components/ai-elements/inline-citation'
 import {Popover,PopoverTrigger,PopoverContent} from '@/components/ui/popover'
 import {AgentAvatar} from '@/components/agents/agent-avatar'
 import {MentionMessage} from './message-mentions'
+import {RoomArtifacts} from './room-artifacts'
 import {messageTimeline,activitySections,OPEN_RUNS,isPartStreaming,type TeamTimelineEvent} from './message-timeline'
 import type {LoopMember,LoopPart,LoopRoomDetail,LoopTaskDetail,LoopRun} from '@/lib/api/loop-types'
+import type {DashboardApi} from '@/lib/api/dashboard-api'
 const markdownComponents={pre:MarkdownCodeBlock,a:({href,children}:ComponentProps<'a'>)=><InlineCitationLink href={href??''}>{children}</InlineCitationLink>}
 function runLabel(run:LoopRun){
   if(run.status==='queued')return run.timing?.waiting_for_resources?'已安排，等待目录可用':'已安排，等待执行'
@@ -75,8 +77,8 @@ function UntimedRun({run}:{run:LoopRun}){
   const [open,setOpen]=useState(false)
   return <ChainOfThought className="room-run-activity" open={open} onOpenChange={setOpen}><ChainOfThoughtHeader>历史执行详情 · 时间未记录</ChainOfThoughtHeader><ChainOfThoughtContent>{run.parts?.map(part=><RunPart key={part.id} part={part} run={run}/>)}</ChainOfThoughtContent></ChainOfThought>
 }
-export function RoomMessages({room,task,onInspect}:{room:LoopRoomDetail;task?:LoopTaskDetail;onInspect:(member:LoopMember)=>void}){
-  const memberFor=(id:string)=>room.members.find(member=>member.id===id)??room.messages.find(message=>message.author===id&&message.author_snapshot)?.author_snapshot??task?.runs.find(run=>run.member_id===id&&run.member_snapshot)?.member_snapshot
+export function RoomMessages({api,room,task,onInspect}:{api:DashboardApi;room:LoopRoomDetail;task?:LoopTaskDetail;onInspect:(member:LoopMember)=>void}){
+  const memberFor=(id:string)=>room.members.find(member=>member.id===id)??room.messages.find(message=>message.author===id&&message.author_snapshot)?.author_snapshot??task?.runs.find(run=>run.member_id===id&&run.member_snapshot)?.member_snapshot??room.artifact_runs?.find(run=>run.member_id===id&&run.member_snapshot)?.member_snapshot
   const name=(id:string)=>id==='user'?'你':memberFor(id)?.name??'已移除成员'
   const recipientsFor=(ids:string[])=>[...new Set(ids)].map(id=>({id,name:name(id),available:room.members.some(member=>member.id===id)}))
   const inspect=(id:string)=>{const member=room.members.find(value=>value.id===id);if(member)onInspect(member)}
@@ -88,6 +90,7 @@ export function RoomMessages({room,task,onInspect}:{room:LoopRoomDetail;task?:Lo
   return <>{groups.map(group=>{
     const isUser=group.author==='user',member=memberFor(group.author),time=group.events[0].at
     const renderEvent=(event:TeamTimelineEvent)=>{
+        if(event.kind==='files')return null
         const index=group.events.indexOf(event)
         const previous=group.events[index-1]
         const continuedReport=event.kind==='part'&&event.part.type==='text'&&!!event.recipients?.length&&previous?.kind==='part'&&previous.part.type==='text'&&event.recipients.length===previous.recipients?.length&&event.recipients.every(id=>previous.recipients!.includes(id))
@@ -99,6 +102,7 @@ export function RoomMessages({room,task,onInspect}:{room:LoopRoomDetail;task?:Lo
       </div>}
     return <MessageScrollerItem key={group.id} messageId={group.id}><Message align={isUser?'end':'start'} role="article" className="room-message" data-author={isUser?'user':'agent'} data-run-id={group.run?.id}>{!isUser?<MessageAvatar className="room-message__avatar"><AgentAvatar id={group.author} name={name(group.author)} avatar={member?.avatar}/></MessageAvatar>:null}<MessageContent className="team-message-content"><MessageHeader className="team-message-header">{!isUser?<strong>{name(group.author)}</strong>:null}{member?<span>{member.runtime_id==='claude'?'Claude Code':'Codex'}</span>:null}{group.author===room.config?.leader_id?<span className="room-leader-tag">Leader</span>:null}{group.run&&OPEN_RUNS.has(group.run.status)&&lastGroup.get(group.run.id)===group.id&&runLabel(group.run)!=='正在思考'?<span role="status">{runLabel(group.run)}</span>:null}<time dateTime={time}>{new Date(time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</time>{group.run&&lastGroup.get(group.run.id)===group.id?<RunUsage run={group.run}/>:null}</MessageHeader><Bubble variant={isUser?'muted':'ghost'}><BubbleContent>
       {activitySections(group.events).map(events=>events.every(event=>event.kind==='part'&&(event.part.type==='reasoning'||event.part.type==='tool'||event.part.origin==='hook'))?<RunActivity key={events[0].id} events={events}>{events.map(renderEvent)}</RunActivity>:events.map(renderEvent))}
+      {group.run&&lastGroup.get(group.run.id)===group.id?<RoomArtifacts api={api} roomId={room.id} run={group.run}/>:null}
     </BubbleContent></Bubble></MessageContent></Message></MessageScrollerItem>
-  })}{untimed.length?<section className="team-untimed-history" aria-label="时间缺失的历史动作"><p>以下历史动作未记录时间，无法确定它们与其他成员消息的先后。</p>{untimed.map(run=><div key={run.id}><strong>{name(run.member_id)}</strong><UntimedRun run={run}/></div>)}</section>:null}{pendingRuns.map(run=><MessageScrollerItem key={`presence:${run.id}`} messageId={`presence:${run.id}`}><Message align="start" role="article" className="room-message" data-author="agent" data-run-id={run.id} data-run-presence><MessageAvatar className="room-message__avatar"><AgentAvatar id={run.member_id} name={name(run.member_id)} avatar={memberFor(run.member_id)?.avatar}/></MessageAvatar><MessageContent className="team-message-content"><MessageHeader className="team-message-header"><strong>{name(run.member_id)}</strong><span>{memberFor(run.member_id)?.runtime_id==='claude'?'Claude Code':'Codex'}</span>{run.member_id===room.config?.leader_id?<span className="room-leader-tag">Leader</span>:null}</MessageHeader><p className="room-run-presence" role="status"><LoaderCircle className="room-spinner"/>{run.status==='running'&&run.session_id?'等待模型响应':runLabel(run)}</p></MessageContent></Message></MessageScrollerItem>)}</>
+  })}{untimed.length?<section className="team-untimed-history" aria-label="时间缺失的历史动作"><p>以下历史动作未记录时间，无法确定它们与其他成员消息的先后。</p>{untimed.map(run=><div key={run.id}><strong>{name(run.member_id)}</strong><UntimedRun run={run}/>{!lastGroup.has(run.id)?<RoomArtifacts api={api} roomId={room.id} run={run}/>:null}</div>)}</section>:null}{pendingRuns.map(run=><MessageScrollerItem key={`presence:${run.id}`} messageId={`presence:${run.id}`}><Message align="start" role="article" className="room-message" data-author="agent" data-run-id={run.id} data-run-presence><MessageAvatar className="room-message__avatar"><AgentAvatar id={run.member_id} name={name(run.member_id)} avatar={memberFor(run.member_id)?.avatar}/></MessageAvatar><MessageContent className="team-message-content"><MessageHeader className="team-message-header"><strong>{name(run.member_id)}</strong><span>{memberFor(run.member_id)?.runtime_id==='claude'?'Claude Code':'Codex'}</span>{run.member_id===room.config?.leader_id?<span className="room-leader-tag">Leader</span>:null}</MessageHeader><p className="room-run-presence" role="status"><LoaderCircle className="room-spinner"/>{run.status==='running'&&run.session_id?'等待模型响应':runLabel(run)}</p></MessageContent></Message></MessageScrollerItem>)}</>
 }

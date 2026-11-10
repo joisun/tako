@@ -10,6 +10,24 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe('DashboardApi', () => {
+  test('uploads file bytes without JSON conversion and preserves the Unicode filename',async()=>{
+    const file=new File(['png'],'截图 #1.png',{type:'image/png'})
+    const calls:Array<{url:string;init:RequestInit}>=[]
+    const api=createDashboardApi({fetchImpl:async(url,init={})=>{calls.push({url:String(url),init});return jsonResponse({attachment:{name:file.name}})}})
+    await api.uploadRoomAttachment('team one',file)
+    expect(calls[0].url).toBe('/api/v1/teams/team%20one/attachments/upload')
+    expect(calls[0].init.body).toBe(file)
+    expect(calls[0].init.headers).toMatchObject({'Content-Type':'image/png','X-File-Name':'%E6%88%AA%E5%9B%BE%20%231.png'})
+  })
+
+  test('artifact preview and download preserve exact project references',async()=>{
+    const calls:string[]=[]
+    const api=createDashboardApi({fetchImpl:async url=>{calls.push(String(url));return jsonResponse({artifact:{name:'结果.md'}})}})
+    await api.roomArtifactPreview('team-one','run-one','project:2/docs/结果 #1.md')
+    expect(calls[0]).toBe('/api/v1/teams/team-one/artifacts/run-one?reference=project%3A2%2Fdocs%2F%E7%BB%93%E6%9E%9C+%231.md&preview=1')
+    expect(api.roomArtifactUrl('team-one','run-one','project:2/docs/结果 #1.md',true)).toBe('/api/v1/teams/team-one/artifacts/run-one?reference=project%3A2%2Fdocs%2F%E7%BB%93%E6%9E%9C+%231.md&download=1')
+  })
+
   test('relation metadata and registration allow native runtime validation to finish', async () => {
     const timer = vi.spyOn(globalThis, 'setTimeout')
     const api = createDashboardApi({ fetchImpl: async () => jsonResponse({}) })

@@ -1,5 +1,5 @@
 import type {MarketSource,MarketCatalog,MarketDefinition,InstalledAgent,AgentUpdate,AgentReview,MarketplaceMutation,AgentSessionContext,AgentRuntimeAdapter} from './marketplace-types'
-import type { RoomBoard, RoomWorkItem, RoomRuntime, RoomMemberDefinition, LoopAvatar, LoopAttachment } from './loop-types'
+import type { RoomBoard, RoomWorkItem, RoomRuntime, RoomMemberDefinition, LoopAvatar, LoopAttachment, LoopArtifactPreview } from './loop-types'
 import type { GuidedPlan,GuidedRequest,GuidedCreation,GuidedRefinement } from './guided-types'
 import type { AgentDefinition, AgentCatalog, AgentCatalogSource, LoopRoom, LoopRoomDetail, LoopMember, LoopTaskInput, LoopTaskDetail } from './loop-types'
 import type {
@@ -109,6 +109,9 @@ export interface DashboardApi {
   deleteRoom(id:string):Promise<{room:LoopRoomDetail}>
   dissolveRoom(id:string):Promise<{room:LoopRoomDetail}>
   roomAttachment(id:string,path:string):Promise<{attachment:LoopAttachment}>
+  uploadRoomAttachment(id:string,file:File,signal?:AbortSignal):Promise<{attachment:LoopAttachment}>
+  roomArtifactPreview(id:string,runId:string,reference:string):Promise<{artifact:LoopArtifactPreview}>
+  roomArtifactUrl(id:string,runId:string,reference:string,download?:boolean):string
   addRoomMember(id: string, input: { name: string; runtime_id: string; instructions?: string; definition_id?: string; model?:string|null;effort?:string|null;avatar?:LoopAvatar }): Promise<{ member: LoopMember }>
   postRoomMessage(id: string, input: { text: string; task_id: string | null; request_key: string; mentions?: string[];attachments?:LoopAttachment[] }): Promise<{ message: unknown }>
   createLoopTask(id: string, input: LoopTaskInput): Promise<{ task: LoopTaskDetail }>
@@ -202,6 +205,7 @@ export function createDashboardApi({
     requestTimeoutMs?: number
     signal?: AbortSignal
   } = {}): Promise<T> {
+    const file = typeof File !== 'undefined' && body instanceof File ? body : null
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), requestTimeoutMs)
     let response: Response
@@ -210,9 +214,9 @@ export function createDashboardApi({
         method,
         headers: {
           Accept: 'application/json',
-          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+          ...(file ? { 'Content-Type': file.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) } : body === undefined ? {} : { 'Content-Type': 'application/json' }),
         },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(body === undefined ? {} : { body: file ?? JSON.stringify(body) }),
         signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
         ...(method === 'GET' ? { cache: 'no-store' } : {}),
       })
@@ -298,6 +302,9 @@ export function createDashboardApi({
     deleteRoom:id=>request(`/api/v1/teams/${encodeURIComponent(id)}/delete`,{method:'POST',body:{confirm:true}}),
     dissolveRoom:id=>request(`/api/v1/teams/${encodeURIComponent(id)}`,{method:'DELETE',body:{}}),
     roomAttachment:(id,path)=>request(`/api/v1/teams/${encodeURIComponent(id)}/attachments`,{method:'POST',body:{path}}),
+    uploadRoomAttachment:(id,file,signal)=>request(`/api/v1/teams/${encodeURIComponent(id)}/attachments/upload`,{method:'POST',body:file,signal,requestTimeoutMs:RUNTIME_TIMEOUT_MS}),
+    roomArtifactPreview:(id,runId,reference)=>request(`/api/v1/teams/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(runId)}${queryString({reference,preview:'1'})}`),
+    roomArtifactUrl:(id,runId,reference,download)=>`${baseUrl}/api/v1/teams/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(runId)}${queryString({reference,...(download?{download:'1'}:{})})}`,
     addRoomMember: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}/members`, { method: 'POST', body }),
     postRoomMessage: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}/messages`, { method: 'POST', body }),
     createLoopTask: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}/tasks`, { method: 'POST', body, requestTimeoutMs: RUNTIME_TIMEOUT_MS }),

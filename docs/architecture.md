@@ -350,7 +350,7 @@ Geist Sans/Mono 的拉丁字集 WOFF2 随 esbuild 以 data URL 内嵌，中文�
 这些能力自 0.17.0 版本开始提供，既有安装版需要手动更新。验证范围见[实施验证记录](job/agent-loop/03-phases.md)。
 
 
-Teams 成员的 name/avatar 是团队身份，execution_config 保存模型与实际支持的 effort。用户显式 @ 直接派发，无收件人时由 Leader 承接；成员结果交回实际请求者，只有需要协调才通知 Leader。Teams 观察性审查允许并行编辑，实施按声明项目使用排他占用，Leader 统筹不因身份独占项目；depends_on 依赖完成后才派发。公开摘要、工具输入输出及状态保存在 Run.parts，图片/PDF 为服务端路径引用，详见 [Teams](agent-loop.md#成员身份运行内容与生命周期)。loop_schema=7 增加消息关联、投递与处理状态，保留版本 6 的历史成员快照和独立全局定义删除日志。团队成员菜单只移出当前团队；本地 Agent 目录才删除全局定义文件，所有团队成员继续使用定义快照。删除文件先确认 digest，暂存后按 staging/committed 日志恢复或清理；旧成员删除日志继续恢复。解散先停止本团队执行，保留历史，不改变其他团队。
+Teams 成员的 name/avatar 是团队身份，execution_config 保存模型与实际支持的 effort。用户显式 @ 直接派发，无收件人时由 Leader 承接；成员结果交回实际请求者，只有需要协调才通知 Leader。Teams 观察性审查允许并行编辑，实施按声明项目使用排他占用，Leader 统筹不因身份独占项目；depends_on 依赖完成后才派发。公开摘要、工具输入输出及状态保存在 Run.parts，图片/PDF 可从浏览器选择、粘贴或拖拽到本机服务，发送时沿用服务端文件引用；已登记交付文件可预览和下载，详见 [Teams](agent-loop.md#成员身份运行内容与生命周期)。loop_schema=7 增加消息关联、投递与处理状态，保留版本 6 的历史成员快照和独立全局定义删除日志。团队成员菜单只移出当前团队；本地 Agent 目录才删除全局定义文件，所有团队成员继续使用定义快照。删除文件先确认 digest，暂存后按 staging/committed 日志恢复或清理；旧成员删除日志继续恢复。解散先停止本团队执行，保留历史，不改变其他团队。
 
 Teams 对话采用官方 shadcn Base UI 的 Message、Bubble、Message Scroller、Input Group、Code Block、Trace 与 shimmer；Reasoning、Tool、Task 和自动续轮组合复用 Trace，InlineCitation 保留真实来源适配；当前任务通过专属 SSE 接收规范化片段更新，初始和重连使用持久化快照校准，连接建立后停止任务级整份重查；约 180ms 的片段持久化批处理保留。Codex 公开 reasoning 请求 detailed 并保留分段，Token 与文件路径/状态同步，文件 diff 和原始推理不进入此链路。Tiptap Mention 继续使用稳定成员 ID。Agent 组件展示定义快照与配置，不接管运行时。导航顺序为 Sessions、Actions、Teams；当前页面与接口使用 teams，旧 rooms 链接和接口保留已有数据兼容入口。团队解散/删除入口位于左侧列表；删除隐藏列表记录并保留原生会话及历史。
 

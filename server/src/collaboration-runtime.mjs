@@ -5,10 +5,10 @@ import { fileURLToPath } from 'node:url'
 import { isAbsolute, join, resolve } from 'node:path'
 import { processExists } from './execution-resource-coordinator.mjs'
 import { prepareCollaborationWorkspace, prepareConversationWorkspace, refreshCollaborationWorkspace } from './collaboration-workspace.mjs'
-import { resolveCollaborationArtifact } from './collaboration-artifacts.mjs'
+import { validateCollaborationArtifacts,openCollaborationArtifact } from './collaboration-artifacts.mjs'
 import { executionPrompt } from './collaboration/context.mjs'
 import { memberConfiguration, memberAvatar } from './collaboration/member-configuration.mjs'
-import { prepareRoomAttachments,readRoomAttachment } from './collaboration/attachments.mjs'
+import { prepareRoomAttachments,readRoomAttachment,saveRoomAttachmentUpload } from './collaboration/attachments.mjs'
 import { createRunParts } from './collaboration/run-parts.mjs'
 import { createTeamLiveStream } from './collaboration/live-stream.mjs'
 import { loopError } from './collaboration/errors.mjs'
@@ -18,6 +18,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
   hydrateRunParts=async run=>run,
   toolServerPath = fileURLToPath(new URL('../vendor/loop-server.mjs', import.meta.url)) }) {
   const active = new Map()
+  const attachmentRoot=workspaceRoot||memoryRoot?join(workspaceRoot??memoryRoot,'attachments'):null
   if(![concurrency,coordinationConcurrency].every(value=>Number.isSafeInteger(value)&&value>0&&value<=32))throw loopError('LOOP_CONCURRENCY_INVALID','Teams 并发数须为1–32')
   const messageQueues = new Map()
   let creationQueue = Promise.resolve()
@@ -82,7 +83,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       const attached=[]
       for(const message of store.room(context.task.room_id).messages)for(const attachment of message.attachments??[]) {
         if(!context.room_messages?.some(value=>value.id===message.id))continue
-        await readRoomAttachment(attachment,{extract:false})
+        await readRoomAttachment(attachment,{extract:false,managedRoot:attachmentRoot,roomId:context.task.room_id})
         attached.push(attachment)
       }
       let sequence = 0
@@ -176,7 +177,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
         const input=message?{message_id:message.id,kind:pending.payload.message_kind,from:message.author,reply_to_message_id:message.reply_to_message_id,assignment_id:message.assignment_id,text:message.text,attachments:message.attachments}:{kind:'result',from:source.member_id,assignment_id:pending.payload.assignment_id,source_run_id:source.id,status:source.status,error_code:source.error_code,report:report?{id:report.id,version:report.version,excerpt:report.content.slice(0,2000),read:'read_context(section=reports,report_id,version,offset)'}:null}
         store.recordDelivery(runId,[pending.id],'sending',{marker,mode:'steer'})
         try{
-          for(const attachment of message?.attachments??[])await readRoomAttachment(attachment,{extract:false})
+          for(const attachment of message?.attachments??[])await readRoomAttachment(attachment,{extract:false,managedRoot:attachmentRoot,roomId:store.detail(entry.taskId).room_id})
           await entry.interactive.steer({expectedTurnRevision:entry.interactive.turnRevision,text:`${marker}\n${JSON.stringify(input)}\nThis is additional input for your current team work. Delivery alone does not resolve work. For a question, reply with its message link or include answered_message_ids in your formal report. For a result, read the cited report and continue only your unfinished work; do not send a receipt acknowledgement.`,images:(message?.attachments??[]).filter(value=>value.media_type.startsWith('image/')).map(value=>value.path)})
           store.recordDelivery(runId,[pending.id],'delivered',{marker,mode:'steer'})
         }catch(error){
@@ -294,14 +295,14 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     const operation = (messageQueues.get(roomId) ?? Promise.resolve()).then(async () => {
       const room = store.room(roomId)
       if(room.config?.dissolved_at)throw loopError('LOOP_ROOM_DISSOLVED','团队已解散，只能查看历史',409)
-      input={...input,attachments:await prepareRoomAttachments(input.attachments)}
+      input={...input,attachments:await prepareRoomAttachments(input.attachments,{managedRoot:attachmentRoot,roomId})}
+      if(typeof input.text!=='string'||!input.text.trim()&&!input.attachments.length||input.text.length>20000||input.text.includes('\0')||typeof input.request_key!=='string'||!input.request_key.trim()||input.request_key.length>128)throw loopError('LOOP_INPUT_INVALID','消息或请求标识无效')
       const selected = input.task_id ? room.tasks.find(task => task.id === input.task_id) : room.tasks.find(task => task.config.workflow === 'conversation' && !['completed','canceled'].includes(task.status))
       const sameConfiguration = selected?.config.leader === room.config?.leader_id && selected?.config.source_workspace === room.config?.workspace && (selected?.config.room_instructions ?? '') === (room.config?.instructions ?? '')
       if (!selected?.config.imported && selected?.config.workflow === 'conversation' && sameConfiguration && !['completed','canceled'].includes(selected.status)) {
         const value = store.continueConversation(roomId, selected.id, input)
         changed(); wake(); return value
       }
-      if (typeof input.text !== 'string' || !input.text.trim() || input.text.length > 20000 || typeof input.request_key !== 'string' || !input.request_key.trim()) throw loopError('LOOP_INPUT_INVALID', '消息或请求标识无效')
       if(selected?.config.imported&&store.unresolvedRoom(roomId).length)throw loopError('LOOP_RUN_UNRESOLVED','迁移的旧执行尚未核对，请先确认旧进程已退出',409)
       const leader = room.members.find(member => member.id === room.config?.leader_id)
       if (!leader) throw loopError('LOOP_LEADER_REQUIRED', '请先为团队指定leader')
@@ -318,6 +319,10 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     try { return await operation } finally { if (messageQueues.get(roomId) === tail) messageQueues.delete(roomId) }
   }
   async function requestAction(id,input) {
+    if(input.artifacts!==undefined){
+      if(input.action!=='deliver')throw loopError('LOOP_ARTIFACT_INVALID','只有交付动作可以登记产物')
+      await validateCollaborationArtifacts(store.context(id).task,input.artifacts)
+    }
     if(input.action==='reconcile_delivery'){
       const context=store.context(id),row=store.deliveryRows(context.task.id).find(value=>value.id===input.inbox_id)
       if(!row||context.run.member_id!==context.task.config.leader&&row.member_id!==context.run.member_id)throw loopError('LOOP_NOT_FOUND','投递记录不属于当前工作',404)
@@ -421,9 +426,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
     async submit(id, input) {
       const context = store.context(id)
       // Validate syntax before resolving paths, then validate again after the asynchronous reads.
-      const artifacts = input.artifacts ?? []
-      if (!Array.isArray(artifacts) || artifacts.length > 32 || artifacts.some(path => typeof path !== 'string' || !path.trim() || path.includes('\0') || path.length > 2048 || isAbsolute(path) || path.split(/[\\/]/).includes('..'))) throw loopError('LOOP_ARTIFACT_INVALID', '产物须为工作目录内的相对文件路径')
-      for (const path of artifacts) await resolveCollaborationArtifact(context.task,path).catch(error=>{throw loopError(error.code==='ENOENT'?'LOOP_ARTIFACT_MISSING':error.code??'LOOP_ARTIFACT_INVALID',`无法读取产物：${path}`)})
+      await validateCollaborationArtifacts(context.task,input.artifacts??[])
       if(input.evidence_ids!==undefined&&(!Array.isArray(input.evidence_ids)||input.evidence_ids.length>64||input.evidence_ids.some(value=>typeof value!=='string')))throw loopError('LOOP_INPUT_INVALID','证据标识列表无效')
       if(input.findings!==undefined&&(!Array.isArray(input.findings)||input.findings.length>32||input.findings.some(value=>!value||typeof value.id!=='string'||!value.id||value.id.length>128||typeof value.text!=='string'||!value.text||value.text.length>2000||!Array.isArray(value.evidence_ids)||value.evidence_ids.length>64||value.evidence_ids.some(id=>typeof id!=='string'))))throw loopError('LOOP_INPUT_INVALID','审查发现及证据引用无效')
       const findingIds=(input.findings??[]).flatMap(value=>value.evidence_ids??[])
@@ -472,11 +475,21 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       const value=store.updateMember(roomId,id,{...input,execution_config:configuration,avatar:memberAvatar(input.avatar)})
       changed();return value
     },
-    async attachment(roomId,input){store.room(roomId);return (await readRoomAttachment(input)).attachment},
+    async attachment(roomId,input){store.room(roomId);return (await readRoomAttachment(input,{managedRoot:attachmentRoot,roomId})).attachment},
+    async uploadAttachment(roomId,input){
+      const room=store.room(roomId)
+      if(room.config?.dissolved_at)throw loopError('LOOP_ROOM_DISSOLVED','团队已解散，只能查看历史',409)
+      return saveRoomAttachmentUpload(attachmentRoot,roomId,input)
+    },
+    async artifactContent(roomId,runId,reference){
+      const room=store.room(roomId),run=store.run(runId),task=store.detail(run.task_id)
+      if(task.room_id!==roomId||typeof reference!=='string'||![...(run.submission?.artifacts??[]),...(run.action?.artifacts??[])].includes(reference))throw loopError('LOOP_NOT_FOUND','产物未登记在此团队的执行中',404)
+      return openCollaborationArtifact(task,run,reference,room.config.memory_directory)
+    },
     async attachmentContent(roomId,messageId,index){
       const message=store.room(roomId).messages.find(value=>value.id===messageId),attachment=message?.attachments?.[index]
       if(!attachment)throw loopError('LOOP_NOT_FOUND','附件不存在',404)
-      return readRoomAttachment(attachment,{extract:false})
+      return readRoomAttachment(attachment,{extract:false,managedRoot:attachmentRoot,roomId})
     },
     async retryDefinitionDeletion(roomId){await recoverDefinitionDeletions(roomId);changed();return store.room(roomId)},
     removeMember(roomId,id,input){
