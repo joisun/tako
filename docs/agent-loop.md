@@ -299,7 +299,7 @@ PDF 使用 unpdf / PDF.js 在受限 Worker 中提取文本，最多 200 页、12
 
 产品导航为 Sessions、Actions、Teams。新页面使用 view=teams、team=<ID>、team_view=conversation|kanban；旧 view=rooms、room、room_view 链接会读取并规范为新 URL。新接口使用 /api/v1/teams 和 /api/v1/teams-runtime。旧 /api/v1/rooms 接口作为已有客户端与资料的兼容入口继续读取，不另建一套服务；数据库 loop_rooms、room_id、tako-room-v1 导出格式和已安装的数据目录保持原状，避免仅为界面更名搬动用户数据。
 
-Teams 对话使用 shadcn MessageScrollerProvider / Viewport / Content / Item / Button，进入团队定位最新消息，自动跟随新增内容并保留用户向上浏览的位置。PromptInput / Body / Header / Footer / Tools / Submit 负责输入容器、服务器路径附件和提交状态；编辑内容仍使用现有 Tiptap 稳定 ID Mention，不添加浏览器上传或第二套聊天传输。
+Teams 对话使用 shadcn MessageScrollerProvider / Viewport / Content / Item / Button，进入团队定位最新消息。在底部时跟随新增内容，手动上翻后保留阅读位置；点击“滚动到最新消息”或本次消息发送成功后恢复跟随。历史用户消息只登记稳定 messageId，不标为新回合 scrollAnchor，避免状态占位替换为真实回复时误跳到旧消息。发送失败保留草稿与阅读位置。PromptInput / Body / Header / Footer / Tools / Submit 负责输入容器、服务器路径附件和提交状态；编辑内容仍使用现有 Tiptap 稳定 ID Mention，不添加浏览器上传或第二套聊天传输。
 
 Message / MessageContent / MessageResponse 展示正文。文字、公开摘要、工具动作、真实指派/回复以及失败按各自时间合并，不再把整轮内容挂在 Run 创建时间或统一折叠为执行过程。仅连续同作者且同 Run 的相邻动作共用作者头，其他成员插入后会分开，不移动动作以维持整轮分组。对话中的思考仅以当前成员的临时实时摘要展示，完成后移除；Tool 显示真实输入输出和状态，Task 用于实际协作执行记录。InlineCitation 仅用于真实 HTTP(S) 来源链接，并支持悬停查看来源，不生成虚假引用。Agent / AgentHeader / AgentContent / AgentInstructions / AgentTools 用于成员定义及目录预览，声明的工具不等同于运行权限。
 

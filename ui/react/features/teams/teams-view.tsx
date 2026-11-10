@@ -1,8 +1,8 @@
 import {useTeamStream} from './use-team-stream'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState,type ReactNode } from 'react'
+import { useEffect, useState,type ComponentProps,type ReactNode } from 'react'
 import { Check, GitBranch, Hash, Menu, MessageSquare, Pause, Play, Plus, Search, Settings2, Square, UsersRound, X } from 'lucide-react'
-import {MessageScrollerProvider,MessageScroller,MessageScrollerViewport,MessageScrollerContent,MessageScrollerButton} from '@/components/ui/message-scroller'
+import {MessageScrollerProvider,MessageScroller,MessageScrollerViewport,MessageScrollerContent,MessageScrollerButton,useMessageScroller} from '@/components/ui/message-scroller'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogDescription } from '@/components/ui/dialog'
@@ -28,6 +28,14 @@ const OPEN_RUNS=new Set(['queued','starting','running','stopping','unknown'])
 const key=queryKeys.rooms
 function initialRoom(){return new URLSearchParams(window.location.search).get('team')??new URLSearchParams(window.location.search).get('room')??''}
 function initialView(){if(new URLSearchParams(window.location.search).get('team_view')==='agents')return 'agents';return (new URLSearchParams(window.location.search).get('team_view')??new URLSearchParams(window.location.search).get('room_view'))==='kanban'?'kanban':'conversation'}
+function ConversationComposer(props:ComponentProps<typeof RoomComposer>){
+  const {scrollToEnd}=useMessageScroller()
+  return <RoomComposer {...props} onSend={async(...args)=>{
+    const accepted=await props.onSend(...args)
+    if(accepted)scrollToEnd()
+    return accepted
+  }}/>
+}
 export function TeamsView({api,agentManagement}:{api:DashboardApi;agentManagement:ReactNode}) {
   const client=useQueryClient(),[roomId,setRoomId]=useState(initialRoom),[view,setView]=useState(initialView),[dialog,setDialog]=useState<'room'|'settings'|'agents'|'search'|null>(()=>new URLSearchParams(window.location.search).get('team_create')==='guided'?'room':null)
   const [drawer,setDrawer]=useState<'navigation'|'members'|null>(null),[inspected,setInspected]=useState<LoopMember|null>(null),[pending,setPending]=useState(false),[error,setError]=useState(''),[search,setSearch]=useState('')
@@ -77,8 +85,8 @@ export function TeamsView({api,agentManagement}:{api:DashboardApi;agentManagemen
     {task?.config.imported?<p className="room-waiting" role="status">历史资料已恢复。核对未知执行后，发送新消息可在本机项目继续。</p>:null}
     {task?.status==='waiting'&&waiting?<p className="room-waiting" role="status">{typeof waiting.payload.reason==='string'?waiting.payload.reason:waiting.kind==='budget_exhausted'?'执行预算已用完，可检查成果后归档。':waiting.kind==='leader_failed'?'Leader 执行失败，请查看执行记录。':'Leader 正在等待进一步安排。'}</p>:null}
     <MessageScrollerProvider key={`conversation:${selected}`} autoScroll defaultScrollPosition="end"><MessageScroller className="team-conversation-log"><MessageScrollerViewport><MessageScrollerContent className="room-messages">{room?<RoomMessages room={room} task={task} onInspect={setInspected}/>:null}
-      {room?.config?.dissolved_at?<p className="room-waiting" role="status">团队已解散，历史资料保留。</p>:null}{!room?.messages.length?<div className="room-empty"><MessageSquare/><h2>说清目标，交给团队</h2><p>直接说明任务，或 @ 一位成员。</p></div>:null}</MessageScrollerContent></MessageScrollerViewport><MessageScrollerButton aria-label="滚动到最新消息"/></MessageScroller></MessageScrollerProvider>
-    <RoomComposer api={api} roomId={selected} key={selected} members={room?.members??[]} insertion={insertion} pending={pending} disabled={!room?.members.length||!!room.config?.dissolved_at} onSend={send}/></div>
+      {room?.config?.dissolved_at?<p className="room-waiting" role="status">团队已解散，历史资料保留。</p>:null}{!room?.messages.length?<div className="room-empty"><MessageSquare/><h2>说清目标，交给团队</h2><p>直接说明任务，或 @ 一位成员。</p></div>:null}</MessageScrollerContent></MessageScrollerViewport><MessageScrollerButton aria-label="滚动到最新消息"/></MessageScroller>
+    <ConversationComposer api={api} roomId={selected} key={selected} members={room?.members??[]} insertion={insertion} pending={pending} disabled={!room?.members.length||!!room.config?.dissolved_at} onSend={send}/></MessageScrollerProvider></div>
     {view==='kanban'&&room?<RoomBoardView key={room.id} api={api} roomId={room.id} members={room.members} refreshKey={boardRefreshKey} readOnly={!!room.config?.dissolved_at} onContinue={continueItem}/>:null}
     </section><aside className="room-inspector room-theme" aria-label="成员与进度">{inspector}</aside></>:<section className="room-empty room-empty--full room-theme"><UsersRound/><h2>一个团队，一起推进</h2><Button variant="primary" onClick={()=>setDialog('room')}><Plus/>新建团队</Button>{queryError?<p role="alert" className="room-error">{queryError.message}</p>:null}</section>}
     {drawer?<Sheet open onOpenChange={open=>{if(!open)setDrawer(null)}}><SheetContent className={cn('room-drawer',drawer==='navigation'?'room-drawer--navigation':'room-theme')}><header className="room-drawer-heading"><DialogTitle>{drawer==='navigation'?'团队导航':'成员与进度'}</DialogTitle><Button variant="quiet" isIconOnly aria-label="关闭抽屉" onClick={()=>setDrawer(null)}><X/></Button></header><div className={drawer==='navigation'?'rooms-sidebar':'room-inspector'}>{drawer==='navigation'?navigation:inspector}</div></SheetContent></Sheet>:null}
