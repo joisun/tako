@@ -4,6 +4,7 @@ node_modules/
 .render.lock
 /.vdut-log/
 /.vdr-log/
+/.playwright-mcp/
 /release/
 /.vscode/
 /.worktree/
