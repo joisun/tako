@@ -649,7 +649,7 @@ test('fork menus navigate by full provider/store/session identity and dismiss wi
   await userEvent.click(trigger)
   await userEvent.click(within(await screen.findByRole('dialog', { name: '父会话的派生 Fork' })).getByRole('button', { name: /替代方案/ }))
   await waitFor(() => expect(api.readSession).toHaveBeenCalledWith(expect.objectContaining({ provider: 'codex', store_id: 'store', session_id: 'fork' }), expect.any(AbortSignal)))
-  expect(screen.queryByRole('dialog', { name: '父会话的派生 Fork' })).not.toBeInTheDocument()
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: '父会话的派生 Fork' })).not.toBeInTheDocument())
 })
 
 test('status precedes titles, branch shares the workspace row and accurate time bounds appear only in the reader subtitle', async () => {
