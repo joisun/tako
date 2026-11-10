@@ -1,7 +1,7 @@
 {
   "name": "tako",
   "displayName": "TAKO",
-  "version": "0.20.0",
+  "version": "0.20.1",
   "description": "Manage agent sessions, automate actions, and coordinate professional agent teams.",
   "author": {
     "name": "Joi Sun",
