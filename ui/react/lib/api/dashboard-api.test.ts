@@ -10,6 +10,31 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe('DashboardApi', () => {
+  test('reads session opening permissions from the encoded Run route without overriding server facts', async () => {
+    const payload = { session: { state: 'active', can_resume: false, can_fork: true, reason: '会话正在执行' } }
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => jsonResponse(payload))
+    const api = createDashboardApi({ fetchImpl })
+    expect(await api.scheduledRunSessionOpening('run/id ?')).toEqual(payload)
+    expect(fetchImpl).toHaveBeenCalledWith('/api/v1/scheduled-runs/run%2Fid%20%3F/session-opening', expect.objectContaining({ method: 'GET', cache: 'no-store' }))
+    expect(fetchImpl.mock.calls[0][1]).not.toHaveProperty('body')
+  })
+
+  test('fork sends only empty JSON and derives no session or workspace facts from the client', async () => {
+    const payload = { action: 'new_tab', terminal: 'otty', run_id: 'run/id ?', session_id: 'original-session' }
+    const calls: RequestInit[] = []
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init: RequestInit = {}) => { calls.push(init); return jsonResponse(payload) })
+    const api = createDashboardApi({ fetchImpl })
+    const response = await Reflect.apply(api.forkScheduledRun, api, ['run/id ?', { session_id: 'forged', workspace: '/other', runtime_id: 'other' }])
+    expect(response).toEqual(payload)
+    expect(fetchImpl.mock.calls[0][0]).toBe('/api/v1/scheduled-runs/run%2Fid%20%3F/fork')
+    expect(calls[0]).toMatchObject({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+  })
+
+  test('preserves a server refusal when opening permissions change before fork', async () => {
+    const api = createDashboardApi({ fetchImpl: async () => jsonResponse({ ok: false, error: { code: 'RUN_SESSION_UNAVAILABLE', message: '此会话已无法 Fork' } }, 409) })
+    await expect(api.forkScheduledRun('run-one')).rejects.toMatchObject({ code: 'RUN_SESSION_UNAVAILABLE', status: 409, message: '此会话已无法 Fork' })
+  })
+
   test('uploads file bytes without JSON conversion and preserves the Unicode filename',async()=>{
     const file=new File(['png'],'截图 #1.png',{type:'image/png'})
     const calls:Array<{url:string;init:RequestInit}>=[]

@@ -97,6 +97,8 @@ async function fixture(overrides = {}) {
     },
     sessionResume: {
       resumeScheduledRun: async (id) => { calls.push(['resume-run', id]); return { ok: true, run_id: id } },
+      sessionOpening: async (id) => { calls.push(['session-opening', id]); return { session: { state: 'idle', can_resume: true, can_fork: true, reason: null } } },
+      forkScheduledRun: async (id) => { calls.push(['fork-run', id]); return { ok: true, run_id: id } },
     },
     ...overrides.api,
   })
@@ -289,6 +291,33 @@ test('Run routes hide internal evidence, validate log tails, review, and resume 
   } finally {
     await current.close()
   }
+})
+
+test('Run session-opening and Fork aliases use canonical IDs and reject client overrides', async t => {
+  const current = await fixture()
+  t.after(() => current.close())
+  for (const prefix of ['scheduled-runs', 'runs']) {
+    const opening = await json(current.url, `/api/v1/${prefix}/${RUN_ID}/session-opening`)
+    assert.equal(opening.status, 200)
+    assert.deepEqual(opening.body.session, { state: 'idle', can_resume: true, can_fork: true, reason: null })
+    assert.deepEqual(current.calls.at(-1), ['session-opening', RUN_ID])
+    const fork = await json(current.url, `/api/v1/${prefix}/${RUN_ID}/fork`, { method: 'POST', body: {} })
+    assert.equal(fork.status, 200)
+    assert.deepEqual(current.calls.at(-1), ['fork-run', RUN_ID])
+    const before = current.calls.length
+    const invalid = await json(current.url, `/api/v1/${prefix}/${RUN_ID}/fork`, { method: 'POST', body: { session_id: 'injected-session', workspace: '/wrong' } })
+    assert.equal(invalid.status, 400)
+    assert.equal(current.calls.length, before)
+  }
+})
+
+test('resume activity conflicts preserve their actionable message as HTTP 409', async t => {
+  const current = await fixture({ api: { sessionResume: { resumeScheduledRun: async () => { throw Object.assign(new Error('该会话正在执行，结束后才能恢复原会话。'), { code: 'SCHEDULE_SESSION_ACTIVE', statusCode: 409 }) } } } })
+  t.after(() => current.close())
+  const result = await json(current.url, `/api/v1/scheduled-runs/${RUN_ID}/resume`, { method: 'POST', body: {} })
+  assert.equal(result.status, 409)
+  assert.equal(result.body.error.code, 'SCHEDULE_SESSION_ACTIVE')
+  assert.match(result.body.error.message, /正在执行/)
 })
 
 test('Scheduler typed errors preserve conflict status without leaking unknown internals', async () => {

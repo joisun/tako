@@ -79,23 +79,24 @@ function validateSessionId(sessionId) {
   return sessionId
 }
 
-function normalizeWindowTitle(title, runtimeId) {
-  const fallback = runtimeId === 'opencode' ? 'OpenCode Resume' : 'Codex Resume'
+function normalizeWindowTitle(title, runtimeId, mode) {
+  let fallback = runtimeId === 'opencode' ? 'OpenCode Resume' : 'Codex Resume'
+  if (mode === 'fork') fallback = 'Codex Fork'
   if (typeof title !== 'string') return fallback
   const normalized = title.replace(/\s+/g, ' ').trim()
   return normalized === '' ? fallback : normalized.slice(0, 160)
 }
 
-function launcherScript({ scriptPath, runtimePath, runtimeId, sessionId, workspace, codexHome }) {
+function launcherScript({ scriptPath, runtimePath, runtimeId, sessionId, workspace, codexHome, mode }) {
   return `#!/bin/zsh
 rm -f -- ${shellQuote(scriptPath)}
 cd -- ${shellQuote(workspace)}
-exec ${resumeShellCommand({ runtimePath, runtimeId, sessionId, codexHome })}
+exec ${sessionShellCommand({ runtimePath, runtimeId, sessionId, codexHome, mode })}
 `
 }
 
-function resumeShellCommand({ runtimePath, runtimeId, sessionId, codexHome }) {
-  const option = runtimeId === 'opencode' ? '--session' : 'resume'
+function sessionShellCommand({ runtimePath, runtimeId, sessionId, codexHome, mode }) {
+  const option = runtimeId === 'opencode' ? '--session' : mode
   const prefix = codexHome === undefined ? '' : `/usr/bin/env ${shellQuote('CODEX_HOME=' + codexHome)} `
   return `${prefix}${shellQuote(runtimePath)} ${option} ${shellQuote(sessionId)}`
 }
@@ -251,7 +252,13 @@ export function createTerminalLauncher({
     })
   }
 
-  async function launchOnce({ terminal = DEFAULT_RESUME_TERMINAL, runtimeId = 'codex', sessionId, workspace, title, codexHome, allowCreate = true }) {
+  async function launchOnce({ terminal = DEFAULT_RESUME_TERMINAL, runtimeId = 'codex', sessionId, workspace, title, codexHome, allowCreate = true, mode = 'resume' }) {
+    if (!['resume', 'fork'].includes(mode)) {
+      throw taskError('SESSION_OPEN_MODE_INVALID', 'Session opening mode must be resume or fork.')
+    }
+    if (mode === 'fork' && runtimeId !== 'codex') {
+      throw taskError('RUNTIME_FORK_UNSUPPORTED', 'Only Codex sessions can currently be forked.', { runtime_id: runtimeId })
+    }
     if (!['codex', 'opencode'].includes(runtimeId)) {
       throw taskError('RUNTIME_RESUME_UNSUPPORTED', 'This runtime cannot currently be resumed.', { runtime_id: runtimeId })
     }
@@ -276,8 +283,10 @@ export function createTerminalLauncher({
     if (typeof workspace !== 'string' || !isAbsolute(workspace)) {
       throw taskError('WORKSPACE_INVALID', 'Session Workspace must be an absolute path.')
     }
-    const key = JSON.stringify([runtimeId, runtimeId === 'codex' ? codexHome ?? env.CODEX_HOME ?? join(homeDirectory, '.codex') : null, normalizedSessionId])
-    const focused = terminal === 'otty' ? await focusOtty(adapter.executable, { key, runtimeId, sessionId: normalizedSessionId }) : terminal === 'ghostty' ? await ghostty.focus(key) : null
+    const key = mode === 'fork' ? JSON.stringify(['fork', randomId()]) : JSON.stringify([runtimeId, runtimeId === 'codex' ? codexHome ?? env.CODEX_HOME ?? join(homeDirectory, '.codex') : null, normalizedSessionId])
+    let focused = null
+    if (mode === 'resume' && terminal === 'otty') focused = await focusOtty(adapter.executable, { key, runtimeId, sessionId: normalizedSessionId })
+    if (mode === 'resume' && terminal === 'ghostty') focused = await ghostty.focus(key)
     if (focused) return { terminal, terminal_label: terminalDefinition.label, session_id: normalizedSessionId, workspace, ...focused }
     if (!allowCreate) throw taskError('SESSION_BROWSER_SESSION_ACTIVE', '会话正在执行，未找到可定位的终端 pane，未重复启动会话。')
     try {
@@ -298,14 +307,14 @@ export function createTerminalLauncher({
       if (terminal === 'otty') {
         launchMetadata = await launchOtty({
           executable: adapter.executable,
-          command: resumeShellCommand({ runtimePath, runtimeId, sessionId: normalizedSessionId, codexHome }),
+          command: sessionShellCommand({ runtimePath, runtimeId, sessionId: normalizedSessionId, codexHome, mode }),
           workspace,
           key,
-          title: normalizeWindowTitle(title, runtimeId),
+          title: normalizeWindowTitle(title, runtimeId, mode),
         })
       } else {
         await mkdirImpl(runtimeDirectory, { recursive: true, mode: 0o700 })
-        scriptPath = join(runtimeDirectory, `resume-${randomId()}.command`)
+        scriptPath = join(runtimeDirectory, `${mode}-${randomId()}.command`)
         await writeFileImpl(scriptPath, launcherScript({
           scriptPath,
           runtimePath,
@@ -313,9 +322,10 @@ export function createTerminalLauncher({
           sessionId: normalizedSessionId,
           workspace,
           codexHome,
+          mode,
         }), { encoding: 'utf8', mode: 0o700 })
         if (terminal === 'ghostty') {
-          launchMetadata = await ghostty.create({ key, workspace, title: normalizeWindowTitle(title, runtimeId), command: `${shellQuote('/bin/zsh')} ${shellQuote(scriptPath)}` })
+          launchMetadata = await ghostty.create({ key, workspace, title: normalizeWindowTitle(title, runtimeId, mode), command: `${shellQuote('/bin/zsh')} ${shellQuote(scriptPath)}` })
         } else {
           await execFileImpl('/usr/bin/open', ['-na', adapter.appPath, scriptPath], { timeout: 5_000 })
         }

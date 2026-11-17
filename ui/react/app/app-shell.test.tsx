@@ -104,6 +104,8 @@ function dashboardApi(runRecord: RunRecord = run): DashboardApi {
       run: { ...runRecord, reviewed_at: '2026-08-28T03:00:00.000Z' }, changed: true,
     })),
     resumeScheduledRun: vi.fn(async () => ({ ok: true, run_id: runRecord.id })),
+    scheduledRunSessionOpening: vi.fn(async () => ({ session: { state: 'idle' as const, can_resume: true, can_fork: true, reason: null } })),
+    forkScheduledRun: vi.fn(async () => ({ ok: true, run_id: runRecord.id })),
     steerRun: vi.fn(async (_id, input) => ({
       accepted: true, run_id: runRecord.id, turn_revision: input.expected_turn_revision,
     })),

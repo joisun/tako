@@ -22,6 +22,7 @@ import type {
   RunLogResponse,
   RunResponse,
   RunResumeResponse,
+  RunSessionOpeningResponse,
   TerminalResumeAction,
   RuntimeListResponse,
   RuntimeModelCatalogResponse,
@@ -160,6 +161,8 @@ export interface DashboardApi {
   scheduledRunConversation(id: string): Promise<RunConversationResponse>
   markScheduledRunReviewed(id: string): Promise<RunResponse>
   resumeScheduledRun(id: string): Promise<RunResumeResponse>
+  scheduledRunSessionOpening(id: string): Promise<RunSessionOpeningResponse>
+  forkScheduledRun(id: string): Promise<RunResumeResponse>
   openRunFile(id: string, path: string): Promise<{ opened: boolean; path: string }>
   previewRunFileUrl(id: string, path: string): string
   steerRun(
@@ -393,6 +396,13 @@ export function createDashboardApi({
     ),
     resumeScheduledRun: (id) => request(
       `/api/v1/scheduled-runs/${encodeURIComponent(id)}/resume`,
+      { method: 'POST', body: {} },
+    ),
+    scheduledRunSessionOpening: (id) => request(
+      `/api/v1/scheduled-runs/${encodeURIComponent(id)}/session-opening`,
+    ),
+    forkScheduledRun: (id) => request(
+      `/api/v1/scheduled-runs/${encodeURIComponent(id)}/fork`,
       { method: 'POST', body: {} },
     ),
     openRunFile: (id, path) => request(

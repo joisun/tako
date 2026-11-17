@@ -298,15 +298,17 @@ export function createRunService({
     previewFile: (id, path) => filePreviews.create(runStore.get(id), path),
     readPreview: (token, path) => filePreviews.read(token, path),
     markReviewed: (id) => publicRun(runStore.markReviewed(id)),
-    resumeTarget(id) {
+    isSessionActive: (runtimeId, sessionId) => runStore.isSessionActive(runtimeId, sessionId),
+    resumeTarget(id, { allowActive = false } = {}) {
       const run = runStore.get(id)
-      if (['queued', 'running'].includes(run.status)) {
+      if (!allowActive && ['queued', 'running'].includes(run.status)) {
         throw serviceError('SCHEDULE_RUN_ACTIVE', 'Wait for the active Run to finish before resuming its session')
       }
       return {
         run_id: run.id,
         schedule_id: run.schedule_id,
         runtime_id: run.runtime_id,
+        status: run.status,
         session_id: run.session_id,
         workspace: run.snapshot?.workspace ?? null,
         title: run.snapshot?.title ?? null,

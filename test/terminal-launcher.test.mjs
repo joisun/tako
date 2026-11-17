@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 
 import { createTerminalLauncher, shellQuote } from '../server/src/terminal-launcher.mjs'
@@ -192,4 +195,120 @@ test('terminal launcher safely quotes native OpenCode session IDs with underscor
   })
   await launcher.launch({ terminal: 'terminal', runtimeId: 'opencode', sessionId: 'ses_abcdef_123456', workspace: '/workspace' })
   assert.match(writes[0][1], /exec '.*opencode' --session 'ses_abcdef_123456'/)
+})
+
+test('Terminal.app forks with the native Codex command and preserves quoted workspace and data root',async()=>{
+  const writes=[],calls=[],runtimePath="/tools's/$(ignored)/codex",workspace="/work folder/project's",codexHome="/data's/$(ignored)"
+  const launcher=createTerminalLauncher({
+    platform:'darwin',env:{PATH:"/tools's/$(ignored)"},runtimeDirectory:'/private/runtime',
+    accessImpl:async()=>{},statImpl:async()=>({isDirectory:()=>true}),mkdirImpl:async()=>{},
+    writeFileImpl:async(...args)=>writes.push(args),execFileImpl:async(...args)=>calls.push(args),randomId:()=> 'fork-id',
+  })
+  const result=await launcher.launch({mode:'fork',sessionId:'source-id',workspace,codexHome})
+  assert.equal(result.session_id,'source-id');assert.equal(writes.length,1)
+  const [path,script,options]=writes[0]
+  assert.equal(path,'/private/runtime/fork-fork-id.command');assert.equal(options.mode,0o700)
+  assert.ok(script.includes('rm -f -- '+shellQuote(path)))
+  assert.ok(script.includes('cd -- '+shellQuote(workspace)))
+  assert.ok(script.includes('exec /usr/bin/env '+shellQuote('CODEX_HOME='+codexHome)+' '+shellQuote(runtimePath)+" fork 'source-id'"))
+  assert.ok(!script.includes(" resume 'source-id'"))
+  assert.deepEqual(calls,[['/usr/bin/open',['-na','/System/Applications/Utilities/Terminal.app',path],{timeout:5000}]])
+})
+
+test('launch mode is strictly validated before terminal and filesystem side effects',async()=>{
+  const calls=[]
+  const launcher=createTerminalLauncher({
+    platform:'darwin',env:{PATH:'/tools'},accessImpl:async()=>calls.push('access'),statImpl:async()=>{calls.push('stat');return{isDirectory:()=>true}},
+    mkdirImpl:async()=>calls.push('mkdir'),writeFileImpl:async()=>calls.push('write'),execFileImpl:async()=>calls.push('exec'),
+  })
+  for(const mode of [null,'','Fork','resume; fork',true,0,{},['fork']])await assert.rejects(launcher.launch({mode,sessionId:'source-id',workspace:'/workspace'}),{code:'SESSION_OPEN_MODE_INVALID'})
+  assert.deepEqual(calls,[])
+})
+
+test('fork rejects OpenCode before creating any terminal target',async()=>{
+  const f=ottyFixture()
+  await assert.rejects(f.launcher.launch({...ottyTarget,runtimeId:'opencode',mode:'fork'}),{code:'RUNTIME_FORK_UNSUPPORTED'})
+  assert.deepEqual(f.calls,[]);assert.equal(f.state.created,0)
+})
+
+test('Otty fork skips even ambiguous live source panes and opens a separate tab',async()=>{
+  const f=ottyFixture({panes:['source-one','source-two'].map(id=>({id,agent:'Codex',agent_session_id:'session-safe',agent_state:'processing'}))})
+  const codexHome="/Users/me/Codex's data/$(ignored)"
+  const result=await f.launcher.launch({...ottyTarget,mode:'fork',codexHome})
+  assert.equal(result.action,'new_tab');assert.equal(result.pane_id,'p_created_1')
+  assert.ok(!f.calls.some(args=>args[0]==='pane'&&args[1]==='list'&&args.length===3))
+  assert.deepEqual(f.calls.filter(args=>args[1]==='focus'),[['pane','focus','--pane','p_created_1','--json']])
+  const command=f.calls.find(args=>args[1]==='send-text').at(-2)
+  assert.equal(command,'/usr/bin/env '+shellQuote('CODEX_HOME='+codexHome)+" '/tools/codex' fork 'session-safe'")
+})
+
+test('each Otty fork creates a new pane without replacing the pending source resume reference',async()=>{
+  const f=ottyFixture()
+  const forks=await Promise.all([f.launcher.launch({...ottyTarget,mode:'fork'}),f.launcher.launch({...ottyTarget,mode:'fork'})])
+  assert.deepEqual(forks.map(value=>value.action),['new_tab','new_tab']);assert.notEqual(forks[0].pane_id,forks[1].pane_id)
+  const original=await f.launcher.launch({...ottyTarget,mode:'resume'})
+  assert.equal(original.action,'new_tab');assert.ok(!forks.some(value=>value.pane_id===original.pane_id))
+  const focused=await f.launcher.launch(ottyTarget)
+  assert.equal(focused.action,'focused');assert.equal(focused.pane_id,original.pane_id)
+  assert.equal(f.state.created,3)
+})
+
+test('Otty source pending pane remains the resume target after repeated forks',async()=>{
+  const f=ottyFixture(),source=await f.launcher.launch(ottyTarget)
+  Object.assign(f.state.panes.find(pane=>pane.id===source.pane_id),{agent:'Codex',agent_session_id:''})
+  const first=await f.launcher.launch({...ottyTarget,mode:'fork'}),second=await f.launcher.launch({...ottyTarget,mode:'fork'})
+  assert.notEqual(first.pane_id,source.pane_id);assert.notEqual(second.pane_id,source.pane_id);assert.notEqual(first.pane_id,second.pane_id)
+  const resumed=await f.launcher.launch(ottyTarget)
+  assert.equal(resumed.action,'focused');assert.equal(resumed.pane_id,source.pane_id)
+  assert.equal(f.state.created,3)
+  assert.deepEqual(f.calls.filter(args=>args[1]==='send-text').map(args=>args.at(-2)),["'/tools/codex' resume 'session-safe'","'/tools/codex' fork 'session-safe'","'/tools/codex' fork 'session-safe'"])
+  assert.deepEqual(f.calls.at(-1),['pane','focus','--pane',source.pane_id,'--json'])
+})
+
+async function ghosttyLauncherFixture(t,{windows=['w_source'],panes=['p_source'],cachedSource=true}={}){
+  const runtimeDirectory=await mkdtemp(join(tmpdir(),'tako-fork-launcher-')),codexHome="/data's/$(ignored)",sourceKey=JSON.stringify(['codex',codexHome,'source-id'])
+  t.after(()=>rm(runtimeDirectory,{recursive:true,force:true}))
+  if(cachedSource)await writeFile(join(runtimeDirectory,'ghostty-targets.json'),JSON.stringify({[sourceKey]:'p_source'}))
+  const state={windows,panes,created:0,calls:[]};let sequence=0
+  const make=()=>createTerminalLauncher({
+    platform:'darwin',env:{PATH:'/tools'},homeDirectory:'/home/user',runtimeDirectory,
+    accessImpl:async()=>{},statImpl:async()=>({isDirectory:()=>true}),randomId:()=> 'launch-'+ ++sequence,
+    execFileImpl:async(file,args)=>{
+      assert.equal(file,'/usr/bin/osascript')
+      const operation=args[2];state.calls.push({operation,args:args.slice(3)})
+      if(operation==='list')return{stdout:[...state.windows.map(id=>'W\t'+id),...state.panes.map(id=>'P\t'+id),...(state.windows.length?['F\t'+state.windows[0]]:[])].join('\n')}
+      if(operation==='focus')return{stdout:args[3]}
+      const id='p_fork_'+ ++state.created;state.panes.push(id)
+      if(operation==='window')state.windows.push('w_created')
+      return{stdout:id}
+    },
+  })
+  return{launcher:make(),make,state,runtimeDirectory,sourceKey,target:{terminal:'ghostty',sessionId:'source-id',workspace:'/workspace',codexHome}}
+}
+
+test('Ghostty forks never focus or overwrite the source routing key and preserve resume after restart',async t=>{
+  const f=await ghosttyLauncherFixture(t)
+  const first=await f.launcher.launch({...f.target,mode:'fork'}),second=await f.launcher.launch({...f.target,mode:'fork'})
+  assert.equal(first.action,'new_tab');assert.equal(second.action,'new_tab');assert.notEqual(first.pane_id,second.pane_id)
+  assert.ok(!f.state.calls.some(call=>call.operation==='focus'))
+  const cache=JSON.parse(await readFile(join(f.runtimeDirectory,'ghostty-targets.json'),'utf8'))
+  assert.equal(cache[f.sourceKey],'p_source')
+  assert.ok(Object.entries(cache).some(([key,pane])=>key!==f.sourceKey&&pane===first.pane_id))
+  assert.ok(Object.entries(cache).some(([key,pane])=>key!==f.sourceKey&&pane===second.pane_id))
+  const resumed=await f.make().launch({...f.target,mode:'resume'})
+  assert.equal(resumed.action,'focused');assert.equal(resumed.pane_id,'p_source')
+})
+
+test('Ghostty fork with no existing window creates one window and leaves source resume unmapped',async t=>{
+  const f=await ghosttyLauncherFixture(t,{windows:[],panes:[],cachedSource:false})
+  const forked=await f.launcher.launch({...f.target,mode:'fork'})
+  assert.equal(forked.action,'new_window')
+  const command=f.state.calls.find(call=>call.operation==='window').args[1]
+  const match=command.match(/^'\/bin\/zsh' '([^']+)'$/)
+  assert.ok(match)
+  const script=await readFile(match[1],'utf8')
+  assert.ok(script.includes("'/tools/codex' fork 'source-id'"))
+  assert.ok(script.includes('/usr/bin/env '+shellQuote('CODEX_HOME='+f.target.codexHome)))
+  const original=await f.launcher.launch(f.target)
+  assert.equal(original.action,'new_tab');assert.notEqual(original.pane_id,forked.pane_id)
 })

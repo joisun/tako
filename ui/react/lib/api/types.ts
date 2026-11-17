@@ -348,6 +348,15 @@ export interface RunControlResponse {
 
 export type TerminalResumeAction = 'focused' | 'new_tab' | 'new_window'
 
+export interface RunSessionOpeningResponse {
+  session: {
+    state: 'active' | 'idle' | 'unknown'
+    can_resume: boolean
+    can_fork: boolean
+    reason: string | null
+  }
+}
+
 export interface RunResumeResponse {
   action?: TerminalResumeAction
   ok?: boolean

@@ -658,6 +658,22 @@ export function createApiServer({
         response.end()
         return
       }
+      const sessionOpening = pathname.match(/^\/api\/v1\/(?:scheduled-runs|runs)\/([^/]+)\/session-opening$/)
+      if (request.method === 'GET' && sessionOpening) {
+        const result = await sessionResume?.sessionOpening(safeSegment(sessionOpening[1]))
+        if (!result) throw httpError('SCHEDULE_RESUME_UNAVAILABLE', 'Session opening status is unavailable', 503)
+        sendJson(response, 200, result)
+        return
+      }
+      const runFork = pathname.match(/^\/api\/v1\/(?:scheduled-runs|runs)\/([^/]+)\/fork$/)
+      if (request.method === 'POST' && runFork) {
+        requireJson(request)
+        exactBody(await readJson(request), new Set(), 'Run fork')
+        const result = await sessionResume?.forkScheduledRun(safeSegment(runFork[1]))
+        if (!result) throw httpError('SCHEDULE_RESUME_UNAVAILABLE', 'Session Fork is unavailable', 503)
+        sendJson(response, 200, result)
+        return
+      }
       const runAction = pathname.match(/^\/api\/v1\/runs\/([^/]+)\/(cancel|review|resume)$/)
       if (request.method === 'POST' && runAction && runService) {
         requireJson(request)

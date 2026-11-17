@@ -34,6 +34,7 @@ export const queryKeys = {
   allRuns: ['dashboard', 'runs'] as const,
   run: (runId: string) => ['dashboard', 'runs', runId] as const,
   runConversation: (runId: string) => ['dashboard', 'runs', runId, 'conversation'] as const,
+  runSessionOpening: (runId: string) => ['dashboard', 'runs', runId, 'session-opening'] as const,
   runLog: (runId: string, stream: 'stdout' | 'stderr') => (
     ['dashboard', 'runs', runId, 'logs', stream] as const
   ),

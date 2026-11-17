@@ -356,6 +356,10 @@ export function createRunStore({
     list,
     markReviewed,
     hasOccurrence,
+    isSessionActive: (runtimeId, sessionId) => Boolean(db.prepare(`
+      SELECT 1 FROM scheduled_runs WHERE runtime_id = ? AND status IN ('queued', 'running')
+        AND (session_id = ? OR json_extract(snapshot_json, '$.resume_session_id') = ?) LIMIT 1
+    `).get(runtimeId, sessionId, sessionId)),
     close: () => { if (!database) db.close() },
   })
 }

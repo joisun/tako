@@ -43,6 +43,30 @@ async function withStore(t, run) {
   await run({ store, databasePath })
 }
 
+test('session activity follows active inherited Runs across the ledger, including pre-start reservations', async t => {
+  await withStore(t, ({ store }) => {
+    const definition = schedule({ thread_mode: 'reuse' })
+    const input = { schedule: definition, runtime_id: 'codex', origin: 'manual', occurrence_key: null, scheduled_for: null, idempotency_key: null }
+    const first = store.create(input)
+    store.markRunning(first.id)
+    store.recordSession(first.id, 'shared-session')
+    assert.equal(store.isSessionActive('codex', 'shared-session'), true)
+    assert.equal(store.isSessionActive('opencode', 'shared-session'), false)
+    store.complete(first.id, { status: 'succeeded', session_id: 'shared-session' })
+    assert.equal(store.isSessionActive('codex', 'shared-session'), false)
+    const next = store.create(input)
+    store.prepareQueued(next.id)
+    assert.equal(store.get(next.id).session_id, null)
+    assert.equal(store.isSessionActive('codex', 'shared-session'), true)
+    store.cancelQueued(next.id)
+    assert.equal(store.isSessionActive('codex', 'shared-session'), false)
+    const other = store.create({ ...input, schedule: schedule() })
+    store.markRunning(other.id)
+    store.recordSession(other.id, 'shared-session')
+    assert.equal(store.isSessionActive('codex', 'shared-session'), true)
+  })
+})
+
 test('Run creation is durable before launch and deduplicates an occurrence', async (t) => {
   await withStore(t, ({ store }) => {
     const definition = schedule()

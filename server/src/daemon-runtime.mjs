@@ -443,15 +443,17 @@ export async function startDaemon({
       resolver: runtimeResolver,
     })
     await startScheduler()
+    const codexSessions = createSessionAdapter({ resolveLaunch: () => runtimeRegistry.resolve('codex'), onChange: () => hub.publish() })
     const sessionResume = createResumeService({
       settings: dashboardSettings,
       terminalLauncher,
       sessionInventory,
       runtimeRegistry,
       runService,
+      sessionActivity: options => codexSessions.activity(options),
     })
     sessionBrowser = createBrowser({
-      adapters: [createSessionAdapter({ resolveLaunch: () => runtimeRegistry.resolve('codex'), onChange: () => hub.publish() })],
+      adapters: [codexSessions],
       settings: dashboardSettings,
       terminalLauncher,
       links,

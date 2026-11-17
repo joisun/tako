@@ -61,6 +61,7 @@ export function createCodexSessionStatus({ dataRoot, createClient = createCodexS
           threads.push(thread)
         }
       }))
+      if (version !== generation) return { available: false, threads: [], checked_at, generation: version }
       return { available: true, threads: threads.sort((left, right) => left.id.localeCompare(right.id)), checked_at, generation: version }
     } catch {
       client?.close()
@@ -70,8 +71,9 @@ export function createCodexSessionStatus({ dataRoot, createClient = createCodexS
   }
 
   return {
-    async snapshot() {
-      if (cached && clock() - Date.parse(cached.checked_at) < FRESH_MS) return cached
+    async snapshot({ fresh = false } = {}) {
+      if (fresh && pending) await pending
+      if (!fresh && cached && clock() - Date.parse(cached.checked_at) < FRESH_MS) return cached
       if (pending) return pending
       pending = scan().then(result => {
         if (!closed && result.generation === generation) cached = result

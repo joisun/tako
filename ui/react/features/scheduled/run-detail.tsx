@@ -1,7 +1,7 @@
 import { Pill } from '@/components/kibo-ui/pill'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Clipboard, FileText, RefreshCw, Square, Terminal } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Check, Clipboard, FileText, GitFork, RefreshCw, Square, Terminal } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { CodeBlock, CodeBlockContent, CodeBlockCopyButton, CodeBlockHeader } from '@/components/ui/code-block'
@@ -27,6 +27,23 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
   const input = JSON.stringify(run.data ?? null, null, 2)
   const settings = useQuery({ queryKey: queryKeys.settings, queryFn: () => api.settings(), staleTime: 60_000 })
   const localActions = Boolean(settings.data && settings.data.local_actions_supported !== false)
+  const checkSession = localActions && run.runtime_id === 'codex' && Boolean(run.thread_id)
+  const sessionOpening = useQuery({
+    queryKey: queryKeys.runSessionOpening(run.id),
+    queryFn: () => api.scheduledRunSessionOpening(run.id),
+    enabled: checkSession,
+    refetchInterval: 5_000,
+    retry: false,
+  })
+  const session = sessionOpening.data?.session
+  const checkedSession = !sessionOpening.isPending && !sessionOpening.isError
+  const canResume = !active && (!checkSession || (checkedSession && session?.state === 'idle' && session.can_resume))
+  const canFork = checkSession && checkedSession && session?.can_fork === true
+  const openingLock = useRef(false)
+  let resumeTitle = '恢复此 Session'
+  if (active) resumeTitle = '运行结束后恢复 Session'
+  else if (checkSession && !canResume) resumeTitle = session?.reason ?? '检查会话状态后恢复 Session'
+  const sessionReason = session?.reason ?? (session?.state === 'active' ? '原会话正在执行，暂不能恢复。' : session?.state === 'unknown' ? '暂时无法确认原会话是否空闲。' : null)
 
   const reviewed = useMutation({
     mutationFn: () => api.markScheduledRunReviewed(run.id),
@@ -40,11 +57,20 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
       ])
     },
   })
-  const resume = useMutation({
-    mutationFn: () => api.resumeScheduledRun(run.id),
+  const opening = useMutation({
+    mutationFn: (mode: 'resume' | 'fork') => mode === 'fork' ? api.forkScheduledRun(run.id) : api.resumeScheduledRun(run.id),
     onMutate: () => setActionError(''),
     onError: (error) => setActionError(error instanceof Error ? error.message : 'Terminal 打开失败'),
+    onSettled: () => {
+      openingLock.current = false
+      if (checkSession) void queryClient.invalidateQueries({ queryKey: queryKeys.runSessionOpening(run.id) })
+    },
   })
+  function openSession(mode: 'resume' | 'fork') {
+    if (openingLock.current || !localActions || !run.thread_id || !(mode === 'fork' ? canFork : canResume)) return
+    openingLock.current = true
+    opening.mutate(mode)
+  }
   const fileOpen = useMutation({
     mutationFn: (path: string) => api.openRunFile(run.id, path),
   })
@@ -113,11 +139,14 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
           ) : null}
           {run.thread_id ? (
             <>
-              {localActions ? (
-                <Button aria-label="恢复此 Session" title={active ? '运行结束后恢复 Session' : '恢复此 Session'} isIconOnly isPending={resume.isPending} disabled={active} size="xs" variant="quiet" onClick={() => resume.mutate()}>
+              {localActions ? <>
+                <Button aria-label="恢复此 Session" title={resumeTitle} isIconOnly isPending={opening.isPending && opening.variables === 'resume'} disabled={!canResume || opening.isPending} size="xs" variant="quiet" onClick={() => openSession('resume')}>
                   <Terminal aria-hidden="true" />
                 </Button>
-              ) : null}
+                {checkSession ? <Button aria-label="Fork 此 Session" title="Fork 为独立对话，保留 Action 绑定，共用原工作目录" isIconOnly isPending={opening.isPending && opening.variables === 'fork'} disabled={!canFork || opening.isPending} size="xs" variant="quiet" onClick={() => openSession('fork')}>
+                  <GitFork aria-hidden="true" />
+                </Button> : null}
+              </> : null}
               <Button aria-label="复制 Session ID" title="复制 Session ID" isIconOnly size="xs" variant="quiet" onClick={() => void copySession()}>
                 {copied ? <Check aria-hidden="true" /> : <Clipboard aria-hidden="true" />}
               </Button>
@@ -131,7 +160,11 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
           <div><dt>Exit code</dt><dd>{run.exit_code ?? '—'}</dd></div>
           <div><dt>Runtime</dt><dd>{run.runtime_id}</dd></div>
         </dl>
-        {resume.isSuccess ? <p className="run-detail__action-status" role="status">Terminal 已打开</p> : null}
+        {checkSession ? <>
+          {sessionOpening.isPending ? <p className="run-detail__action-status" role="status">正在检查 Session 状态…</p> : null}
+          {sessionOpening.isError ? <p className="run-detail__action-error" role="alert">无法检查 Session 状态：{sessionOpening.error.message} <Button size="xs" variant="quiet" isPending={sessionOpening.isFetching} aria-label="重试检查 Session 状态" onClick={() => void sessionOpening.refetch()}><RefreshCw aria-hidden="true"/>重试</Button></p> : sessionReason ? <p className="run-detail__action-status" role="status">{sessionReason}</p> : null}
+        </> : null}
+        {opening.isSuccess ? <p className="run-detail__action-status" role="status">{opening.variables === 'fork' ? '已请求在 Terminal 打开 Fork 副本' : 'Terminal 已打开'}</p> : null}
         {actionError ? <p className="run-detail__action-error" role="alert">{actionError}</p> : null}
       </div>
 

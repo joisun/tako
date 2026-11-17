@@ -390,8 +390,8 @@ export function createCodexSessionAdapter({
     storeId,
     resumeOptions: { codexHome: root },
     capabilities: { full_text_search: true, search_experimental: true, message_location: true, resume: true, live_presence: true, timeline: true, relations: true, branch_groups: true },
-    async activity() {
-      const snapshot = await status.snapshot()
+    async activity(options) {
+      const snapshot = await status.snapshot(options)
       return { store_id: storeId, available: snapshot.available, sessions: snapshot.threads.map(session), checked_at: snapshot.checked_at }
     },
     list,
