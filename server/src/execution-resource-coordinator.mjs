@@ -36,7 +36,11 @@ export function createExecutionResourceCoordinator({ database, isAlive = process
     } catch (error) { try { database.exec('ROLLBACK') } catch {}; throw error }
     return {
       spawned(pid) { database.prepare('UPDATE execution_resources SET pid=? WHERE owner=? AND run_id=?').run(pid, owner, runId) },
-      async releaseWhenExited(pid) {
+      async releaseWhenExited(pid, { executionStopped = true } = {}) {
+        if (!executionStopped) {
+          database.prepare("UPDATE execution_resources SET state='unknown' WHERE owner=? AND run_id=?").run(owner, runId)
+          return false
+        }
         // Allow the owned runtime's asynchronous shutdown to reap its child.
         for (let attempt = 0; pid && isAlive(pid) && attempt < 25; attempt++) await delay(100)
         if (pid && isAlive(pid)) {

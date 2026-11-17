@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { sessionBrowserError } from '../../session-reference.mjs'
-import { createCodexAppServerClient } from '../codex-app-server-client.mjs'
+import { createCodexSharedClient } from '../codex-shared-client.mjs'
 import { createCodexSessionStatus } from '../codex-session-status.mjs'
 import { codexTimestamp, createCodexSessionTimeline } from '../codex-session-timeline.mjs'
 import { messageTimestamp } from '../codex-message-timing.mjs'
@@ -15,8 +15,8 @@ import { createCodexRolloutHistory } from '../codex-rollout-history.mjs'
 
 const SOURCES = ['cli', 'vscode', 'appServer', 'exec']
 const MESSAGE_LIMIT = 16 * 1024
-const IDLE_MS = 45_000
 const SEARCH_TIMEOUT_MS = 60_000
+const METHODS = ['initialize', 'thread/list', 'thread/read', 'thread/search', 'thread/searchOccurrences', 'thread/turns/list', 'thread/items/list', 'thread/items/read']
 
 function timestamp(value) {
   if (!Number.isFinite(value)) return null
@@ -37,8 +37,7 @@ function nativePage(response) {
 }
 
 export function createCodexSessionAdapter({
-  resolveLaunch,
-  createClient = createCodexAppServerClient,
+  createClient = createCodexSharedClient,
   dataRoot = process.env.CODEX_HOME ?? join(homedir(), '.codex'),
   onChange,
   clock,
@@ -48,7 +47,7 @@ export function createCodexSessionAdapter({
   const root = resolve(dataRoot)
   const storeId = createHash('sha256').update(root).digest('hex').slice(0, 20)
   const status = createCodexSessionStatus({ dataRoot: root, createClient: createStatusClient, onChange, clock })
-  const readChannel = { connection: null, idleTimer: null, activeRequests: 0 }
+  const readChannel = { connection: null }
   const searchChannels = new Set()
   let closed = false
   let repairClient = null
@@ -62,23 +61,21 @@ export function createCodexSessionAdapter({
     if (channel.connection !== expected) return
     const previous = channel.connection
     channel.connection = null
-    clearTimeout(channel.idleTimer)
-    channel.idleTimer = null
-    previous?.then((client) => client.close()).catch(() => {})
+    previous?.client.close()
   }
 
   async function connected(channel) {
     if (closed) throw sessionBrowserError('SESSION_BROWSER_UNAVAILABLE', 'Session browser is closed', 503)
     if (!channel.connection) {
-      channel.connection = (async () => {
-        const launch = await resolveLaunch()
-        const client = createClient({
-          executable: launch.executable,
-          cwd: homedir(),
-          env: { CODEX_HOME: root },
-          requestTimeoutMs: channel.search ? SEARCH_TIMEOUT_MS : 20_000,
-          maximumLineBytes: 8 * 1024 * 1024,
-        })
+      const client = createClient({
+        dataRoot: root,
+        allowedMethods: METHODS,
+        requestTimeoutMs: channel.search ? SEARCH_TIMEOUT_MS : 20_000,
+        maximumLineBytes: 8 * 1024 * 1024,
+      })
+      const connection = { client, ready: null }
+      channel.connection = connection
+      connection.ready = (async () => {
         try {
           await client.started
           await client.request('initialize', {
@@ -89,21 +86,23 @@ export function createCodexSessionAdapter({
           client.onNotification?.(({ method }) => {
             if (/^(thread\/(?:started|archived|unarchived|name\/updated|status\/changed)|turn\/completed)$/.test(method)) metadataPages.changed()
           })
+          if (closed || client.closed) throw new Error('CODEX_SHARED_SERVER_CLOSED')
           return client
         } catch (error) {
-          client.close()
+          closeConnection(channel, connection)
           throw error
         }
       })()
+      client.onClose?.(() => closeConnection(channel, connection))
+      return connection.ready
     }
-    return channel.connection
+    return channel.connection.ready
   }
 
   async function reconcile() {
-    const launch = await resolveLaunch()
     if (closed) return
     // Log repair is slow and must not serialize interactive reads behind it.
-    const client = createClient({ executable: launch.executable, cwd: homedir(), env: { CODEX_HOME: root }, requestTimeoutMs: 20_000, maximumLineBytes: 8 * 1024 * 1024 })
+    const client = createClient({ dataRoot: root, allowedMethods: METHODS, requestTimeoutMs: 20_000, maximumLineBytes: 8 * 1024 * 1024 })
     repairClient = client
     try {
       await client.started
@@ -127,8 +126,6 @@ export function createCodexSessionAdapter({
   }
 
   async function request(method, params, channel = readChannel) {
-    channel.activeRequests += 1
-    clearTimeout(channel.idleTimer)
     let attempt = null
     try {
       const pendingClient = connected(channel)
@@ -147,13 +144,7 @@ export function createCodexSessionAdapter({
         : 'Codex 正文搜索暂不可用，列表和对话仍可继续浏览。', timeout ? 504 : 503)
       throw sessionBrowserError('SESSION_BROWSER_UNAVAILABLE', timeout
         ? 'Codex 查询超时，请缩小搜索范围或稍后重试。'
-        : '无法读取本机 Codex 会话，请确认 Codex CLI 和数据目录可用。', timeout ? 504 : 503)
-    } finally {
-      channel.activeRequests -= 1
-      if (channel.activeRequests === 0) {
-        channel.idleTimer = setTimeout(() => closeConnection(channel), IDLE_MS)
-        channel.idleTimer.unref?.()
-      }
+        : '无法连接本机 Codex 共享服务，请先打开 Codex 并确认数据目录可用。', timeout ? 504 : 503)
     }
   }
 
@@ -201,7 +192,7 @@ export function createCodexSessionAdapter({
       })
       return branch ? { ...page, sessions: page.sessions.filter(row => row.branch === branch) } : page
     }
-    const channel = { connection: null, idleTimer: null, activeRequests: 0, search: true }
+    const channel = { connection: null, search: true }
     const callerSignal = options?.signal
     callerSignal?.throwIfAborted()
     const controller = new AbortController()
@@ -215,7 +206,7 @@ export function createCodexSessionAdapter({
     try {
       if (!cursor || cursor.startsWith('files:')) {
         const files = await searchCodexFiles({ workspace, branch, query, archived, cursor, limit }, {
-          dataRoot: root, resolveLaunch, signal, session,
+          dataRoot: root, signal, session,
           load: async params => nativePage(await request('thread/list', { ...params, sourceKinds: SOURCES })),
         })
         if (files) return files
@@ -229,7 +220,7 @@ export function createCodexSessionAdapter({
     } catch (error) {
       callerSignal?.throwIfAborted()
       if (timedOut) throw sessionBrowserError('SESSION_BROWSER_SEARCH_FAILED', 'Codex 正文搜索超时，请稍后重试。', 504)
-      if (!error.code?.startsWith('SESSION_BROWSER_')) throw sessionBrowserError('SESSION_BROWSER_SEARCH_FAILED', '会话文件搜索暂不可用，请检查读取权限。', 503)
+      if (!error.code?.startsWith('SESSION_BROWSER_')) throw sessionBrowserError('SESSION_BROWSER_SEARCH_FAILED', 'Codex 正文搜索暂不可用，请稍后重试。', 503)
       throw error
     } finally {
       clearTimeout(budget)

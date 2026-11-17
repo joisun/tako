@@ -167,9 +167,9 @@ test(`scheduler failure at ${phase} leaves Sessions and runtime registry availab
         list: async () => [{ id: 'codex' }],
         resolve: async (id) => { resolved.push(id); return { executable: '/codex' } },
       }),
-      createSessionAdapter: ({ resolveLaunch }) => ({
+      createSessionAdapter: () => ({
         id: 'codex', label: 'Codex', storeId: 'native-test', capabilities: {},
-        list: async () => { await resolveLaunch(); return { sessions: [], relations: [], next_cursor: null } },
+        list: async () => ({ sessions: [], relations: [], next_cursor: null }),
         close() {},
       }),
     })
@@ -181,7 +181,7 @@ test(`scheduler failure at ${phase} leaves Sessions and runtime registry availab
     const sessions = await fetch(`${base}/api/v1/session-browser/codex/sessions?store_id=native-test`)
     assert.equal(sessions.status, 200, await sessions.clone().text())
     assert.deepEqual((await sessions.json()).sessions, [])
-    assert.deepEqual(resolved, ['codex'])
+    assert.deepEqual(resolved, [])
     const status = await fetch(`${base}/api/v1/status`).then(response => response.json())
     assert.equal(status.scheduler.degraded, true)
     await assert.rejects(readFile(join(directory, 'tasks.sqlite')), { code: 'ENOENT' })

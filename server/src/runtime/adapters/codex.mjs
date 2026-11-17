@@ -1,8 +1,7 @@
-import { execFile } from 'node:child_process'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
-import { buildCodexInvocation } from '../../scheduler/codex-run-spec.mjs'
-import { createCodexModelCatalog } from '../../scheduler/codex-model-catalog.mjs'
-import { createCodexAppServerClient } from '../codex-app-server-client.mjs'
+import { createCodexSharedClient } from '../codex-shared-client.mjs'
 import { createCodexCapabilityPolicyResolver } from '../codex-capability-policy.mjs'
 import { parseCodexJsonLine } from '../parsers/codex-jsonl.mjs'
 import { runtimeError } from '../runtime-errors.mjs'
@@ -11,6 +10,8 @@ import { createCodexInteractiveSessionFactory } from './codex-interactive-sessio
 const CONVERSATION_PROTOCOL_BYTES = 16 * 1024 * 1024
 const MAX_CONVERSATION_CHARACTERS = 1024 * 1024
 const MAX_CONVERSATION_MESSAGES = 2_048
+const METHODS = ['initialize', 'thread/start', 'thread/resume', 'thread/read', 'thread/items/list', 'thread/loaded/list', 'thread/unsubscribe',
+  'thread/turns/list', 'turn/start', 'turn/steer', 'turn/interrupt', 'skills/list', 'config/read', 'model/list']
 
 const FALLBACK_MODELS = Object.freeze([
   Object.freeze({
@@ -21,35 +22,46 @@ const FALLBACK_MODELS = Object.freeze([
 ])
 
 export function createCodexRuntimeDefinition({
-  execFileImpl = execFile,
-  clock,
-  modelTtlMs,
-  runtimeEnvironment,
-  createAppServerClient = createCodexAppServerClient,
+  dataRoot = process.env.CODEX_HOME ?? join(homedir(), '.codex'),
+  clock = Date.now,
+  modelTtlMs = 300_000,
+  createClient = createCodexSharedClient,
   interactiveFactory = null,
 } = {}) {
-  const modelCatalogs = new Map()
-  const capabilityPolicy = createCodexCapabilityPolicyResolver({
-    execFileImpl,
-    runtimeEnvironment,
-  })
+  let modelCache = null
+  let modelsExpireAt = 0
+  let modelRequest = null
+  const capabilityPolicy = createCodexCapabilityPolicyResolver()
+  const connect = () => createClient({ dataRoot, allowedMethods: METHODS,
+    requestTimeoutMs: 20_000, maximumLineBytes: CONVERSATION_PROTOCOL_BYTES })
   const sessions = interactiveFactory ?? createCodexInteractiveSessionFactory({
-    createClient: (options) => createAppServerClient({ ...options, runtimeEnvironment }),
-    resolveCapabilityLaunch: capabilityPolicy.resolveLaunch,
+    createClient: connect,
+    resolveCapabilityConfig: capabilityPolicy.resolveThreadConfig,
   })
 
-  function modelCatalog(executable) {
-    let catalog = modelCatalogs.get(executable)
-    if (!catalog) {
-      catalog = createCodexModelCatalog({
-        codexPath: executable,
-        execFileImpl,
-        ...(clock ? { clock } : {}),
-        ...(modelTtlMs ? { ttlMs: modelTtlMs } : {}),
-      })
-      modelCatalogs.set(executable, catalog)
-    }
-    return catalog
+  async function initialized(client) {
+    await client.started
+    await client.request('initialize', {
+      clientInfo: { name: 'tako', title: 'TAKO', version: 'source' },
+      capabilities: { experimentalApi: true },
+    })
+    client.notify?.('initialized')
+  }
+
+  async function models() {
+    if (modelCache && clock() < modelsExpireAt) return modelCache
+    if (!modelRequest) modelRequest = (async () => {
+      const client = connect()
+      try {
+        await initialized(client)
+        const result = await client.request('model/list', { limit: 100, includeHidden: false })
+        if (!Array.isArray(result?.data) || result.data.length === 0) throw runtimeError('MODEL_PROBE_FAILED', 'Codex 未返回可用模型。')
+        modelCache = result.data.map(normalizeModel)
+        modelsExpireAt = clock() + modelTtlMs
+        return modelCache
+      } finally { client.close() }
+    })().finally(() => { modelRequest = null })
+    return modelRequest
   }
 
   return Object.freeze({
@@ -91,17 +103,9 @@ export function createCodexRuntimeDefinition({
           'The Run does not have a readable Codex session.',
         )
       }
-      const client = createAppServerClient({
-        executable: launch.executable,
-        cwd: workspace,
-        runtimeEnvironment,
-        maximumLineBytes: CONVERSATION_PROTOCOL_BYTES,
-      })
+      const client = connect()
       try {
-        await client.started
-        await client.request('initialize', {
-          clientInfo: { name: 'tako', title: 'TAKO', version: 'source' },
-        })
+        await initialized(client)
         try {
           return await readConversationPages(client, threadId)
         } catch (error) {
@@ -118,10 +122,9 @@ export function createCodexRuntimeDefinition({
     },
     async fetchModels({ launch }) {
       try {
-        const models = await modelCatalog(launch.executable).list()
         return {
           source: 'live',
-          models: models.map(normalizeModel),
+          models: await models(),
         }
       } catch (error) {
         return {
@@ -131,10 +134,8 @@ export function createCodexRuntimeDefinition({
         }
       }
     },
-    async buildInvocation({ launch, run }) {
-      return buildCodexInvocation(invocationSnapshot(run), {
-        codexPath: launch.executable,
-      })
+    async buildInvocation() {
+      throw runtimeError('RUNTIME_SHARED_SERVER_REQUIRED', '请先启动 Codex 共享 app-server；TAKO 不会启动独立 Codex 进程。')
     },
   })
 }
@@ -224,34 +225,13 @@ function conversationMessage(item) {
   return null
 }
 
-function invocationSnapshot(run) {
-  if (Object.hasOwn(run, 'job_id')) return run
-  return {
-    job_id: run.id,
-    definition_etag: run.etag,
-    title: run.title,
-    prompt: run.prompt,
-    workspace: run.workspace,
-    cadence: run.cadence,
-    timezone_mode: run.timezone_mode ?? 'system',
-    thread_mode: run.thread_mode ?? 'new',
-    sandbox_mode: run.sandbox_mode,
-    model: run.model ?? null,
-    reasoning_effort: run.reasoning_effort ?? null,
-    ...(run.network_access != null ? { network_access: run.network_access } : {}),
-    ...(run.fast_mode != null ? { fast_mode: run.fast_mode } : {}),
-    ...(run.resume_session_id ? { resume_session_id: run.resume_session_id } : {}),
-    timeout_seconds: run.timeout_seconds,
-  }
-}
-
 function normalizeModel(model) {
   return {
-    id: model.slug,
-    displayName: model.display_name,
+    id: model.id,
+    displayName: model.displayName,
     description: model.description,
-    reasoningLevels: [...model.supported_reasoning_levels],
-    defaultReasoningLevel: model.default_reasoning_level,
+    reasoningLevels: (model.supportedReasoningEfforts ?? []).map(level => level.reasoningEffort),
+    defaultReasoningLevel: model.defaultReasoningEffort,
     metadata: {},
   }
 }

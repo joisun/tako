@@ -61,6 +61,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
   async function execute(candidate, controller, preparedLease) {
     const parts=createRunParts(value=>store.recordParts(candidate.id,value),updates=>{live.parts(candidate.task_id,candidate.id,updates);try{onChange({kind:'rooms'})}catch{}})
     let lease = preparedLease, pid = null, handle = null, result = null, claimed = false
+    let executionStopped = true
     try {
       if (controller.signal.aborted) return
       const token = randomBytes(32).toString('hex')
@@ -97,9 +98,10 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
           capabilities: { skills: 'inherit', integrations: 'inherit' },
           execution_config: executionConfig, execution_env: executionEnv, loop_mcp: loopMcp },
         nextSequence: () => ++sequence,
-        onSpawn(value) { pid = value.pid; lease.spawned(pid); store.spawned(candidate.id, value); changed() },
+        onSpawn(value) { executionStopped = false; pid = value.pid; lease.spawned(pid); store.spawned(candidate.id, value); changed() },
         emit(event) { parts.emit(event); if(((event.type==='thinking'||event.type==='assistant_delta')&&event.payload?.text)||event.type==='activity_started')store.firstResponse(candidate.id,event.observedAt); if (event.type === 'turn_started') {store.inputDelivered(candidate.id);void deliverPending(candidate.id)} if (event.type === 'session') { store.recordSession(candidate.id, event.payload.session_id,context.member.runtime_id==='codex'?{provider:context.member.runtime_id,store_id:createHash('sha256').update(resolve(process.env.CODEX_HOME??join(homedir(),'.codex'))).digest('hex').slice(0,20),session_id:event.payload.session_id}:null); changed() } },
       })
+      executionStopped = result?.execution_stopped
       await refreshProjects(candidate.task_id)
     } catch (error) {
       result = { status: controller.signal.aborted ? 'canceled' : 'failed', error_code: error.code ?? 'LOOP_EXECUTION_FAILED', final_message: error.message }
@@ -110,7 +112,7 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
       if(claimed){const task=store.detail(candidate.task_id);if(task.config.workflow==='conversation'&&task.config.resources?.length)store.recordProjectVersions(candidate.id,'end',await captureProjectVersions(task))}
       if(claimed&&result){const report=store.formalReport(candidate.id);if(report?.evidence?.length)result.evidence_checks=await Promise.all(report.evidence.map(value=>checkEvidence(store.detail(candidate.task_id),value)))}
       await handle?.close().catch(() => {})
-      const exited = lease ? await lease.releaseWhenExited(pid) : true
+      const exited = lease ? await lease.releaseWhenExited(pid, { executionStopped }) : true
       if (claimed) {
         try { store.complete(candidate.id, result ?? { status: 'failed', error_code: 'LOOP_EXECUTION_FAILED' }, { exited }) }
         catch (error) { console.error('TAKO collaboration result persistence failed:', error.code ?? error.message) }
@@ -356,6 +358,8 @@ export function createCollaborationRuntime({ store, executeAgent, resources, reg
   async function memberRuntime(runtimeId) {
     if (!['codex','claude'].includes(runtimeId)) throw loopError('LOOP_PROVIDER_INVALID','团队成员支持 Codex 或 Claude')
     try {
+      const definition = registry.get(runtimeId)
+      if (definition.capabilities?.collaboration === false) return {id:runtimeId,state:'unavailable',source:'unavailable',models:[],model_override_supported:false,error_code:'RUNTIME_SHARED_SERVER_UNAVAILABLE'}
       await registry.resolve(runtimeId)
       const result = registry.models ? await registry.models(runtimeId) : {source:'unavailable',models:[]}
       return { id:runtimeId, state:'ready', source:result.source, models:result.source==='live' ? result.models : [],

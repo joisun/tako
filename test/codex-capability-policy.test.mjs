@@ -6,89 +6,90 @@ import {
   skillsThreadConfig,
 } from '../server/src/runtime/codex-capability-policy.mjs'
 
-const CHILD_ENVIRONMENT = Object.freeze({
-  childEnvironment: (env) => ({ PATH: '/opt/tasks/bin', ...env }),
-})
-
-test('integration isolation resolves every configured MCP identity without shell execution', async () => {
+test('integration isolation reads workspace MCP configuration through the shared client', async () => {
   const calls = []
-  const resolver = createCodexCapabilityPolicyResolver({
-    runtimeEnvironment: CHILD_ENVIRONMENT,
-    execFileImpl(command, args, options, callback) {
-      calls.push({ command, args, options })
-      callback(null, JSON.stringify([
-        { name: 'plain-server', enabled: true },
-        { name: 'plugin-server', enabled: true },
-        { name: 'plain-server', enabled: true },
-      ]), '')
+  const client = {
+    async request(method, params) {
+      calls.push({ method, params })
+      return { config: { mcp_servers: {
+        'plain-server': { command: '/fake/plain', enabled: true },
+        'paused-server': { command: '/fake/paused', enabled: false },
+      } } }
     },
-  })
+  }
+  const resolver = createCodexCapabilityPolicyResolver()
 
-  const result = await resolver.resolveLaunch({
-    executable: '/opt/tasks/bin/codex',
+  const result = await resolver.resolveThreadConfig({
+    client,
     cwd: '/tmp/project',
     capabilities: { skills: 'inherit', integrations: 'disabled' },
   })
 
   assert.deepEqual(calls, [{
-    command: '/opt/tasks/bin/codex',
-    args: [
-      'mcp', 'list', '--json',
-      '--disable', 'plugins',
-      '-c', 'apps._default.enabled=false',
-    ],
-    options: {
-      cwd: '/tmp/project',
-      encoding: 'utf8',
-      env: { PATH: '/opt/tasks/bin' },
-      maxBuffer: 524_288,
-      shell: false,
-      timeout: 5_000,
-      windowsHide: true,
-    },
+    method: 'config/read',
+    params: { cwd: '/tmp/project', includeLayers: false },
   }])
   assert.deepEqual(result, {
-    disabledFeatures: ['plugins'],
-    configOverrides: [
-      'apps._default.enabled=false',
-      'mcp_servers.plain-server.enabled=false',
-      'mcp_servers.plugin-server.enabled=false',
-    ],
+    'features.plugins': false,
+    'features.apps': false,
+    'apps._default.enabled': false,
+    'mcp_servers.plain-server.enabled': false,
+    'mcp_servers.paused-server.enabled': false,
   })
 })
 
-test('inherited integrations perform no discovery or launch override', async () => {
+test('inherited integrations perform no discovery or thread override', async () => {
   let calls = 0
-  const resolver = createCodexCapabilityPolicyResolver({
-    runtimeEnvironment: CHILD_ENVIRONMENT,
-    execFileImpl() { calls += 1 },
-  })
-  assert.deepEqual(await resolver.resolveLaunch({
-    executable: '/opt/tasks/bin/codex',
+  const resolver = createCodexCapabilityPolicyResolver()
+  assert.deepEqual(await resolver.resolveThreadConfig({
+    client: { request() { calls += 1; throw new Error('unexpected discovery') } },
     cwd: '/tmp/project',
     capabilities: { skills: 'disabled', integrations: 'inherit' },
-  }), { disabledFeatures: [], configOverrides: [] })
+  }), {})
   assert.equal(calls, 0)
 })
 
-test('integration discovery fails closed on timeout, malformed output, and unsafe names', async () => {
-  const cases = [
-    [Object.assign(new Error('timed out'), { killed: true, signal: 'SIGTERM' }), '', 'RUNTIME_CAPABILITY_DISCOVERY_TIMEOUT'],
-    [null, '{broken', 'RUNTIME_CAPABILITY_DISCOVERY_INVALID'],
-    [null, JSON.stringify([{ name: 'line\nbreak' }]), 'RUNTIME_CAPABILITY_DISCOVERY_INVALID'],
-    [null, JSON.stringify([{ name: 'ambiguous.name' }]), 'RUNTIME_CAPABILITY_DISCOVERY_INVALID'],
-  ]
-  for (const [failure, stdout, code] of cases) {
-    const resolver = createCodexCapabilityPolicyResolver({
-      runtimeEnvironment: CHILD_ENVIRONMENT,
-      execFileImpl(command, args, options, callback) { callback(failure, stdout, '') },
+test('integration isolation disables plugins and apps even without configured MCP servers', async () => {
+  for (const config of [{}, { mcp_servers: {} }]) {
+    const resolver = createCodexCapabilityPolicyResolver()
+    assert.deepEqual(await resolver.resolveThreadConfig({
+      client: { async request() { return { config } } },
+      cwd: '/tmp/project', capabilities: { integrations: 'disabled' },
+    }), {
+      'features.plugins': false,
+      'features.apps': false,
+      'apps._default.enabled': false,
     })
-    await assert.rejects(resolver.resolveLaunch({
-      executable: '/opt/tasks/bin/codex',
+  }
+})
+
+test('integration discovery rejects malformed configuration, unsafe names, and excessive server counts', async () => {
+  const cases = [
+    undefined,
+    { config: null },
+    { config: { mcp_servers: [] } },
+    { config: { mcp_servers: 'invalid' } },
+    { config: { mcp_servers: { 'line\nbreak': {} } } },
+    { config: { mcp_servers: { 'ambiguous.name': {} } } },
+    { config: { mcp_servers: Object.fromEntries(Array.from({ length: 257 }, (_, i) => [`server-${i}`, {}])) } },
+  ]
+  for (const response of cases) {
+    const resolver = createCodexCapabilityPolicyResolver()
+    await assert.rejects(resolver.resolveThreadConfig({
+      client: { async request() { return response } },
       cwd: '/tmp/project',
       capabilities: { skills: 'inherit', integrations: 'disabled' },
-    }), { code })
+    }), { code: 'RUNTIME_CAPABILITY_DISCOVERY_INVALID' })
   }
+})
+
+test('integration discovery propagates shared connection failure instead of using partial isolation', async () => {
+  const failure = Object.assign(new Error('shared connection timed out'), { code: 'RUNTIME_PROTOCOL_TIMEOUT' })
+  const resolver = createCodexCapabilityPolicyResolver()
+  await assert.rejects(resolver.resolveThreadConfig({
+    client: { async request() { throw failure } },
+    cwd: '/tmp/project', capabilities: { integrations: 'disabled' },
+  }), error => error === failure)
 })
 
 test('skill isolation converts only the requested workspace discovery into thread config', () => {

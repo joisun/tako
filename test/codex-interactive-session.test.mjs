@@ -3,24 +3,30 @@ import test from 'node:test'
 
 import { createCodexInteractiveSessionFactory } from '../server/src/runtime/adapters/codex-interactive-session.mjs'
 
-function fakeClient({ skillsResponse } = {}) {
+function fakeClient({ skillsResponse, handlers = {} } = {}) {
   const notifications = new Set()
   const closeListeners = new Set()
   const requests = []
   const client = {
-    pid: 7401,
-    started: Promise.resolve({ pid: 7401 }),
+    started: Promise.resolve({}),
     requests,
+    notified: [],
     closed: false,
+    closeCalls: 0,
     async request(method, params) {
+      assert.equal(client.closed, false, 'requests must use an open connection')
       requests.push({ method, params })
+      if (Object.hasOwn(handlers, method)) return handlers[method](params)
       if (method === 'initialize') return { userAgent: 'codex-cli 0.150.0' }
       if (method === 'skills/list') return skillsResponse ?? { data: [] }
-      if (method === 'thread/start') {
+      if (method === 'thread/loaded/list') return { data: [], nextCursor: null }
+      if (method === 'thread/unsubscribe') return {}
+      if (method === 'thread/turns/list') return { data: [{ id: 'private-turn', status: 'interrupted' }], nextCursor: null }
+      if (method === 'thread/start' || method === 'thread/resume') {
         return {
-          thread: { id: 'private-thread', turns: [] },
+          thread: { id: params.threadId ?? 'private-thread', turns: [] },
           model: 'gpt-5', cwd: '/tmp/project', approvalPolicy: 'never',
-          approvalsReviewer: 'user', sandbox: { type: 'readOnly' }, modelProvider: 'openai',
+          approvalsReviewer: 'user', sandbox: { type: { 'read-only': 'readOnly', 'workspace-write': 'workspaceWrite', 'danger-full-access': 'dangerFullAccess' }[params.sandbox] }, modelProvider: 'openai',
         }
       }
       if (method === 'turn/start') {
@@ -30,7 +36,7 @@ function fakeClient({ skillsResponse } = {}) {
       if (method === 'turn/interrupt') return {}
       throw new Error(`unexpected method ${method}`)
     },
-    notify() {},
+    notify(method) { client.notified.push(method) },
     onNotification(listener) {
       notifications.add(listener)
       return () => notifications.delete(listener)
@@ -46,9 +52,37 @@ function fakeClient({ skillsResponse } = {}) {
     emit(method, params) {
       for (const listener of notifications) listener({ method, params })
     },
-    close() { client.closed = true },
+    close() { client.closeCalls += 1; client.closed = true },
   }
   return client
+}
+
+function deferred() {
+  let resolve
+  const promise = new Promise(done => { resolve = done })
+  return { promise, resolve }
+}
+
+const flush = () => new Promise(resolve => setImmediate(resolve))
+
+function fakeTimers() {
+  let nextId = 0
+  const timers = new Map()
+  return {
+    setTimer(callback, delay) {
+      const id = ++nextId
+      timers.set(id, { callback, delay })
+      return id
+    },
+    clearTimer(id) { timers.delete(id) },
+    expire(delay) {
+      const entry = [...timers.entries()].find(([, timer]) => timer.delay === delay)
+      assert.ok(entry, `expected a ${delay}ms timer`)
+      timers.delete(entry[0])
+      entry[1].callback()
+    },
+    get pending() { return timers.size },
+  }
 }
 
 const RUN = Object.freeze({
@@ -63,7 +97,7 @@ const RUN = Object.freeze({
   capabilities: Object.freeze({ skills: 'inherit', integrations: 'inherit' }),
 })
 
-test('Codex interactive session streams a private Turn and steers it through a public revision', async () => {
+test('Codex interactive session streams a shared-server Turn and steers it through a public revision', async () => {
   const client = fakeClient()
   const events = []
   const spawns = []
@@ -79,7 +113,8 @@ test('Codex interactive session streams a private Turn and steers it through a p
   const completion = session.start()
   await new Promise((resolve) => setImmediate(resolve))
 
-  assert.deepEqual(spawns, [{ pid: 7401 }])
+  assert.deepEqual(spawns, [{ pid: null }])
+  assert.deepEqual(client.notified, ['initialized'])
   assert.deepEqual(events.slice(0, 2), [
     { type: 'session', payload: { session_id: 'private-thread' } },
     { type: 'user_message', payload: { kind: 'prompt', text: 'Review the migration.' } },
@@ -87,13 +122,17 @@ test('Codex interactive session streams a private Turn and steers it through a p
   assert.deepEqual(client.requests.slice(0, 3), [
     {
       method: 'initialize',
-      params: { clientInfo: { name: 'tako', title: 'TAKO', version: 'source' } },
+      params: {
+        clientInfo: { name: 'tako', title: 'TAKO', version: 'source' },
+        capabilities: { experimentalApi: true },
+      },
     },
     {
       method: 'thread/start',
       params: {
         cwd: '/tmp/project', model: 'gpt-5', approvalPolicy: 'never',
         sandbox: 'read-only', ephemeral: false,
+        config: { thread_unload_delay_secs: 0 },
       },
     },
     {
@@ -157,10 +196,16 @@ test('Codex interactive session streams a private Turn and steers it through a p
     usage: null, file_changes: [{ path: 'report.md', kind: 'update' }],
   })
   assert.equal(client.closed, true)
+  assert.deepEqual(client.requests.slice(-2), [
+    { method: 'thread/unsubscribe', params: { threadId: 'private-thread' } },
+    { method: 'thread/loaded/list', params: { limit: 100, cursor: null } },
+  ])
 })
 
-test('Codex interactive session closes promptly when daemon aborts the Run', async () => {
-  const client = fakeClient()
+test('canceling a Run interrupts its Turn and waits for stop confirmation before disconnecting', async () => {
+  const stopped = deferred()
+  const client = fakeClient({ handlers: { 'thread/turns/list': () => stopped.promise } })
+  const observer = fakeClient()
   const controller = new AbortController()
   const factory = createCodexInteractiveSessionFactory({ createClient: () => client })
   const session = factory.create({
@@ -172,17 +217,34 @@ test('Codex interactive session closes promptly when daemon aborts the Run', asy
   })
 
   const completion = session.start()
-  await Promise.resolve()
+  let completed = false
+  void completion.then(() => { completed = true })
+  await flush()
   controller.abort()
+  await flush()
+
+  assert.deepEqual(client.requests.slice(-2), [
+    { method: 'turn/interrupt', params: { threadId: 'private-thread', turnId: 'private-turn' } },
+    { method: 'thread/turns/list', params: { threadId: 'private-thread', limit: 1, sortDirection: 'desc', itemsView: 'summary' } },
+  ])
+  assert.equal(completed, false)
+  assert.equal(client.closed, false)
+  assert.equal(client.requests.some(({ method }) => method === 'thread/unsubscribe'), false)
+
+  stopped.resolve({ data: [{ id: 'private-turn', status: 'interrupted' }] })
 
   assert.deepEqual(await completion, {
     status: 'canceled', exit_code: null, error_code: 'RUN_CANCELED',
-    session_id: null, final_message: null, usage: null, file_changes: [],
+    session_id: 'private-thread', final_message: null, usage: null, file_changes: [],
   })
   assert.equal(client.closed, true)
+  assert.equal(client.closeCalls, 1)
+  assert.equal(observer.closed, false)
+  assert.deepEqual(await observer.request('thread/loaded/list', {}), { data: [], nextCursor: null })
+  observer.close()
 })
 
-test('Codex interactive session applies integration launch isolation and disables Skills before Thread creation', async () => {
+test('Codex interactive session resolves integration config on the initialized shared client before Thread creation', async () => {
   const client = fakeClient({
     skillsResponse: { data: [{
       cwd: '/tmp/project', errors: [],
@@ -192,15 +254,18 @@ test('Codex interactive session applies integration launch isolation and disable
       }],
     }] },
   })
-  const launches = []
+  const configurations = []
   const clients = []
   const signal = new AbortController().signal
   const factory = createCodexInteractiveSessionFactory({
-    async resolveCapabilityLaunch(input) {
-      launches.push(input)
+    async resolveCapabilityConfig(input) {
+      configurations.push(input)
+      assert.equal(client.requests[0].method, 'initialize')
       return {
-        disabledFeatures: ['plugins'],
-        configOverrides: ['apps._default.enabled=false'],
+        'features.plugins': false,
+        'features.apps': false,
+        'apps._default.enabled': false,
+        'mcp_servers.external.enabled': false,
       }
     },
     createClient(options) {
@@ -222,22 +287,19 @@ test('Codex interactive session applies integration launch isolation and disable
   const completion = session.start()
   await new Promise((resolve) => setImmediate(resolve))
 
-  assert.deepEqual(launches, [{
-    executable: '/opt/tasks/bin/codex',
+  assert.deepEqual(configurations, [{
+    client,
     cwd: '/tmp/project',
     capabilities: { skills: 'disabled', integrations: 'disabled' },
   }])
-  assert.deepEqual(clients, [{
-    executable: '/opt/tasks/bin/codex',
-    cwd: '/tmp/project',
-    signal,
-    disabledFeatures: ['plugins'],
-    configOverrides: ['apps._default.enabled=false'],
-  }])
+  assert.deepEqual(clients, [undefined])
   assert.deepEqual(client.requests.slice(0, 3), [
     {
       method: 'initialize',
-      params: { clientInfo: { name: 'tako', title: 'TAKO', version: 'source' } },
+      params: {
+        clientInfo: { name: 'tako', title: 'TAKO', version: 'source' },
+        capabilities: { experimentalApi: true },
+      },
     },
     {
       method: 'skills/list',
@@ -249,8 +311,13 @@ test('Codex interactive session applies integration launch isolation and disable
         cwd: '/tmp/project', model: 'gpt-5', approvalPolicy: 'never',
         sandbox: 'read-only', ephemeral: false,
         config: {
+          'features.plugins': false,
+          'features.apps': false,
+          'apps._default.enabled': false,
+          'mcp_servers.external.enabled': false,
           skills: { config: [{ path: '/skills/review/SKILL.md', enabled: false }] },
           features: { skill_search: false, skill_mcp_dependency_install: false },
+          thread_unload_delay_secs: 0,
         },
       },
     },
@@ -264,11 +331,12 @@ test('Codex interactive session applies integration launch isolation and disable
   await completion
 })
 
-test('Codex interactive session fails before spawning when capability discovery fails', async () => {
+test('Codex interactive session fails before creating a Thread when shared capability discovery fails', async () => {
   let clients = 0
+  const client = fakeClient()
   const factory = createCodexInteractiveSessionFactory({
-    createClient() { clients += 1 },
-    resolveCapabilityLaunch: async () => {
+    createClient() { clients += 1; return client },
+    resolveCapabilityConfig: async () => {
       throw Object.assign(new Error('private discovery output'), {
         code: 'RUNTIME_CAPABILITY_DISCOVERY_INVALID',
       })
@@ -287,20 +355,20 @@ test('Codex interactive session fails before spawning when capability discovery 
     error_code: 'RUNTIME_CAPABILITY_DISCOVERY_INVALID',
     session_id: null, final_message: null, usage: null, file_changes: [],
   })
-  assert.equal(clients, 0)
+  assert.equal(clients, 1)
+  assert.deepEqual(client.requests.map(({ method }) => method), ['initialize'])
+  assert.equal(client.closed, true)
 })
 
-test('Codex interactive session enforces the durable Run timeout', async () => {
-  const client = fakeClient()
-  let expire
+test('Run timeout interrupts its Turn and waits for confirmed termination without stopping the server', async () => {
+  const stopped = deferred()
+  const client = fakeClient({ handlers: { 'thread/turns/list': () => stopped.promise } })
+  const observer = fakeClient()
+  const timers = fakeTimers()
   const factory = createCodexInteractiveSessionFactory({
     createClient: () => client,
-    setTimer(callback, delay) {
-      assert.equal(delay, 7_200_000)
-      expire = callback
-      return 19
-    },
-    clearTimer() {},
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
   })
   const session = factory.create({
     launch: { executable: '/opt/tasks/bin/codex', version: 'codex-cli 0.150.0' },
@@ -311,14 +379,91 @@ test('Codex interactive session enforces the durable Run timeout', async () => {
   })
 
   const completion = session.start()
-  await Promise.resolve()
-  expire()
+  let completed = false
+  void completion.then(() => { completed = true })
+  await flush()
+  timers.expire(7_200_000)
+  await flush()
+
+  assert.deepEqual(client.requests.slice(-2), [
+    { method: 'turn/interrupt', params: { threadId: 'private-thread', turnId: 'private-turn' } },
+    { method: 'thread/turns/list', params: { threadId: 'private-thread', limit: 1, sortDirection: 'desc', itemsView: 'summary' } },
+  ])
+  assert.equal(completed, false)
+  assert.equal(client.closed, false)
+  stopped.resolve({ data: [{ id: 'private-turn', status: 'interrupted' }] })
 
   assert.deepEqual(await completion, {
     status: 'timed_out', exit_code: null, error_code: 'RUNTIME_TIMEOUT',
-    session_id: null, final_message: null, usage: null, file_changes: [],
+    session_id: 'private-thread', final_message: null, usage: null, file_changes: [],
   })
   assert.equal(client.closed, true)
+  assert.equal(timers.pending, 0)
+  assert.deepEqual(await observer.request('thread/loaded/list', {}), { data: [], nextCursor: null })
+  observer.close()
+})
+
+test('unconfirmed interruption reports execution_stopped false after the stop deadline', async () => {
+  const stopped = deferred()
+  const client = fakeClient({ handlers: { 'thread/turns/list': () => stopped.promise } })
+  const controller = new AbortController()
+  const timers = fakeTimers()
+  const session = createCodexInteractiveSessionFactory({
+    createClient: () => client,
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+  }).create({
+    launch: { executable: '/fake/codex' }, run: RUN,
+    signal: controller.signal, emit() {}, onSpawn() {},
+  })
+  const completion = session.start()
+  await flush()
+  controller.abort()
+  await flush()
+  assert.equal(client.closed, false)
+  assert.ok(client.requests.some(({ method }) => method === 'turn/interrupt'))
+  timers.expire(5_000)
+
+  const result = await completion
+  assert.equal(result.status, 'canceled')
+  assert.equal(result.error_code, 'RUN_CANCELED')
+  assert.equal(result.execution_stopped, false)
+  assert.equal(result.session_id, 'private-thread')
+  assert.equal(client.closed, true)
+  assert.equal(timers.pending, 0)
+  stopped.resolve({ data: [{ id: 'private-turn', status: 'interrupted' }] })
+  await flush()
+  assert.equal(client.closeCalls, 1)
+})
+
+test('interrupt acknowledgement and an inProgress summary do not confirm execution has stopped', async () => {
+  const nextPoll = deferred()
+  const stopped = deferred()
+  let polls = 0
+  const client = fakeClient({ handlers: {
+    'thread/turns/list': () => {
+      polls += 1
+      if (polls === 1) return { data: [{ id: 'private-turn', status: 'inProgress' }] }
+      nextPoll.resolve()
+      return stopped.promise
+    },
+  } })
+  const controller = new AbortController()
+  const session = createCodexInteractiveSessionFactory({ createClient: () => client }).create({
+    launch: { executable: '/fake/codex' }, run: RUN,
+    signal: controller.signal, emit() {}, onSpawn() {},
+  })
+  const completion = session.start()
+  let completed = false
+  void completion.then(() => { completed = true })
+  await flush()
+  controller.abort()
+  await nextPoll.promise
+  assert.equal(completed, false)
+  assert.equal(client.closed, false)
+  assert.equal(client.requests.some(({ method }) => method === 'thread/unsubscribe'), false)
+  stopped.resolve({ data: [{ id: 'private-turn', status: 'interrupted' }] })
+  assert.equal((await completion).execution_stopped, undefined)
 })
 
 test('Fast mode reaches the actual turn request as fast/default or inherits without an override', async () => {
@@ -347,7 +492,7 @@ test('Fast mode reaches the actual turn request as fast/default or inherits with
   }
 })
 
-test('idle Codex exit completes the Run immediately, keeps session identity and disables steering', async () => {
+test('shared connection loss keeps session identity and reports that execution may still be running', async () => {
   const client = fakeClient()
   const factory = createCodexInteractiveSessionFactory({ createClient: () => client })
   const session = factory.create({ launch: { executable: '/codex' }, run: RUN, signal: new AbortController().signal, emit() {}, onSpawn() {} })
@@ -360,6 +505,7 @@ test('idle Codex exit completes the Run immediately, keeps session identity and 
   assert.equal(result.error_code, 'RUNTIME_PROTOCOL_CLOSED')
   assert.equal(result.exit_code, 17)
   assert.equal(result.session_id, 'private-thread')
+  assert.equal(result.execution_stopped, false)
   assert.equal(session.steerable, false)
   await assert.rejects(session.steer({ expectedTurnRevision: 1, text: 'hello' }), { code: 'RUN_NOT_ACTIVE' })
 })
@@ -402,6 +548,160 @@ test('a busy inherited session fails without starting a turn or silently creatin
   assert.equal(result.error_code, 'RUNTIME_SESSION_IN_USE')
   assert.equal(client.closed, true)
   assert.equal(session.steerable, false)
-  assert.deepEqual(client.requests.map(({ method }) => method), ['initialize', 'thread/resume'])
-  assert.equal(client.requests[1].params.threadId, 'occupied-thread')
+  assert.deepEqual(client.requests.map(({ method }) => method), ['initialize', 'thread/loaded/list', 'thread/resume'])
+  assert.equal(client.requests[2].params.threadId, 'occupied-thread')
+  assert.equal(client.requests[2].params.excludeTurns, true)
+  assert.equal(client.requests[2].params.config.thread_unload_delay_secs, 0)
+})
+
+test('an already loaded inherited Thread is rejected even when found on a later page', async () => {
+  const client = fakeClient({ handlers: {
+    'thread/loaded/list': ({ cursor }) => cursor === null
+      ? { data: ['unrelated-thread'], nextCursor: 'page-2' }
+      : { data: ['occupied-thread'], nextCursor: null },
+  } })
+  const session = createCodexInteractiveSessionFactory({ createClient: () => client }).create({
+    launch: { executable: '/fake/codex' },
+    run: { ...RUN, resume_session_id: 'occupied-thread' },
+    signal: new AbortController().signal, emit() {}, onSpawn() {},
+  })
+  const result = await session.start()
+  assert.equal(result.error_code, 'RUNTIME_SESSION_IN_USE')
+  assert.equal(result.session_id, null)
+  assert.deepEqual(client.requests.map(({ method }) => method), [
+    'initialize', 'thread/loaded/list', 'thread/loaded/list',
+  ])
+  assert.deepEqual(client.requests.slice(1).map(({ params }) => params), [
+    { limit: 100, cursor: null }, { limit: 100, cursor: 'page-2' },
+  ])
+  assert.equal(client.closed, true)
+})
+
+test('invalid loaded-thread discovery fails closed without resuming a Thread', async () => {
+  for (const response of [{}, { data: [], nextCursor: 'repeated' }]) {
+    const client = fakeClient({ handlers: { 'thread/loaded/list': () => response } })
+    const session = createCodexInteractiveSessionFactory({ createClient: () => client }).create({
+      launch: { executable: '/fake/codex' }, run: { ...RUN, resume_session_id: 'old-thread' },
+      signal: new AbortController().signal, emit() {}, onSpawn() {},
+    })
+    assert.equal((await session.start()).error_code, 'RUNTIME_PROTOCOL_INVALID')
+    assert.equal(client.requests.some(({ method }) => ['thread/resume', 'turn/start'].includes(method)), false)
+    assert.equal(client.closed, true)
+  }
+})
+
+test('an unloaded Thread resumes with fresh config, excludeTurns, and zero unload delay', async () => {
+  const client = fakeClient()
+  const session = createCodexInteractiveSessionFactory({
+    createClient: () => client,
+    resolveCapabilityConfig: async () => ({ 'features.plugins': false, 'features.apps': false }),
+  }).create({
+    launch: { executable: '/fake/codex' },
+    run: { ...RUN, resume_session_id: 'old-thread', execution_config: { thread_unload_delay_secs: 60 } },
+    signal: new AbortController().signal, emit() {}, onSpawn() {},
+  })
+  const completion = session.start()
+  await flush()
+  assert.deepEqual(client.requests.slice(0, 4).map(({ method }) => method), [
+    'initialize', 'thread/loaded/list', 'thread/resume', 'turn/start',
+  ])
+  assert.deepEqual(client.requests[2].params, {
+    threadId: 'old-thread', cwd: '/tmp/project', model: 'gpt-5',
+    approvalPolicy: 'never', sandbox: 'read-only', excludeTurns: true,
+    config: { 'features.plugins': false, 'features.apps': false, thread_unload_delay_secs: 0 },
+  })
+  client.emit('turn/completed', {
+    threadId: 'old-thread', turn: { id: 'private-turn', status: 'completed', items: [] },
+  })
+  assert.equal((await completion).session_id, 'old-thread')
+})
+
+test('finishing a Run unsubscribes and waits for Thread unloading before closing its connection', async () => {
+  const unloaded = deferred()
+  const client = fakeClient({ handlers: { 'thread/loaded/list': () => unloaded.promise } })
+  const session = createCodexInteractiveSessionFactory({ createClient: () => client }).create({
+    launch: { executable: '/fake/codex' }, run: RUN,
+    signal: new AbortController().signal, emit() {}, onSpawn() {},
+  })
+  const completion = session.start()
+  let completed = false
+  void completion.then(() => { completed = true })
+  await flush()
+  client.emit('turn/completed', {
+    threadId: 'private-thread', turn: { id: 'private-turn', status: 'completed', items: [] },
+  })
+  await flush()
+  assert.deepEqual(client.requests.slice(-2).map(({ method }) => method), ['thread/unsubscribe', 'thread/loaded/list'])
+  assert.equal(completed, false)
+  assert.equal(client.closed, false)
+  unloaded.resolve({ data: [], nextCursor: null })
+  assert.equal((await completion).status, 'succeeded')
+  assert.equal(client.closed, true)
+})
+
+test('per-run execution credentials reach only the matching MCP config instead of client process options', async () => {
+  const clients = []
+  const specifications = []
+  for (const token of ['run-one-token', 'run-two-token']) {
+    const client = fakeClient()
+    const specification = {
+      ...RUN,
+      execution_env: { TAKO_LOOP_TOKEN: token, TAKO_LOOP_RUN: token, UNUSED_SECRET: 'not-for-mcp' },
+      execution_config: {
+        thread_unload_delay_secs: 60,
+        'mcp_servers.tako_loop': {
+          command: '/fake/node', args: ['/fake/loop-mcp.mjs'], enabled: true,
+          env: { EXISTING: 'kept', TAKO_LOOP_TOKEN: 'stale-token' },
+          env_vars: ['TAKO_LOOP_TOKEN', 'TAKO_LOOP_RUN'],
+        },
+      },
+    }
+    const before = structuredClone(specification)
+    const session = createCodexInteractiveSessionFactory({
+      createClient(...args) { clients.push(args); return client },
+      resolveCapabilityConfig: async () => ({
+        'features.plugins': false, 'features.apps': false,
+        'mcp_servers.external.enabled': false,
+      }),
+    }).create({
+      launch: { executable: '/fake/codex' }, run: specification,
+      signal: new AbortController().signal, emit() {}, onSpawn() {},
+    })
+    const completion = session.start()
+    await flush()
+    const config = client.requests.find(({ method }) => method === 'thread/start').params.config
+    assert.deepEqual(config, {
+      'features.plugins': false, 'features.apps': false,
+      'mcp_servers.external.enabled': false,
+      thread_unload_delay_secs: 0,
+      'mcp_servers.tako_loop': {
+        command: '/fake/node', args: ['/fake/loop-mcp.mjs'], enabled: true,
+        env: { EXISTING: 'kept', TAKO_LOOP_TOKEN: token, TAKO_LOOP_RUN: token },
+      },
+    })
+    assert.deepEqual(specification, before)
+    specifications.push(config['mcp_servers.tako_loop'].env)
+    client.emit('turn/completed', {
+      threadId: 'private-thread', turn: { id: 'private-turn', status: 'completed', items: [] },
+    })
+    await completion
+  }
+  assert.deepEqual(clients, [[], []])
+  assert.equal(specifications[0].TAKO_LOOP_TOKEN, 'run-one-token')
+  assert.equal(specifications[1].TAKO_LOOP_TOKEN, 'run-two-token')
+})
+
+test('missing per-run MCP credentials fail before Thread creation', async () => {
+  const client = fakeClient()
+  const session = createCodexInteractiveSessionFactory({ createClient: () => client }).create({
+    launch: { executable: '/fake/codex' },
+    run: { ...RUN, execution_config: { 'mcp_servers.tako_loop': {
+      command: '/fake/node', env_vars: ['TAKO_LOOP_TOKEN'], enabled: true,
+    } }, execution_env: {} },
+    signal: new AbortController().signal, emit() {}, onSpawn() {},
+  })
+  const result = await session.start()
+  assert.equal(result.error_code, 'RUNTIME_CAPABILITY_DISCOVERY_INVALID')
+  assert.deepEqual(client.requests.map(({ method }) => method), ['initialize'])
+  assert.equal(client.closed, true)
 })

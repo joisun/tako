@@ -318,7 +318,7 @@ export async function startDaemon({
       })
       runService.recover()
       const collaborationRegistry = createRuntimeRegistry({
-        definitions: [createCodexRuntime({ execFileImpl: runtimeExecFile, runtimeEnvironment }), createClaudeRuntimeDefinition()],
+        definitions: [createCodexRuntime(), createClaudeRuntimeDefinition()],
         resolver: runtimeResolver,
       })
       marketplace = createAgentMarketplace({database:executionDatabase,dataDirectory,clock,onChange:change=>hub.publish(change)})
@@ -436,14 +436,11 @@ export async function startDaemon({
       }),
     })
     runtimeRegistry = createRuntimeRegistry({
-      definitions: [createCodexRuntime({
-        execFileImpl: runtimeExecFile,
-        runtimeEnvironment,
-      }), createOpenCodeRuntime({ runtimeEnvironment })],
+      definitions: [createCodexRuntime(), createOpenCodeRuntime({ runtimeEnvironment })],
       resolver: runtimeResolver,
     })
     await startScheduler()
-    const codexSessions = createSessionAdapter({ resolveLaunch: () => runtimeRegistry.resolve('codex'), onChange: () => hub.publish() })
+    const codexSessions = createSessionAdapter({ onChange: () => hub.publish() })
     const sessionResume = createResumeService({
       settings: dashboardSettings,
       terminalLauncher,
@@ -464,12 +461,9 @@ export async function startDaemon({
     messaging = createSessionMessaging({
       store: createSessionMessageStore({ databasePath: join(dataDirectory, 'session-messages.sqlite') }),
       providers: [
-        createCodexMessageProvider({ resolveLaunch: () => runtimeRegistry.resolve('codex'),
+        createCodexMessageProvider({
           readSession: async ref => (await sessionBrowser.read(ref.provider, ref.session_id, ref)).session, terminal: messageTerminal }),
-        createClaudeMessageProvider({
-          resolveLaunch: () => runtimeResolver.resolve({ id: 'claude', launch: { overrideEnv: 'CLAUDE_BIN', executableNames: ['claude'] }, versionProbe: { args: ['--version'], timeout_ms: 5000 } }),
-          terminal: messageTerminal,
-        }),
+        createClaudeMessageProvider({ terminal: messageTerminal }),
       ],
     })
     api = createApi({

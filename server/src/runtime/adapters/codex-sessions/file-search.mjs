@@ -23,8 +23,8 @@ export function messageSearchPattern(query) {
 
 async function ripgrep(executable) {
   let binary
-  try { binary = await realpath(executable) } catch { return null }
-  const candidates = [join(dirname(binary), 'rg'), join(dirname(binary), '..', 'codex-path', 'rg'), ...createRuntimeEnvironment().searchDirectories().map(path => join(path, 'rg'))]
+  try { if (executable) binary = await realpath(executable) } catch {}
+  const candidates = [...(binary ? [join(dirname(binary), 'rg'), join(dirname(binary), '..', 'codex-path', 'rg')] : []), ...createRuntimeEnvironment().searchDirectories().map(path => join(path, 'rg'))]
   for (const candidate of candidates) {
     try { await access(candidate, constants.X_OK); return candidate } catch {}
   }
@@ -101,7 +101,7 @@ export async function searchCodexFiles(filters, { dataRoot, resolveLaunch, load,
   let root
   try { root = await realpath(join(dataRoot, filters.archived ? 'archived_sessions' : 'sessions')); if (!(await stat(root)).isDirectory()) return null }
   catch (error) { if (error.code === 'ENOENT') return null; throw error }
-  const executable = await resolveExecutable((await resolveLaunch()).executable)
+  const executable = await resolveExecutable((await resolveLaunch?.())?.executable)
   if (!executable) return null
   const candidates = []
   let next = null

@@ -2,10 +2,10 @@ import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
 import { resolve, join } from 'node:path'
 import { createCodexSharedClient } from '../../codex-shared-client.mjs'
-import { messageError, unavailable, unknown, runCommand, timeout, deferred } from '../common.mjs'
+import { messageError, unavailable, unknown, timeout, deferred } from '../common.mjs'
 
 const METHODS = ['initialize', 'thread/read', 'thread/resume', 'thread/compact/start', 'thread/turns/list', 'thread/items/list', 'thread/queue/add', 'thread/queue/list', 'turn/steer', 'turn/interrupt']
-export function createCodexMessageProvider({ dataRoot = process.env.CODEX_HOME ?? join(homedir(), '.codex'), resolveLaunch, readSession, createClient = createCodexSharedClient, command = runCommand, terminal = null }) {
+export function createCodexMessageProvider({ dataRoot = process.env.CODEX_HOME ?? join(homedir(), '.codex'), readSession, createClient = createCodexSharedClient, terminal = null }) {
   const root = resolve(dataRoot)
   const storeId = createHash('sha256').update(root).digest('hex').slice(0, 20)
   let client = null, connecting = null, closed = false
@@ -113,25 +113,13 @@ export function createCodexMessageProvider({ dataRoot = process.env.CODEX_HOME ?
       } finally { unsubscribe() }
     },
   }
-  const cli = {
-    id: 'codex-cli', operations: ['queue'],
-    async prepare(context) {
-      context.codexLaunch = await resolveLaunch().catch(() => { throw unavailable('Codex CLI 不可用') })
-      const result = await command(context.codexLaunch.executable, ['queue', '--help'], { env: { ...process.env, CODEX_HOME: root }, timeoutMs: 5000 })
-      if (!result.stdout.includes('--thread') || !result.stdout.includes('--message')) throw unavailable('此 Codex CLI 不支持 queue')
-    },
-    async execute(_operation, context) {
-      await command(context.codexLaunch.executable, ['queue', '--thread', context.session.session_id, '--message', context.text], { env: { ...process.env, CODEX_HOME: root }, cwd: context.target.workspace, mutation: true })
-      return { kind: 'native_queued', native_message_id: null }
-    },
-  }
   return {
-    id: 'codex', dataRoot: root, storeId, transports: [native, cli, ...(terminal ? [terminal] : [])],
+    id: 'codex', dataRoot: root, storeId, transports: [native, ...(terminal ? [terminal] : [])],
     async resolve(session) {
       try { return await readSession(session) }
       catch { throw messageError('SESSION_MESSAGE_REFERENCE_INVALID', '无法核对本机 Codex 会话；消息未发送') }
     },
-    async capabilities() { return [{ operation: 'queue', priority: ['codex-app-server', 'codex-cli', ...(terminal ? ['terminal'] : [])] }, { operation: 'steer', priority: ['codex-app-server'] }, { operation: 'stop', priority: ['codex-app-server'] }, { operation: 'compact', priority: ['codex-app-server'], instructions: false, requires: 'idle_session' }] },
+    async capabilities() { return [{ operation: 'queue', priority: ['codex-app-server', ...(terminal ? ['terminal'] : [])] }, { operation: 'steer', priority: ['codex-app-server'] }, { operation: 'stop', priority: ['codex-app-server'] }, { operation: 'compact', priority: ['codex-app-server'], instructions: false, requires: 'idle_session' }] },
     async describe(session) {
       const target = await this.resolve(session)
       let active_turn_id = null, native_available = false

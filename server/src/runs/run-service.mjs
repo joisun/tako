@@ -65,6 +65,7 @@ export function createRunService({
     let logs = null
     let lease = null
     let pid = null
+    let executionStopped = true
     try {
       let queued = runStore.get(runId)
       if (queued.status !== 'queued') return
@@ -97,6 +98,7 @@ export function createRunService({
           return ++sequence
         },
         onSpawn(value) {
+          executionStopped = false
           pid = value.pid
           lease?.spawned(pid)
           runStore.recordSpawn?.(runId, value)
@@ -109,6 +111,7 @@ export function createRunService({
           emitEvent(event)
         },
       })
+      executionStopped = resultFromAgent.execution_stopped
       let result = resultFromAgent
 
       const workspaceAfter = await safeWorkspaceSnapshot(queued.snapshot.workspace)
@@ -160,7 +163,7 @@ export function createRunService({
       } catch {}
     } finally {
       await logs?.close().catch(() => {})
-      await lease?.releaseWhenExited(pid)
+      await lease?.releaseWhenExited(pid, { executionStopped })
     }
   }
 

@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import test from 'node:test'
 
+import { createExecutionResourceCoordinator } from '../server/src/execution-resource-coordinator.mjs'
 import { createRunEventHub } from '../server/src/runs/run-event-hub.mjs'
 import { createRunService } from '../server/src/runs/run-service.mjs'
 import { createRunStore } from '../server/src/runs/run-store.mjs'
@@ -383,6 +385,112 @@ test('spawn failures use the unified Run error code', async (t) => {
   assert.equal(failed.status, 'failed')
   assert.equal(failed.error_code, 'RUN_SPAWN_FAILED')
 })
+
+for (const executionStopped of [undefined, true, false]) {
+  test(`RunService releases shared execution resources only when stopped (${executionStopped})`, async t => {
+    const database = new DatabaseSync(':memory:')
+    t.after(() => database.close())
+    const resources = createExecutionResourceCoordinator({ database })
+    const ready = deferred(), completion = deferred()
+    t.after(() => completion.resolve({ status: 'canceled', file_changes: [] }))
+    const current = await fixture(t, {
+      resources,
+      async executeAgent({ onSpawn }) {
+        onSpawn({ pid: null, runtime_version: 'shared' })
+        ready.resolve()
+        return completion.promise
+      },
+    })
+    const { run } = await current.service.create({
+      schedule: { ...SCHEDULE, workspace: current.root }, origin: 'manual',
+      idempotency_key: 'shared-execution',
+    })
+    await ready.promise
+    assert.equal(current.runStore.get(run.id).status, 'running')
+    assert.equal(current.runStore.get(run.id).pid, null)
+    assert.equal(current.runStore.get(run.id).runtime_version, 'shared')
+    assert.deepEqual(resources.list().map(({ pid, state }) => ({ pid, state })), [{ pid: null, state: 'held' }])
+    completion.resolve({
+      status: executionStopped === false ? 'canceled' : 'succeeded',
+      execution_stopped: executionStopped, file_changes: [],
+    })
+    await current.service.whenIdle()
+    assert.deepEqual(resources.list().map(({ pid, state }) => ({ pid, state })),
+      executionStopped === false ? [{ pid: null, state: 'unknown' }] : [])
+  })
+}
+
+for (const spawned of [false, true]) {
+  test(`RunService keeps resource claims after an execution throws only if spawned (${spawned})`, async t => {
+    const database = new DatabaseSync(':memory:')
+    t.after(() => database.close())
+    const resources = createExecutionResourceCoordinator({ database })
+    const current = await fixture(t, {
+      resources,
+      async executeAgent({ onSpawn }) {
+        if (spawned) onSpawn({ pid: null })
+        throw Object.assign(new Error('Connection unavailable'), { code: 'RUNTIME_UNAVAILABLE' })
+      },
+    })
+    const { run } = await current.service.create({
+      schedule: { ...SCHEDULE, workspace: current.root }, origin: 'manual',
+      idempotency_key: 'execution-throws',
+    })
+    await current.service.whenIdle()
+    assert.equal(current.runStore.get(run.id).status, 'failed')
+    assert.deepEqual(resources.list().map(({ pid, state }) => ({ pid, state })),
+      spawned ? [{ pid: null, state: 'unknown' }] : [])
+  })
+}
+
+test('RunService releases resources when runtime discovery fails before onSpawn', async t => {
+  const database = new DatabaseSync(':memory:')
+  t.after(() => database.close())
+  const resources = createExecutionResourceCoordinator({ database })
+  const current = await fixture(t, {
+    resources,
+    registry: {
+      resolve: async () => { throw Object.assign(new Error('Missing runtime'), { code: 'RUNTIME_UNAVAILABLE' }) },
+      get() { throw new Error('Must not launch') },
+    },
+  })
+  const { run } = await current.service.create({
+    schedule: { ...SCHEDULE, workspace: current.root }, origin: 'manual',
+    idempotency_key: 'discovery-with-resource',
+  })
+  await current.service.whenIdle()
+  assert.equal(current.runStore.get(run.id).error_code, 'RUNTIME_UNAVAILABLE')
+  assert.deepEqual(resources.list(), [])
+})
+
+for (const executionStopped of [true, false]) {
+  test(`RunService preserves stop confirmation after result processing fails (${executionStopped})`, async t => {
+    const database = new DatabaseSync(':memory:')
+    t.after(() => database.close())
+    const resources = createExecutionResourceCoordinator({ database })
+    const current = await fixture(t, {
+      resources,
+      async executeAgent({ onSpawn }) {
+        onSpawn({ pid: null })
+        return { status: 'succeeded', execution_stopped: executionStopped, file_changes: [] }
+      },
+      logStore: {
+        open: async () => ({
+          get stdout_log_path() { throw Object.assign(new Error('Log metadata unavailable'), { code: 'RUN_LOG_WRITE_FAILED' }) },
+          close: async () => {},
+        }),
+      },
+    })
+    const { run } = await current.service.create({
+      schedule: { ...SCHEDULE, workspace: current.root }, origin: 'manual',
+      idempotency_key: 'result-processing-fails',
+    })
+    await current.service.whenIdle()
+    assert.equal(current.runStore.get(run.id).error_code, 'RUN_LOG_WRITE_FAILED')
+    assert.deepEqual(resources.list().map(({ pid, state }) => ({ pid, state })),
+      executionStopped ? [] : [{ pid: null, state: 'unknown' }])
+  })
+}
 
 test('RunService steers the current interactive Turn without persisting guidance', async (t) => {
   const sessionReady = deferred()

@@ -10,13 +10,13 @@ const FILE_CHANGE_KINDS = new Set(['add', 'update', 'delete'])
 
 export function createCodexInteractiveSessionFactory({
   createClient,
-  resolveCapabilityLaunch = async () => ({ disabledFeatures: [], configOverrides: [] }),
+  resolveCapabilityConfig = async () => ({}),
   setTimer = setTimeout,
   clearTimer = clearTimeout,
   random = Math.random,
 } = {}) {
   if (typeof createClient !== 'function' || typeof setTimer !== 'function'
-    || typeof clearTimer !== 'function' || typeof resolveCapabilityLaunch !== 'function'
+    || typeof clearTimer !== 'function' || typeof resolveCapabilityConfig !== 'function'
     || typeof random !== 'function') {
     throw new TypeError('Codex interactive session requires createClient')
   }
@@ -24,14 +24,14 @@ export function createCodexInteractiveSessionFactory({
   return Object.freeze({
     create(options) {
       return createSession({
-        ...options, createClient, resolveCapabilityLaunch, setTimer, clearTimer, random,
+        ...options, createClient, resolveCapabilityConfig, setTimer, clearTimer, random,
       })
     },
   })
 }
 
 function createSession({
-  launch, run, signal, emit, onSpawn, createClient, resolveCapabilityLaunch,
+  launch, run, signal, emit, onSpawn, createClient, resolveCapabilityConfig,
   setTimer, clearTimer, random, logs,onContinuation=()=>{},
 }) {
   if (typeof launch?.executable !== 'string' || !run || typeof run !== 'object'
@@ -59,6 +59,11 @@ function createSession({
   const pendingOperations = new Set()
   const fileChanges = new Map()
   let settled = false
+  let stopping = false
+  let stopTimer = null
+  let turnRequestPending = false
+  let turnMayBeRunning = false
+  let initialized = false
   let resolveCompletion
   const completion = new Promise((resolve) => { resolveCompletion = resolve })
 
@@ -73,6 +78,7 @@ function createSession({
       if (retryTimer !== null) return
       const nextTurnId = params?.turn?.id
       if (params?.threadId !== threadId || typeof nextTurnId !== 'string') return
+      turnMayBeRunning = true
       if (turnId !== nextTurnId) {
         turnId = nextTurnId
         turnRevision += 1
@@ -163,6 +169,9 @@ function createSession({
     }
     if (method === 'turn/completed') {
       if (params?.threadId !== threadId || params?.turn?.id !== turnId) return
+      turnMayBeRunning = false
+      turnRequestPending = false
+      if (stopping) return
       const failure = providerFailure(params.turn.error ?? providerError, finalMessage)
       if (params.turn.status === 'failed') {
         for (const item of params.turn.items ?? []) {
@@ -184,8 +193,8 @@ function createSession({
       }))
     }
   }
-  const onAbort = () => finish(failedResult(sessionError('RUN_CANCELED')))
-  const timeout = run.timeout_seconds == null ? null : setTimer(() => finish(timeoutResult()), run.timeout_seconds * 1_000)
+  const onAbort = () => { void stop(failedResult(sessionError('RUN_CANCELED'))) }
+  const timeout = run.timeout_seconds == null ? null : setTimer(() => { void stop(timeoutResult()) }, run.timeout_seconds * 1_000)
   timeout?.unref?.()
   signal.addEventListener('abort', onAbort, { once: true })
   if (signal.aborted) onAbort()
@@ -193,32 +202,24 @@ function createSession({
   async function start() {
     if (settled) return completion
     try {
-      const capabilityLaunch = await resolveCapabilityLaunch({
-        executable: launch.executable,
-        cwd: run.workspace,
-        capabilities,
-      })
-      if (settled) return completion
-      client = createClient({
-        executable: launch.executable,
-        cwd: run.workspace,
-        signal,
-        disabledFeatures: capabilityLaunch.disabledFeatures,
-        configOverrides: capabilityLaunch.configOverrides,
-        ...(run.execution_env ? { env: run.execution_env } : {}),
-      })
+      client = createClient()
       unsubscribe = client.onNotification(handleNotification)
       unsubscribeClosed = client.onClose?.((error) => finish({
-        ...failedResult(error),
+        ...failedResult(initialized ? error : sessionError('RUNTIME_SHARED_SERVER_UNAVAILABLE')),
         session_id: threadId,
         file_changes: [...fileChanges.values()],
       })) ?? (() => {})
-      const spawned = await client.started
-      if (settled) return completion
-      onSpawn({ pid: spawned.pid })
+      await client.started
+      if (settled || stopping) return completion
+      onSpawn({ pid: null })
       await client.request('initialize', {
         clientInfo: { name: 'tako', title: 'TAKO', version: 'source' },
+        capabilities: { experimentalApi: true },
       })
+      client.notify?.('initialized')
+      initialized = true
+      const capabilityConfig = await resolveCapabilityConfig({ client, cwd: run.workspace, capabilities })
+      if (settled || stopping) return completion
       const threadConfig = capabilities.skills === 'disabled'
         ? skillsThreadConfig(await client.request('skills/list', {
           cwds: [run.workspace],
@@ -226,9 +227,14 @@ function createSession({
         }), { cwd: run.workspace })
         : null
       const config = {
+        ...capabilityConfig,
         ...threadConfig,
-        ...(run.execution_config ?? {}),
+        ...executionConfig(run),
+        thread_unload_delay_secs: 0,
         ...(run.network_access == null ? {} : { 'sandbox_workspace_write.network_access': run.network_access }),
+      }
+      if (run.resume_session_id && await isLoaded(run.resume_session_id)) {
+        throw sessionError('RUNTIME_SESSION_IN_USE')
       }
       const startedThread = await client.request(run.resume_session_id ? 'thread/resume' : 'thread/start', compact({
         ...(run.resume_session_id ? { threadId: run.resume_session_id } : { ephemeral: false }),
@@ -236,24 +242,30 @@ function createSession({
         model: run.model,
         approvalPolicy: 'never',
         sandbox: run.sandbox_mode,
+        ...(run.resume_session_id ? { excludeTurns: true } : {}),
         config: Object.keys(config).length ? config : null,
       }))
-      if (settled) return completion
+      if (settled || stopping) return completion
       threadId = startedThread?.thread?.id
       if (typeof threadId !== 'string' || threadId.length === 0) {
         throw sessionError('RUNTIME_PROTOCOL_INVALID')
       }
       if (run.resume_session_id && threadId !== run.resume_session_id) throw sessionError('RUNTIME_PROTOCOL_INVALID')
+      const sandboxType = { 'read-only': 'readOnly', 'workspace-write': 'workspaceWrite', 'danger-full-access': 'dangerFullAccess' }[run.sandbox_mode]
+      if (startedThread.sandbox?.type !== sandboxType) throw sessionError('RUNTIME_SANDBOX_MISMATCH')
       safeEmit(emit, { type: 'session', payload: { session_id: threadId } })
       await startTurn(run.prompt, 'prompt')
     } catch (error) {
-      finish(failedResult(error))
+      finish(failedResult(initialized ? error : sessionError('RUNTIME_SHARED_SERVER_UNAVAILABLE')))
     }
     return completion
   }
 
   async function startTurn(text, kind) {
+    if (settled || stopping) return
     const request = ++requestRevision
+    turnRequestPending = true
+    turnMayBeRunning = true
     try {
       providerError = null
       finalMessage = ''
@@ -265,17 +277,21 @@ function createSession({
         ...(run.sandbox_mode==='danger-full-access'?{approvalPolicy:'never',sandboxPolicy:{type:'dangerFullAccess'}}:{}),
         serviceTier: run.fast_mode == null ? undefined : run.fast_mode ? 'fast' : 'default',
       }))
-      if (settled || request !== requestRevision || retryTimer !== null) return
       const nextTurnId = result?.turn?.id
       if (typeof nextTurnId !== 'string' || !nextTurnId) throw sessionError('RUNTIME_PROTOCOL_INVALID')
+      if (settled || request !== requestRevision || retryTimer !== null) return
       if (turnId === null) {
         turnId = nextTurnId
         turnRevision += 1
         safeEmit(emit, { type: 'turn_started', payload: { turn_revision: turnRevision } })
       }
     } catch (error) {
-      if (!settled && request === requestRevision && retryTimer === null) finish(failedResult(error))
-    }
+      if ([-32600, -32601, -32602, -32001].includes(error.rpcCode)) {
+        turnMayBeRunning = false
+        turnRequestPending = false
+      }
+      if (!settled && !stopping && request === requestRevision && retryTimer === null) finish(failedResult(error))
+    } finally { turnRequestPending = false }
   }
 
   function scheduleRetry(failure) {
@@ -338,34 +354,100 @@ function createSession({
     if (expectedTurnRevision !== turnRevision) throw sessionError('TURN_CHANGED')
   }
 
+  async function isLoaded(id) {
+    let cursor = null
+    const seen = new Set()
+    do {
+      const response = await client.request('thread/loaded/list', { limit: 100, cursor })
+      if (!Array.isArray(response?.data) || (response.nextCursor && seen.has(response.nextCursor))) throw sessionError('RUNTIME_PROTOCOL_INVALID')
+      if (response.data.includes(id)) return true
+      cursor = response.nextCursor
+      seen.add(cursor)
+    } while (cursor && seen.size < 100)
+    if (cursor) throw sessionError('RUNTIME_PROTOCOL_INVALID')
+    return false
+  }
+
+  async function stop(result) {
+    if (settled || stopping) return completion
+    stopping = true
+    if (!turnMayBeRunning && !turnRequestPending) { finish(result); return completion }
+    stopTimer = setTimer(() => finish({ ...result, execution_stopped: false }), 5_000)
+    try {
+      while (!settled && turnRequestPending && turnId === null) await new Promise(resolve => setTimeout(resolve, 50))
+      if (settled) return completion
+      if (turnId && turnMayBeRunning) await client.request('turn/interrupt', { threadId, turnId })
+      while (!settled && turnMayBeRunning) {
+        const response = await client.request('thread/turns/list', { threadId, limit: 1, sortDirection: 'desc', itemsView: 'summary' })
+        if (response?.data?.some(turn => turn.id === turnId && turn.status !== 'inProgress')) {
+          turnMayBeRunning = false
+          break
+        }
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+      if (!settled) finish(result)
+    } catch { finish({ ...result, execution_stopped: false }) }
+    return completion
+  }
+
   function finish(result) {
     if (settled) return
     settled = true
     clearTimer(timeout)
+    if (stopTimer !== null) clearTimer(stopTimer)
     if (retryTimer !== null) clearTimer(retryTimer)
     retryTimer = null
     signal.removeEventListener('abort', onAbort)
     unsubscribe()
     unsubscribeClosed()
-    client?.close()
-    resolveCompletion({
+    const completed = {
       ...result,
+      ...((result.execution_stopped === false || turnMayBeRunning || turnRequestPending) ? { execution_stopped: false } : {}),
       ...(formalMessages.size?{formal_messages:[...formalMessages.values()]}:{}),...(hookMessages.size?{hook_messages:[...hookMessages.values()]}:{}),
       session_id: threadId ?? result.session_id,
       final_message: result.final_message ?? (finalMessage || null),
       file_changes: [...fileChanges.values()],
-    })
+    }
+    let cleanupTimer
+    const complete = () => { clearTimeout(cleanupTimer); client?.close(); resolveCompletion(completed) }
+    cleanupTimer = setTimeout(complete, 2_000)
+    void (async () => {
+      try {
+        if (threadId && client && !client.closed) {
+          await client.request('thread/unsubscribe', { threadId })
+          if (completed.execution_stopped !== false) {
+            const deadline = Date.now() + 2_000
+            while (!client.closed && await isLoaded(threadId) && Date.now() < deadline) {
+              await new Promise(resolve => setTimeout(resolve, 50))
+            }
+          }
+        }
+      } catch {} finally { complete() }
+    })()
   }
 
   return Object.freeze({
     start,
     steer,
     interrupt,
-    close: () => finish(failedResult(sessionError('RUN_CANCELED'))),
+    close: () => { void stop(failedResult(sessionError('RUN_CANCELED'))) },
     completion,
     get turnRevision() { return turnRevision },
     get steerable() { return !settled && turnId !== null && turnRevision > 0 },
   })
+}
+
+function executionConfig(run) {
+  return Object.fromEntries(Object.entries(run.execution_config ?? {}).map(([key, value]) => {
+    if (!key.startsWith('mcp_servers.') || !value || typeof value !== 'object' || !Array.isArray(value.env_vars)) return [key, value]
+    const { env_vars: names, ...config } = value
+    const env = { ...config.env }
+    for (const name of names) {
+      if (typeof run.execution_env?.[name] !== 'string') throw sessionError('RUNTIME_CAPABILITY_DISCOVERY_INVALID')
+      env[name] = run.execution_env[name]
+    }
+    return [key, { ...config, env }]
+  }))
 }
 
 function normalizedCapabilities(value) {
@@ -413,7 +495,7 @@ function failedResult(error) {
     exit_code: Number.isSafeInteger(error?.exit_code) ? error.exit_code : null,
     error_code: error?.code ?? 'RUNTIME_PROTOCOL_ERROR',
     session_id: null,
-    final_message: null,
+    final_message: ['RUNTIME_SHARED_SERVER_UNAVAILABLE', 'RUNTIME_SESSION_IN_USE', 'RUNTIME_SANDBOX_MISMATCH'].includes(error?.code) ? error.message : null,
     usage: null,
     file_changes: [],
   }
@@ -491,7 +573,12 @@ function safeEmit(emit, event) {
 }
 
 function sessionError(code) {
-  return Object.assign(new Error(code), { code })
+  const messages = {
+    RUNTIME_SHARED_SERVER_UNAVAILABLE: '无法连接现有 Codex 共享 app-server。请先打开 Codex 并启动共享服务；TAKO 不会创建新实例。',
+    RUNTIME_SESSION_IN_USE: '该会话仍被 Codex 客户端加载，无法安全应用本轮任务配置。请先退出占用它的客户端，或改为新建会话。',
+    RUNTIME_SANDBOX_MISMATCH: 'Codex 返回的实际权限与本轮任务要求不一致，已停止执行。',
+  }
+  return Object.assign(new Error(messages[code] ?? code), { code })
 }
 
 function publicUsage(value){
