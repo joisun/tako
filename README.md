@@ -166,8 +166,8 @@ queued → running → succeeded | failed | timed_out | canceled | interrupted
 1. 读取 Markdown definition，并生成 immutable execution snapshot；
 2. 先在 `scheduler.sqlite` 创建 durable `queued` Run；
 3. daemon 创建一个共享 Runtime Environment，从显式 override、process `PATH`、Homebrew、fnm/nvm/mise 等 user toolchain 与 platform candidates 中解析 executable；
-4. runtime status、model discovery 和 Run 都复用该环境；`daemon` 使用 argv array、`shell: false` 和同源 child `PATH` 直接启动 CLI；
-5. Codex active Run 使用独立的 `codex app-server --listen stdio://`；runtime adapter 把 protocol notification 转为统一、bounded event；
+4. runtime status、model discovery 和 Run 都复用该环境；executable 仅用于版本探测与用户主动打开终端；执行通过已有共享服务连接；
+5. Codex active Run 连接 `CODEX_HOME/app-server-control/app-server-control.sock` 对应的已有共享 app-server；runtime adapter 把 protocol notification 转为统一、bounded event；
 6. `RunService` 在执行边界同时做 bounded、in-memory Workspace snapshot，与 runtime file-change evidence 合并；这样 nested tool 写文件但 app-server 未发 `fileChange` item 时也不会漏掉产出；
 7. Run ledger 保存 terminal state、session ID、final message、Workspace-relative file changes 与 bounded log path；
 8. Dashboard 通过 Run-specific SSE 更新；active Turn 可以追加指令或停止；terminal Run 的历史对话由 runtime adapter 使用可信 Run ID 和 session ID 从 CLI-owned session 按需读取；
@@ -206,11 +206,11 @@ Live Session 只干预当前 active Turn，不在 Dashboard 内创建第二轮�
 
 目录、分支与会话列表共用100条原生索引结果，不在每次打开页面时扫描所有日志。元数据使用最多64页、有效期30秒的进程内缓存，3秒后先返回已有结果再刷新；搜索与正文不进入这份缓存。日志修复使用独立后台连接，正常最多每5分钟核验一次；原生索引为空时先核验历史，核验失败显示错误。文件变化和原生通知触发更新，页面可见时每15秒补查。已读完的热力时间点仅在验证日志历史未变后复用，撤回、重写或无法验证时重新读取。
 
-会话状态通过现有 Codex 共享 app-server 的 Unix socket 读取，不再扫描进程或打开的日志文件。中栏顶部显示 Needs you（等待审批、输入或主会话错误）、Working（执行中）、Ready（已加载且空闲）、Inactive（未加载或子会话失败）。点击一种状态将其优先排列，再次点击恢复最近消息排序，并保留父子层级。计数为当前筛选范围内已载入且可在树中展示的会话，不代表完整历史总数。行内圆点的颜色对应状态，目录绿点表示其中有正在执行或等待用户操作的会话。状态事件触发刷新，并每5秒补查；共享服务器不可用时显示“状态不可用”，历史对话仍可读取。
+会话状态通过现有 Codex 共享 app-server 的 Unix socket 读取，不再扫描进程或打开的日志文件。中栏顶部显示 Needs you（等待审批、输入或主会话错误）、Working（执行中）、Ready（已加载且空闲）、Inactive（未加载或子会话失败）。点击一种状态将其优先排列，再次点击恢复最近消息排序，并保留父子层级。计数为当前筛选范围内已载入且可在树中展示的会话，不代表完整历史总数。行内圆点的颜色对应状态，目录绿点表示其中有正在执行或等待用户操作的会话。状态事件触发刷新，并每5秒补查；共享服务器不可用时，状态与需要原生接口的历史读取均显示不可用，TAKO 不会创建替代进程。
 
 状态范围仅限所连接的共享服务器；独立 CLI、其他数据目录或 Desktop 私有实例中的运行状态可能不在其中。Inactive 表示该共享服务器未加载，不代表系统中没有其他进程使用它。查询不会启动、恢复或接管会话，也不会为获取状态自动启动共享服务器。
 
-协作子会话与原生 subagent 形成层级。标题行提供父会话跳转、子会话数量与选择浮层；已读取的关联会话显示标题，未读取的引用显示短 ID，点击后按完整 provider/store/session 引用读取。Fork 作为独立主会话，标题行显示 `forked from xxx`；Codex 原生创建时间已知时显示 `forked from xxx at xxxx`，这是新 fork 会话的创建时间，不是来源消息的截断时间。派生 Fork 入口支持从来源跳到已发现的派生会话，数量会随分页补充。Fork 不作为协作父子，也不通过项目、分支、标题或时间相近推断关系；复制的早期历史不计入新会话热量。
+协作子会话与原生 subagent 形成层级。标题行提供父会话跳转、子会话数量与选择浮层；已读取的关联会话显示标题，未读取的引用显示短 ID，点击后按完整 provider/store/session 引用读取。Fork 按来源会话显示为子项，复用子会话的缩进、连接线和展开折叠；来源未在当前页时按完整引用补读。已有原生或登记父级时保留该层级。标题行仍显示 `forked from xxx`；Codex 原生创建时间已知时显示 `forked from xxx at xxxx`，这是新 fork 会话的创建时间，不是来源消息的截断时间。派生 Fork 入口支持从来源跳到已发现的派生会话，数量会随分页补充。Fork 不作为协作父子，也不通过项目、分支、标题或时间相近推断关系；复制的早期历史不计入新会话热量。
 
 ### Register collaboration links
 
@@ -251,12 +251,16 @@ TAKO 不配置自动压缩阈值，Codex 自行使用其原生配置与模型默
 
 自动模式会在每轮执行 Prompt 中附加控制说明。Agent 在最终结果末尾单独输出 `<!-- tako:next-session=new -->` 或 `<!-- tako:next-session=reuse -->`。标记缺失、无效或本轮失败时默认继承；新建不删除旧会话。任务正文可说明何时需要连续上下文，例如“连续跟进未完成缺陷时继承，已完成完整日报时下一轮新建”。TAKO 使用已有执行记录保存选择和计数，不写第二份会话正文。运行记录显示本轮实际方式与继承序号，达到上限或自动决策导致的新建有单独标记。
 
+Actions 的 Codex 运行详情提供“恢复此 Session”和“Fork 此 Session”。恢复前核对同一 Session 的所有未结束 Run，以及当前共享 Codex 服务的原生活跃状态；执行中或状态无法核实时禁止恢复，点击时后端重新查询。该检查不表示对独立 CLI、Desktop 私有实例或检查后的状态变化取得全局锁，Codex 仍负责最终写入保护。
+
+Fork 使用原生 `codex fork <session-id>` 在终端新开独立对话，不改 Action 绑定、继承计数或后续自动执行策略；会话运行中也可从已保存历史创建副本。Fork 与原会话仍共用工作目录，不隔离文件，也不会释放原会话已有的人工占用。OpenCode 保留恢复入口，不提供 Fork；Linux 不提供本机终端操作。
+
 ### 手动压缩接口
 
 HTTP：`POST /api/v1/session-control/compact`；MCP：`session_compact`。输入为 `{session: {provider, store_id, session_id}, request_id, instructions?}`，应先查询 `session_control_capabilities`。同一 `request_id` 重试不会重复触发压缩；运行中的会话拒绝压缩，不隐式打断。
 
 - Codex：原生 `thread/compact/start`，不接受 `instructions`，不把 `/compact ...` 作为普通聊天发送。`accepted` 仅表示原生接受，使用 `session_delivery` 查询 `completed`；服务重启或连接丢失后无法确认完成时不宣称成功，也不盲目重发。
-- Claude：SDK 优先，stream-json CLI 次之；受控空闲连接或确认无外部活动会话后 resume。可传自定义说明，由原生 `/compact [instructions]` 处理；观察 `compact_boundary` 才确认完成，可能返回 `pre_tokens`。不接管外部正在运行的会话。
+- Claude：当前不提供 compact；TAKO 不为压缩创建 SDK 或 CLI worker。
 
 压缩保留会话 ID，不删除原始历史，也不保证完全忘记历史。缩短上下文与计费节省不是同一指标，缓存命中可能在压缩后的首次请求下降。
 
@@ -424,7 +428,7 @@ POST /api/v1/runtimes/refresh
 GET  /api/v1/runtimes/:id/models
 ```
 
-当前 Codex adapter 使用同一个解析结果执行 `codex --version`、`codex debug models` 与真实 Run。model probe 失败时 Editor 显示 adapter-owned fallback，而不是无限 loading 或让 route 消失。
+Codex executable 用于版本探测和用户主动打开终端；模型目录由已有共享服务的 `model/list` 返回，真实 Run 也连接该服务。模型查询失败时 Editor 显示 fallback，执行时连接不可用则明确报错。
 
 ## Data and configuration
 
@@ -518,7 +522,7 @@ tail -n 100 ~/.config/tako/logs/tako.ndjson
 - `SERVICE_UNAVAILABLE`：先检查 `tako status` 与 `/health/ready`。
 - Dashboard 打不开：检查 `server_port` 是否被占用以及 `daemon.stderr.log`。
 - Runtime 为 `unavailable`：运行对应 CLI 的 `--version` 后重新打开 editor 或调用 `POST /api/v1/runtimes/refresh`；失败结果不会被长期缓存。registry 会自动补充 Homebrew、fnm/nvm/mise 等 GUI-missing toolchain directories，也可显式配置 `CODEX_BIN` / `codex_path`。
-- Model 使用 fallback：手动运行解析到的 `codex debug models`；fallback 不会阻止保存或 Run。
+- Model 使用 fallback：检查已有 Codex 共享服务是否可连接；模型目录来自 `model/list`，TAKO 不运行 `codex debug models`。
 - Run 失败：在 Run Review 查看 stable error code、退出码、provider 错误详情与 stdout/stderr。模型在地区不可用时显示 `RUNTIME_MODEL_UNAVAILABLE` 和 provider 返回的原文；已有 Session ID 可点击后在 Terminal 继续对话。
 - 继承会话时出现 `RUNTIME_SESSION_IN_USE`：该会话已由其他 Codex 客户端持有写入权。退出对应终端或客户端中的会话后再重跑；TAKO 不会强制接管，也不会自动改为新建会话。
 - 历史对话不可用：确认对应 `thread_id` 仍存在于本机 Codex session inventory；TAKO 不保存第二份 transcript，因此 session 被 Codex 清理后只显示 Run `final_message`。
@@ -606,12 +610,12 @@ bash scripts/verify-release-install.sh release "$(node -p 'require("./package.js
 
 | Provider / 操作 | 优先级与边界 |
 | --- | --- |
-| Codex queue | 现有 app-server 原生队列 → `codex queue` → 已启用的 Otty 队列 |
+| Codex queue | 现有 app-server 原生队列 → 已启用的 Otty 队列 |
 | Codex steer / stop | 原生 `turn/steer` / `turn/interrupt`；CLI 不支持的动作不会伪装成 queue |
-| Claude queue | SDK 受控连接 → stream-json CLI → 已启用的 Otty 队列 |
-| Claude steer / stop | SDK 或 stream-json CLI，只控制服务已持有的 worker；不凭 resume 接管外部活跃进程 |
+| Claude queue | 仅已启用的 Otty 队列，匹配已有终端会话 |
+| Claude steer / stop / compact | 当前不可用，没有创建后台 worker 的备用路径 |
 
-Codex 连接现有共享 app-server，不为控制目标另起 app-server。队列协议启用原生 experimentalApi；CLI 始终传 Session UUID，并固定该数据源的 CODEX_HOME。Claude 恢复空闲会话前核对原生 agent 目录，不能确认运行归属时不另起 worker。SDK 使用 claude_code preset，CLI/SDK 均不添加绕过权限参数；非交互 resume 的权限规则由 Claude CLI 决定。
+Codex 的查询、模型目录、Actions、Teams 和消息控制均连接已有共享 app-server。TAKO 不启动、重启或终止 Codex app-server；连接失败返回不可用。使用这些功能前，在 TAKO 之外运行提供共享服务的 Codex 客户端，或自行执行 `codex app-server --listen unix://`。每个 Run 的配置通过线程覆盖传入，不修改全局配置；取消或超时只打断对应 turn。Claude 没有接入可复用本地实例的稳定接口，自动执行与 SDK/CLI worker 暂停提供，已有任务和历史保留。
 
 Otty 仅在 macOS 且 `resume_terminal` 已选择 otty 时作为最后的 queue 通道，按 agent 类型、完整 session_id、workspace 唯一匹配 pane；等待用户回答、多个匹配或 IPC 权限拒绝时不注入文本，不自动开启终端权限，也不盲发 Ctrl-C。终端队列回执只证明终端接受，不证明模型已收到。
 
@@ -627,11 +631,11 @@ Otty 仅在 macOS 且 `resume_terminal` 已选择 otty 时作为最后的 queue 
 
 回执保存在 `~/.config/tako/session-messages.sqlite`，只记录内容指纹、目标、原生消息 ID 与通道尝试，不复制对话正文，也不重建 Codex 队列。服务重启将未确认的在途请求标记 unknown。原生消息 ID 可用于核对队列或最近历史；队列中找不到并不代表未接受，证据不足仍保持 unknown。一次请求串行尝试多个通道；同一会话的不同请求也串行，重复 ID 共用原回执。
 
-Claude 优先依据带原始输入 UUID 的回复流帧或用户回显确认，不把 stdin 写入成功当作原生接受。长时间排队、旧 CLI 不提供对应确认或断线时，回执可能先为 unknown；连接仍在且后续收到匹配确认时，查询回执可核对为 accepted。仅凭队列文本相同不会确认。Claude 必须支持 `agents --json` 的活动目录核对，否则跳过恢复 worker；不会在旧 CLI 上凭猜测启动第二个进程。
+Otty 回执只证明指定终端已接受消息。Claude 不提供原生 worker 接收确认，不把终端接受当作模型已处理。
 
-`interrupt` 不清空已有队列，新文本遵循 provider 的原生顺序；若已打断但后续投递失败，回执保留 `interrupted_turn_id`。原生 Codex 使用 expectedTurnId；Claude 的 turn ID 表示服务持有 worker 的当前输入，不承诺原生 Codex 同等的跨客户端原子控制。
+`interrupt` 不清空已有队列，新文本遵循 provider 的原生顺序；若已打断但后续投递失败，回执保留 `interrupted_turn_id`。原生 Codex 使用 expectedTurnId；Claude 当前不提供该控制能力。
 
-Claude 受控 worker 随服务关闭，空闲 60 秒释放，最多 8 个；这不改变 accepted 与执行完成的区分。构建固定使用 Anthropic Agent SDK 0.3.312，随包保留其 [LICENSE](server/vendor/CLAUDE_SDK_LICENSE.md)，不捆绑 Claude CLI 可执行文件。
+TAKO 关闭时只释放自己持有的连接，不关闭 Codex 或 Claude 客户端。用户主动点击终端恢复或 Fork 仍按既有终端设置执行。
 
 REST 入口为 `/api/v1/session-control/sources`、`capabilities`、`send`、`interrupt` 和 `deliveries/:request_id`，保留 JSON 类型、字段白名单及消息大小校验，不按 Host、Origin 或客户端 IP 拦截。MCP 不接受自定义可执行文件、shell 命令或任意工作目录。
 

@@ -8,7 +8,7 @@ Teams 与 Sessions、Actions 并列。创建团队只填写名称，存储与内
 
 用户未指定收件人时唤醒 Leader；显式 `@成员` 直接派发给选中的稳定成员 ID，不先转交 Leader。多个明确收件人可各自执行，不广播唤醒其他成员。成员通过 `send_message` 互相委派、求助或回复。未填写 mentions 的 reply 默认回复本次委派来源；执行结果返回实际请求者；仅需要协调时通知 Leader，不因普通完成确认唤醒。Leader 在成员工作结束后汇总、安排后续工作或交付。普通回复不自动形成新的委派回调，避免无任务的互相确认循环。等待用户时不保持模型轮询。Leader 请求 wait 时，如仍有排队或运行中的成员，Task 保持 active，成员凭据和结果回传继续有效；成员结果交回实际请求者处理后，确实只剩用户输入时才进入 waiting。用户显式暂停、取消或修订仍立即撤销旧执行凭据。每个指派只设一个负责成员与明确产出，不重复派发其他成员的职责；`submit_result` 已自动回传，无须额外发送完成通知或确认。reply 消息立即落盘显示，在发送者退出后交接；与该次完成通知合并为一次唤醒。先恢复待处理的成员工作链，再让 Leader 汇总，避免双方抢着处理同一结果。
 
-Teams 的 Codex 进程统一使用完整访问，不再按 Leader、讨论、实施或验证角色强制设置只读或目录写入白名单。Leader 可直接完成当前职责，也可用 `send_message(intent=delegate,write_access=true)` 委派实施；`write_access` 用于实施分类与目录占用调度，不是权限授予开关。用户明确要求只读时，成员仍须遵守任务约束。Leader 按任务选择验证方式，检查实际实现与验证证据；独立验证在有必要或用户要求时安排，不再强制另起验证 Run 或要求结构化 pass 作为交付门槛。未结束成员仍需完成或明确处理后才能交付。服务不会仅凭 CLI 退出成功认定交付，也不会把文本中的“完成”当作状态。Leader 明确请求 `deliver` 且其执行成功后，任务进入 `review`，界面显示“已交付”。用户可完成归档，或继续发送修订要求。
+Teams 的 Codex 会话通过已有共享 app-server 执行，统一使用完整访问，不再按 Leader、讨论、实施或验证角色强制设置只读或目录写入白名单。Leader 可直接完成当前职责，也可用 `send_message(intent=delegate,write_access=true)` 委派实施；`write_access` 用于实施分类与目录占用调度，不是权限授予开关。用户明确要求只读时，成员仍须遵守任务约束。Leader 按任务选择验证方式，检查实际实现与验证证据；独立验证在有必要或用户要求时安排，不再强制另起验证 Run 或要求结构化 pass 作为交付门槛。未结束成员仍需完成或明确处理后才能交付。服务不会仅凭 CLI 退出成功认定交付，也不会把文本中的“完成”当作状态。Leader 明确请求 `deliver` 且其执行成功后，任务进入 `review`，界面显示“已交付”。用户可完成归档，或继续发送修订要求。
 
 团队有未结束工作时不能更换项目或 Leader；可更换资料备份目录以处理磁盘问题，保留旧资料。交付后更换设置，下一条消息使用新设置建立内部任务，保留先前交付记录。
 
@@ -16,7 +16,7 @@ Teams 的 Codex 进程统一使用完整访问，不再按 Leader、讨论、实
 
 新建团队可选择“引导式创建”：输入需求及可选项目目录，由现有 Runtime 生成团队草案。草案可调整名称、任务理解、验收要求，以及成员的定义、职责、头像、客户端、模型和 effort。第一位成员担任 Leader；可增删其他成员，人数由所需专业职责决定，不设置组队人数上限。原有手动创建、复制房间和目录恢复入口保留。
 
-规划 Agent 通过只读 search_agents 工具主动搜索全部已启用 Marketplace 来源的 Agent 池，再用 get_agent_definition 读取候选原文，确认专业能力与职责匹配。本地文件及安装状态不是检索范围或排序优先条件；搜索按页返回，可继续检索，不把最初一组候选当成全部角色池。界面与原生 Session 均可查看实际搜索词、匹配结果和定义读取记录。协调 Leader 或充分搜索后仍缺失的专业职责可生成专用角色，明确标记“按需求生成”。外部定义保留原文、来源、版本和许可证，生成时不安装。确认创建时才安装选中的市场定义，并复核本地内容及模型能力；不覆盖本地修改。规划客户端仅进行只读组队，业务执行仍使用 Teams 原有权限。Claude 成员继续受既有讨论与审阅范围约束。
+规划 Agent 通过只读 search_agents 工具主动搜索全部已启用 Marketplace 来源的 Agent 池，再用 get_agent_definition 读取候选原文，确认专业能力与职责匹配。本地文件及安装状态不是检索范围或排序优先条件；搜索按页返回，可继续检索，不把最初一组候选当成全部角色池。界面与原生 Session 均可查看实际搜索词、匹配结果和定义读取记录。协调 Leader 或充分搜索后仍缺失的专业职责可生成专用角色，明确标记“按需求生成”。外部定义保留原文、来源、版本和许可证，生成时不安装。确认创建时才安装选中的市场定义，并复核本地内容及模型能力；不覆盖本地修改。规划客户端仅进行只读组队，业务执行仍使用 Teams 原有权限。Claude 自动执行当前不可用，组队规划和新成员请选择已连接的 Codex。
 
 “仅创建”事务内保存团队和全部成员，不启动工作；“创建并开始”再把原始需求与组队阶段的用户补充交给现有 Leader 消息入口。重试沿用请求标识，不重复生成、建队或启动。方案及原生 Session 引用保存在现有数据库的 loop_team_plans；刷新保留当前浏览器的编辑草案，服务重启将未完成规划标为中断，等待用户重新生成。原生规划执行最多十分钟，同时只运行一个规划，最多接收四项；这些限制不改变已有 Teams 的业务调度。收到第一份完整的正式方案后，直接校验原文并结束本轮规划，不再等待结束 Hook 重复输出。方案不从截断的运行摘要解析；最终结果回读同样优先使用完整正式报告。无效方案、用户取消或未产生方案的超时仍保留明确失败状态，不自动建队。
 
@@ -99,7 +99,7 @@ Teams 使用局部深灰主题，不改变 Sessions 和 Actions。1440px 时左�
 
 成员 execution_config.model 为 null 时跟随客户端当前默认模型，字符串表示本成员的模型覆盖。模型默认值不从角色定义中强行带入。旧成员没有 execution_config 时保留其原有 profile.model 行为。切换客户端会清空尚未保存的指定模型。
 
-指定模型须出现在 registry 返回的 live 模型列表中，否则返回 LOOP_MODEL_UNVERIFIED。回退列表不作为可用性证明。当前 Claude 适配没有 live 模型目录，只开放默认模型，并显示这一限制。客户端不可用时拒绝加入，不修改全局认证或模型默认设置。
+指定模型须出现在 registry 返回的 live 模型列表中，否则返回 LOOP_MODEL_UNVERIFIED。回退列表不作为可用性证明。Claude 尚未接入已有本地实例的稳定连接通道，运行能力显示不可用，不允许新加入可执行成员。客户端不可用时拒绝加入，不修改全局认证或模型默认设置。
 
 点击成员通过团队 ID 和成员 ID 读取定义。优先展示加入时的 profile 和实际 instructions 快照；旧记录缺少快照正文但有 local 定义标识时，读取关联本地定义并标明来源。未关联或读取失败时明确提示，不以职责简介替代。成员当前模型单独显示，不被定义中的默认模型覆盖。“在对话中提及”向现有 Tiptap 编辑器插入稳定 ID 节点，保留原草稿且不会自动发送。
 
@@ -120,7 +120,7 @@ flowchart TD
   Member --> Driver[agent-execution]
   Leader --> Driver
   Actions[原有 Actions] --> Driver
-  Driver --> Native[Codex app-server / Claude CLI]
+  Driver --> Native[已有 Codex 共享 app-server]
 ```
 
 `execution-database.mjs` 提供同一个 SQLite 连接，daemon 最终关闭连接。Actions 和 Teams 分别拥有记录及生命周期，共用 `agent-execution.mjs`、底层 supervisor 和真实目录占用协调。协作服务不包装 RunService，也不把 Task ID 当成 Schedule ID。
@@ -158,7 +158,7 @@ SQLite 是团队消息、任务、决定、摘要与执行状态的持久存储�
 
 ## 执行权限和恢复
 
-Codex 使用每个 Run 独立的 app-server，Skills 和 integrations 继承客户端已有配置，不强制关闭网络；不修改全局配置。用户已明确授权的动作无需重复确认，Teams 的 Codex 在 thread/start、thread/resume 使用 danger-full-access，并在每次 turn/start 显式传入 dangerFullAccess 与 never，避免历史原生会话继续沿用旧沙箱。此设置不写入全局客户端配置；旧固定阶段任务及 Actions 的 sandbox 设置不变。系统账户权限及运行时实际工具能力仍生效。新任务先分配数据目录下 `rooms/workspaces/<request-hash>`，CLI 始终在这个稳定内部目录启动，不依赖 Git 或用户配置的项目。此目录可保存任务产物及独立新应用源码，不要求 Git、项目绑定或用户先指定路径；修改已有代码项目时通过 prepare_projects 准备，追加资源不会改变内部目录或成员的续接位置。Leader 仅在现有项目目标不明时询问路径，期间可继续独立设计和评估。适合的无依赖工作可并行，目录写锁仍限制并发写入。
+Codex 每个 Run 使用连接同一共享 app-server 的独立 socket，Skills 和 integrations 继承客户端已有配置，不强制关闭网络；不修改全局配置。用户已明确授权的动作无需重复确认，Teams 的 Codex 在 thread/start、thread/resume 使用 danger-full-access，并在每次 turn/start 显式传入 dangerFullAccess 与 never，避免历史原生会话继续沿用旧沙箱。此设置不写入全局客户端配置；旧固定阶段任务及 Actions 的 sandbox 设置不变。系统账户权限及运行时实际工具能力仍生效。新任务先分配数据目录下 `rooms/workspaces/<request-hash>`，原生线程始终以这个稳定内部目录作为工作目录，不依赖 Git 或用户配置的项目。此目录可保存任务产物及独立新应用源码，不要求 Git、项目绑定或用户先指定路径；修改已有代码项目时通过 prepare_projects 准备，追加资源不会改变内部目录或成员的续接位置。Leader 仅在现有项目目标不明时询问路径，期间可继续独立设计和评估。适合的无依赖工作可并行，目录写锁仍限制并发写入。
 
 | execution_mode | 行为 |
 |---|---|
@@ -168,17 +168,17 @@ Codex 使用每个 Run 独立的 app-server，Skills 和 integrations 继承客�
 
 提供 branch 而未提供 execution_mode 时按 existing_branch 处理。项目路径与分支从当前任务及已有上下文确定，不做用户消息中的字符串匹配，不要求重复确认或原样粘贴。existing_branch 不自动 fetch、创建远程跟踪分支或退回 HEAD。in_place 若指定的分支与当前分支不同，返回错误；不会自动 stash、reset 或 checkout。准备时记录实际分支、base_commit 和 dirty，核对实际 Git common directory 与分支归属。同一任务可通过 prepare_projects 显式重新选择分支或执行方式，按 source_workspace 替换原资源位置，保留项目编号，不要求结束任务。该操作复用或准备指定分支，不自动 stash、reset、改写文件或切换已占用目录的分支。
 
-资源占用一次性取得内部目录及全部项目目录。Teams 的 Codex 不附加 sandbox writable roots，Git 可正常更新主仓库元数据及 worktree 父目录；Claude 通过 add-dir 读取准备好的项目，当前适配器仍只允许只读工具，不宣称支持实施。历史任务保留已有工作目录和记录；后续新任务统一使用内部目录。目录准备失败不降级到其他位置，不自动提交、合并、发布、删除成果或覆盖现有改动。隔离模式从提交快照创建目录，未提交内容不自动复制；原目录与已有 worktree 模式保留原内容。旧队列引用缺失目录时记录失败并等待处理，不反复占满派发并发位。
+资源占用一次性取得内部目录及全部项目目录。Teams 的 Codex 不附加 sandbox writable roots，Git 可正常更新主仓库元数据及 worktree 父目录；Claude 自动执行当前不可用。历史任务保留已有工作目录和记录；后续新任务统一使用内部目录。目录准备失败不降级到其他位置，不自动提交、合并、发布、删除成果或覆盖现有改动。隔离模式从提交快照创建目录，未提交内容不自动复制；原目录与已有 worktree 模式保留原内容。旧队列引用缺失目录时记录失败并等待处理，不反复占满派发并发位。
 
-Claude Code 通过 stream-json CLI 执行，只开放 Read、Glob、Grep，关闭 hooks，并仅连接本次 Run 的 MCP。当前只用于讨论与审阅，不开放 Claude 写入。真实 Claude 模型响应曾超时，尚未完成模型侧交付验收；结构化 `is_error` 优先于退出码 0。
+TAKO 只连接已有 Codex 共享 app-server。Claude 自动执行暂时关闭，不创建 SDK 或 stream-json worker；保留已有成员、任务数据和历史。消息工具只可向已启用且唯一匹配的 Otty 会话排队，不提供 Claude 原生 steer、stop 或 compact。
 
-领取派发记录后先持久化 `starting`，再启动原生进程。重启时已领取的 Run 转为 `unknown`，不会自动重放。未领取队列可继续。暂停、取消和修改目标撤销 Run 凭据；旧结果必须匹配 revision 与 generation 才能推进。
+领取派发记录后先持久化 `starting`，再连接已有原生服务。重启时已领取的 Run 转为 `unknown`，不会自动重放。未领取队列可继续。暂停、取消和修改目标撤销 Run 凭据；旧结果必须匹配 revision 与 generation 才能推进。
 
-目录占用按真实路径及父子目录判重。Teams 依据 resource_scope 选择目录与访问方式，Leader 统筹默认只观察内部执行目录，不因身份取得全部项目写占用；观察性审查允许其他会话编辑，实际写入之间仍互斥。调度先检查资源再领取运行名额，工作默认并发 2，另保留默认 1 个协调名额，配置见下文。同一成员在同一 Task 中最多一个未结束执行。PID 不明或仍存在时不按超时释放，未知执行先核对旧进程，不自动重放。Actions 与旧固定阶段任务保持原有目录占用语义。该协调只覆盖 TAKO 启动的工作，不控制用户手动启动的外部写入者。
+目录占用按真实路径及父子目录判重。Teams 依据 resource_scope 选择目录与访问方式，Leader 统筹默认只观察内部执行目录，不因身份取得全部项目写占用；观察性审查允许其他会话编辑，实际写入之间仍互斥。调度先检查资源再领取运行名额，工作默认并发 2，另保留默认 1 个协调名额，配置见下文。同一成员在同一 Task 中最多一个未结束执行。共享服务的 PID 不登记为任务 PID。无法确认对应 turn 已结束时保留 unknown 目录占用，不自动重放。Actions 与旧固定阶段任务保持原有目录占用语义。该协调只覆盖 TAKO 启动的工作，不控制用户手动启动的外部写入者。
 
 ## Run 专用 MCP
 
-`mcp/src/loop-server.mjs` 构建为 `server/vendor/loop-server.mjs`，随现有 vendor 流程打包。仅向本次受控进程注入，不安装全局插件，不改变原有 `session_*` 和 `schedule_*` 工具。
+`mcp/src/loop-server.mjs` 构建为 `server/vendor/loop-server.mjs`，随现有 vendor 流程打包。仅通过本次会话配置注入，不安装全局插件，不改变原有 `session_*` 和 `schedule_*` 工具。
 
 | 工具 | 行为 |
 |---|---|
