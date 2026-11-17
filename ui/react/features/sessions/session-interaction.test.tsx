@@ -269,7 +269,7 @@ test('pointer capture keeps dragging outside row, release preserves selection an
   expect(onSeek).toHaveBeenLastCalledWith(new Date(250).toISOString())
 })
 
-test('partial indexing stays unknown until final page; visible children are discovered and fork uses read instead of nesting', async () => {
+test('partial indexing stays unknown until final page; fork and native children share the parent tree', async () => {
   window.history.replaceState(null, '', '/?view=sessions&sessions=activity')
   const { api, wrap } = fixture()
   const fork = { ...session, session_id: 'fork', title: '派生会话', forked_from: session }
@@ -293,6 +293,8 @@ test('partial indexing stays unknown until final page; visible children are disc
   await waitFor(() => expect(density.getAttribute('aria-valuetext')).not.toContain('+ 条消息'))
   await userEvent.click(screen.getByRole('button', { name: '展开 父会话' }))
   expect(await screen.findByRole('button', { name: '原生子会话' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '派生会话' }).closest('.session-tree__row')).toHaveAttribute('data-depth', '1')
+  expect(document.querySelectorAll('.session-tree__workspace > .session-tree__branch')).toHaveLength(1)
   await userEvent.click(screen.getByRole('button', { name: '查看 fork 来源' }))
   await waitFor(() => expect(api.readSession).toHaveBeenCalledWith(expect.objectContaining({ session_id: 'parent' }), expect.any(AbortSignal)))
   expect(api.resumeSession).not.toHaveBeenCalled()
@@ -677,4 +679,21 @@ test('unavailable ancestors never cause an orphaned subagent to appear as a main
   expect(await screen.findByText('父会话暂不可读取')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '孤立子会话' })).not.toBeInTheDocument()
   expect(document.querySelectorAll('.session-tree__workspace > .session-tree__branch')).toHaveLength(0)
+})
+
+test('a fork listed before its source loads that source and renders once beneath it', async () => {
+  const { api, wrap } = fixture()
+  const fork = { ...session, session_id: 'fork', title: '先返回的 Fork', forked_from: session }
+  api.sessions.mockResolvedValue({ sessions: [fork], relations: [], next_cursor: null, search_scope: null, scanned_count: 1 })
+  render(wrap(<SessionsView api={api} />))
+  const expand = await screen.findByRole('button', { name: '展开 父会话' })
+  expect(api.readSession).toHaveBeenCalledWith(expect.objectContaining({ provider: 'codex', store_id: 'store', session_id: 'parent' }), expect.any(AbortSignal))
+  expect(document.querySelectorAll('.session-tree__workspace > .session-tree__branch')).toHaveLength(1)
+  expect(screen.queryByRole('button', { name: '先返回的 Fork' })).not.toBeInTheDocument()
+  await userEvent.click(expand)
+  const row = await screen.findByRole('button', { name: '先返回的 Fork' })
+  expect(row.closest('.session-tree__row')).toHaveAttribute('data-depth', '1')
+  expect(screen.getAllByRole('button', { name: '先返回的 Fork' })).toHaveLength(1)
+  await userEvent.click(screen.getByRole('button', { name: '折叠 父会话' }))
+  expect(screen.queryByRole('button', { name: '先返回的 Fork' })).not.toBeInTheDocument()
 })

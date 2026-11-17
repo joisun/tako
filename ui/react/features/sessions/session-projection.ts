@@ -15,7 +15,9 @@ export function projectSessionTree(sessions: BrowserSession[], relations: Sessio
     key: sessionKey(session), ref: session, session, relation: null, conflict: false, children: [],
   }]))
   const candidates = new Map<string, Map<string, SessionRelation>>()
-  const parentRelations = collectSessionRelations(sessions, relations).filter(relation => relation.kind !== 'fork')
+  const edges = collectSessionRelations(sessions, relations)
+  const childrenWithParents = new Set(edges.filter(relation => relation.kind !== 'fork').map(relation => sessionKey(relation.child)))
+  const parentRelations = edges.filter(relation => relation.kind !== 'fork' || !childrenWithParents.has(sessionKey(relation.child)))
   for (const relation of parentRelations) {
     const childKey = sessionKey(relation.child)
     if (!nodes.has(childKey)) continue
@@ -43,7 +45,7 @@ export function projectSessionTree(sessions: BrowserSession[], relations: Sessio
 }
 
 export function isChildSession(session: BrowserSession, relations: SessionRelation[]) {
-  return Boolean(session.is_subagent || session.native_parent || relations.some(relation => relation.kind !== 'fork' && sessionKey(relation.child) === sessionKey(session)))
+  return Boolean(session.is_subagent || session.native_parent || session.forked_from || relations.some(relation => sessionKey(relation.child) === sessionKey(session)))
 }
 
 export function collectSessionRelations(sessions: BrowserSession[], relations: SessionRelation[]) {
@@ -65,13 +67,14 @@ export function collectSessionFamily(roots: BrowserSession[], relations: Session
   const visited = new Set<string>()
   const edges: SessionRelation[] = []
   const parents = new Map<string, SessionRef[]>()
+  const forkSources = new Map<string, SessionRef[]>()
   const missing = new Map<string, SessionRef>()
   function addRelations(rows: SessionRelation[]) {
     edges.push(...rows)
     for (const relation of rows) {
-      if (relation.kind === 'fork') continue
       const key = sessionKey(relation.child)
-      parents.set(key, [...(parents.get(key) ?? []), relation.parent])
+      const index = relation.kind === 'fork' ? forkSources : parents
+      index.set(key, [...(index.get(key) ?? []), relation.parent])
     }
   }
   addRelations(relations)
@@ -89,7 +92,8 @@ export function collectSessionFamily(roots: BrowserSession[], relations: Session
       page.sessions.forEach(include)
     }
     const current = sessions.get(key)!
-    const references = [...(parents.get(key) ?? []), ...(current.native_parent ? [current.native_parent] : [])]
+    const parentReferences = [...(parents.get(key) ?? []), ...(current.native_parent ? [current.native_parent] : [])]
+    const references = parentReferences.length ? parentReferences : [...(forkSources.get(key) ?? []), ...(current.forked_from ? [current.forked_from] : [])]
     for (const parent of references) {
       const parentKey = sessionKey(parent)
       if (ancestors[parentKey]) include(ancestors[parentKey])

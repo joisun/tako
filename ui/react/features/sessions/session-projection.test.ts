@@ -11,15 +11,15 @@ function relation(parent: SessionRef, child: SessionRef, kind: SessionRelation['
   return { id: `${parent.session_id}-${child.session_id}`, kind, origin: 'registered', parent, child, source: 'test', created_at: null }
 }
 
-test('forks stay roots, native and registered children nest, and unresolved children never become roots', () => {
+test('forks nest with native and registered children while unresolved children never become roots', () => {
   const parent = session('parent')
   const native = session('native', { native_parent: parent })
   const child = session('child')
   const fork = session('fork', { forked_from: parent })
   const missing = session('missing', { native_parent: session('unavailable') })
   const roots = projectSessionTree([parent, native, child, fork, missing], [relation(parent, child), relation(parent, fork, 'fork')])
-  expect(roots.map((node) => node.ref.session_id)).toEqual(['parent', 'fork'])
-  expect(roots[0].children.map((node) => node.ref.session_id)).toEqual(['child', 'native'])
+  expect(roots.map((node) => node.ref.session_id)).toEqual(['parent'])
+  expect(roots[0].children.map((node) => node.ref.session_id)).toEqual(['child', 'fork', 'native'])
   expect(roots.some(node => node.ref.session_id === 'missing')).toBe(false)
 })
 
@@ -90,11 +90,42 @@ test('family discovery includes descendants once and ignores child pages from an
 })
 
 
-test('parentless native subagents stay hidden while independent forks remain primary sessions', () => {
+test('forks of unresolved native subagents stay hidden with their source instead of becoming roots', () => {
   const main = session('main')
   const review = session('review', { is_subagent: true })
   const fork = session('fork', { forked_from: review })
-  expect(projectSessionTree([main, review, fork], []).map(node => node.ref.session_id)).toEqual(['main', 'fork'])
+  expect(projectSessionTree([main, review, fork], []).map(node => node.ref.session_id)).toEqual(['main'])
+})
+
+test('fork ancestry is restored across pages without duplicating sessions or changing relation kinds', () => {
+  const main = session('main')
+  const fork = session('fork', { forked_from: main })
+  const nextFork = session('next-fork', { forked_from: fork })
+  const missing = collectSessionFamily([nextFork], [], {})
+  expect(missing.missingParents).toEqual([fork])
+  expect(projectSessionTree(missing.sessions, missing.relations)).toEqual([])
+  const family = collectSessionFamily([nextFork], [], {}, { [sessionKey(fork)]: fork, [sessionKey(main)]: main })
+  const roots = projectSessionTree(family.sessions, family.relations)
+  expect(roots.map(node => node.ref.session_id)).toEqual(['main'])
+  expect(roots[0].children[0].ref.session_id).toBe('fork')
+  expect(roots[0].children[0].children[0].ref.session_id).toBe('next-fork')
+  expect(family.relations.every(relation => relation.kind === 'fork')).toBe(true)
+  expect(collectSessionFamily([main, fork], [], {}, { [sessionKey(main)]: main }).sessions).toHaveLength(2)
+})
+
+test('an explicit parent keeps its hierarchy when the same session also has a fork source', () => {
+  const parent = session('parent'), source = session('source')
+  const fork = session('fork', { native_parent: parent, forked_from: source })
+  const family = collectSessionFamily([fork], [], {}, { [sessionKey(parent)]: parent, [sessionKey(source)]: source })
+  expect(family.sessions.map(row => row.session_id)).toEqual(['fork', 'parent'])
+  const roots = projectSessionTree(family.sessions, family.relations)
+  expect(roots.map(node => node.ref.session_id)).toEqual(['parent'])
+  expect(roots[0].children.map(node => node.ref.session_id)).toEqual(['fork'])
+})
+
+test('cyclic fork references do not produce primary sessions or recurse forever', () => {
+  const a = session('a'), b = session('b')
+  expect(projectSessionTree([a, b], [relation(a, b, 'fork'), relation(b, a, 'fork')])).toEqual([])
 })
 
 test('out-of-page ancestors resolve the real main session without promoting the child', () => {
