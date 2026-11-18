@@ -314,7 +314,7 @@ test('Sessions list, history, search and index reconciliation use only the exist
       if (params.useStateDbOnly === false) repaired = true
       return reply(socket, message.id, { data: repaired ? [thread] : [], nextCursor: null })
     }
-    if (method === 'thread/read') return reply(socket, message.id, { thread: { ...thread, id: params.threadId } })
+    if (method === 'thread/read') return reply(socket, message.id, { thread: { ...thread, id: params.threadId, forkedFromId: 'original' } })
     if (method === 'thread/items/list') return reply(socket, message.id, { data: [{ turnId: 'turn', startedAtMs: 1000, item: { id: 'answer', type: 'agentMessage', text: 'Native history' } }], nextCursor: null })
     if (method === 'thread/search') return reply(socket, message.id, { data: [{ thread, snippet: 'Native body match' }], nextCursor: null })
     assert.fail('Unexpected method: ' + method)
@@ -323,12 +323,15 @@ test('Sessions list, history, search and index reconciliation use only the exist
   await mkdir(join(f.root, 'sessions'))
   const adapter = createCodexSessionAdapter({ dataRoot: f.root, resolveLaunch: () => assert.fail('Must not resolve Codex executable') })
   t.after(() => adapter.close())
-  assert.equal((await adapter.list(listInput)).sessions[0].session_id, 'native')
+  const listed = (await adapter.list(listInput)).sessions[0]
+  assert.equal(listed.session_id, 'native')
+  assert.equal(listed.forked_from.session_id, 'original')
   assert.equal((await adapter.workspaces(listInput)).workspaces[0].path, '/workspace')
   const history = await adapter.messages('native', { order: 'asc' })
   assert.equal(history.messages[0].text, 'Native history')
   const search = await adapter.list({ ...listInput, query: 'body' })
   assert.equal(search.sessions[0].snippet, 'Native body match')
+  assert.equal(search.sessions[0].forked_from.session_id, 'original')
   assert.equal(search.search_scope, 'messages')
   assert.deepEqual(f.calls.filter(call => call.params?.useStateDbOnly === false).map(call => call.params.archived), [false, true])
   assert.equal(f.calls.filter(call => call.method === 'initialize').length, 3)

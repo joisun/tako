@@ -72,10 +72,11 @@ test('watch changes invalidate in-flight cache writes; close releases all watche
   assert.equal(closed.length, 3)
 })
 
-test('list and directory pages use one fast native request, preserving every returned cursor and store isolation', async t => {
+test('list and directory pages share enriched metadata, preserving cursors and store isolation', async t => {
   const calls = []
   const make = root => createCodexSessionAdapter({ dataRoot: root, resolveLaunch: async () => ({ executable: '/bin/codex' }), watchImpl() { throw new Error('no watcher') }, createClient: () => ({ started: Promise.resolve(), notify() {}, close() {}, async request(method, input) {
     if (method === 'initialize') return {}
+    if (method === 'thread/read') return { thread: { id: input.threadId, forkedFromId: input.threadId === 's1' ? 's0' : null } }
     calls.push(input)
     return { data: Array.from({ length: 100 }, (_, i) => ({ id: 's' + i, cwd: '/project', createdAt: 1, updatedAt: 2 })), nextCursor: 'native-next' }
   } }) })
@@ -86,6 +87,8 @@ test('list and directory pages use one fast native request, preserving every ret
   assert.equal(calls.length, 1)
   assert.equal(calls[0].useStateDbOnly, true)
   assert.equal(sessions.sessions.length, 100)
+  assert.equal(sessions.sessions[1].forked_from.session_id, 's0')
+  assert.equal(sessions.sessions[1].forked_from.store_id, adapter.storeId)
   assert.equal(directories.workspaces[0].observed_count, 100)
   assert.equal(sessions.next_cursor, 'native-next')
   assert.equal(directories.next_cursor, 'native-next')
@@ -105,6 +108,7 @@ test('a blocked background repair uses its own client and cannot hold a foregrou
     clients.push(number)
     return { started: Promise.resolve(), notify() {}, close() {}, async request(method, input) {
       if (method === 'initialize') return {}
+      if (method === 'thread/read') return { thread: { id: input.threadId } }
       if (input.useStateDbOnly === false && !input.archived) { repairing(); await blocked }
       return { data: [{ id: 'native', cwd: input.cwd ?? '/workspace' }], nextCursor: null }
     } }
@@ -117,4 +121,35 @@ test('a blocked background repair uses its own client and cannot hold a foregrou
   const result = await adapter.list({ ...params, workspace: '/another-workspace', query: '' })
   assert.equal(result.sessions[0].workspace, '/another-workspace')
   release()
+})
+
+test('list restores native fork and parent metadata with bounded read-only queries', async t => {
+  const calls = []
+  let active = 0, maximum = 0
+  const adapter = createCodexSessionAdapter({ dataRoot: '/fork-metadata', watchImpl() { throw new Error('no watcher') }, createClient: () => ({
+    started: Promise.resolve(), notify() {}, close() {}, async request(method, input) {
+      calls.push({ method, input })
+      if (method === 'initialize') return {}
+      if (method === 'thread/list') return { data: Array.from({ length: 9 }, (_, index) => ({ id: 's' + index, name: 'Session ' + index, forkedFromId: null, parentThreadId: null })), nextCursor: 'next-page' }
+      assert.equal(method, 'thread/read')
+      assert.equal(input.includeTurns, false)
+      maximum = Math.max(maximum, ++active)
+      await settle()
+      active--
+      return { thread: { id: input.threadId, forkedFromId: input.threadId === 's1' ? 'outside-page' : null, parentThreadId: input.threadId === 's2' ? 's0' : null } }
+    },
+  }) })
+  t.after(() => adapter.close())
+  const input = { ...params, workspace: '', query: '' }
+  const page = await adapter.list(input)
+  assert.equal(page.sessions[1].title, 'Session 1')
+  assert.equal(page.sessions[1].forked_from.session_id, 'outside-page')
+  assert.equal(page.sessions[2].native_parent.session_id, 's0')
+  assert.equal(page.sessions[2].is_subagent, true)
+  assert.equal(page.sessions[0].forked_from, null)
+  assert.equal(page.next_cursor, 'next-page')
+  assert.equal(page.scanned_count, 9)
+  assert.equal(maximum, 4)
+  await adapter.list(input)
+  assert.equal(calls.filter(call => call.method === 'thread/read').length, 9)
 })

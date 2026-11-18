@@ -16,6 +16,7 @@ import { createCodexRolloutHistory } from '../codex-rollout-history.mjs'
 const SOURCES = ['cli', 'vscode', 'appServer', 'exec']
 const MESSAGE_LIMIT = 16 * 1024
 const SEARCH_TIMEOUT_MS = 60_000
+const METADATA_READ_CONCURRENCY = 4
 const METHODS = ['initialize', 'thread/list', 'thread/read', 'thread/search', 'thread/searchOccurrences', 'thread/turns/list', 'thread/items/list', 'thread/items/read']
 
 function timestamp(value) {
@@ -122,7 +123,7 @@ export function createCodexSessionAdapter({
   async function listPage(params) {
     const result = nativePage(await request('thread/list', { ...params, useStateDbOnly: true }))
     if (result.cursor !== null && result.cursor === params.cursor) throw sessionBrowserError('SESSION_BROWSER_READ_FAILED', 'Codex returned a repeated cursor', 502)
-    return { sessions: result.data.map(row => ({ ...session(row), snippet: null })).filter(row => !params.cwd || row.workspace === params.cwd), next_cursor: result.cursor, scanned_count: result.data.length, search_scope: null }
+    return hydrateRelations({ sessions: result.data.map(row => ({ ...session(row), snippet: null })).filter(row => !params.cwd || row.workspace === params.cwd), next_cursor: result.cursor, scanned_count: result.data.length, search_scope: null })
   }
 
   async function request(method, params, channel = readChannel) {
@@ -184,6 +185,21 @@ export function createCodexSessionAdapter({
     return metadata
   }
 
+  async function hydrateRelations(page, signal) {
+    const sessions = []
+    // The state-db list omits fork ancestry. thread/read supplies native metadata without loading the thread or its turns.
+    for (let offset = 0; offset < page.sessions.length; offset += METADATA_READ_CONCURRENCY) {
+      signal?.throwIfAborted()
+      const batch = await Promise.all(page.sessions.slice(offset, offset + METADATA_READ_CONCURRENCY).map(async row => {
+        const metadata = await readSession(row.session_id)
+        return { ...row, is_subagent: metadata.is_subagent, native_parent: metadata.native_parent, forked_from: metadata.forked_from }
+      }))
+      sessions.push(...batch)
+    }
+    signal?.throwIfAborted()
+    return { ...page, sessions }
+  }
+
   async function list({ workspace, branch, query, archived, cursor, limit }, options) {
     if (!query) {
       const page = await metadataPages.list({
@@ -209,14 +225,15 @@ export function createCodexSessionAdapter({
           dataRoot: root, signal, session,
           load: async params => nativePage(await request('thread/list', { ...params, sourceKinds: SOURCES })),
         })
-        if (files) return files
+        if (files) return await hydrateRelations(files, signal)
         if (cursor) throw sessionBrowserError('SESSION_BROWSER_SEARCH_FAILED', '文件搜索暂不可用，请重新搜索。', 503)
       }
-      return await searchCodexSessions({ workspace, branch, query, archived, cursor, limit }, {
+      const page = await searchCodexSessions({ workspace, branch, query, archived, cursor, limit }, {
         signal,
         load: async params => nativePage(await request('thread/search', { ...params, sourceKinds: SOURCES }, channel)),
         session,
       })
+      return await hydrateRelations(page, signal)
     } catch (error) {
       callerSignal?.throwIfAborted()
       if (timedOut) throw sessionBrowserError('SESSION_BROWSER_SEARCH_FAILED', 'Codex 正文搜索超时，请稍后重试。', 504)
