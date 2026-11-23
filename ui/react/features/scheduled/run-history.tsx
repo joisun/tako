@@ -14,6 +14,7 @@ function runTimestamp(run: RunRecord) {
 }
 
 function sessionModeLabel(run: RunRecord) {
+  if (run.session_mode_reason === 'followup') return '续聊'
   if (run.session_mode === 'reuse') return `继承 ${run.inherit_run_number ?? 1}/${run.max_inherit_runs ?? 20}`
   if (run.session_mode_reason === 'inherit_limit') return '新建 · 上限'
   if (run.session_mode_reason === 'agent_choice') return '新建 · 自动'

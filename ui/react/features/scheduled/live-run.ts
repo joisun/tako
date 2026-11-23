@@ -147,7 +147,7 @@ function controlError(error: unknown) {
     if (error.code === 'RUNTIME_PROTOCOL_CLOSED') return 'Codex 执行连接已关闭，无法发送消息。请查看任务状态后重新运行。'
     if (error.code === 'TURN_CHANGED') return '当前 Turn 已变化，请基于最新消息重新发送。'
     if (error.code === 'TURN_NOT_STEERABLE') return 'Agent 当前阶段暂不接受追加指令，请稍后重试。'
-    if (error.code === 'RUN_NOT_ACTIVE') return '这个 Run 已结束，请使用 Terminal Resume。'
+    if (error.code === 'RUN_NOT_ACTIVE') return '这个 Run 已结束，可在会话记录下方继续发送消息。'
     if (error.code === 'RUNTIME_PROTOCOL_UNAVAILABLE') return '当前 Runtime 不支持 Live Session protocol。'
   }
   return error instanceof Error ? error.message : '操作失败，请重试。'

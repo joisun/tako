@@ -165,6 +165,7 @@ export interface DashboardApi {
   forkScheduledRun(id: string): Promise<RunResumeResponse>
   openRunFile(id: string, path: string): Promise<{ opened: boolean; path: string }>
   previewRunFileUrl(id: string, path: string): string
+  followUpRun(id: string, text: string, requestId: string): Promise<RunResponse>
   steerRun(
     id: string,
     input: { expected_turn_revision: number; text: string },
@@ -410,6 +411,10 @@ export function createDashboardApi({
       { method: 'POST', body: { path } },
     ),
     previewRunFileUrl: (id, path) => `${baseUrl}/api/v1/runs/${encodeURIComponent(id)}/files/preview${queryString({ path })}`,
+    followUpRun: (id, text, requestId) => request(
+      `/api/v1/runs/${encodeURIComponent(id)}/followup`,
+      { method: 'POST', body: { text, request_id: requestId } },
+    ),
     steerRun: (id, { expected_turn_revision, text }) => request(
       `/api/v1/runs/${encodeURIComponent(id)}/steer`,
       { method: 'POST', body: { expected_turn_revision, text } },

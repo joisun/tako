@@ -107,6 +107,8 @@ Run 的 `input_json` 单独保存本轮 data，固定 Markdown 不随调用改�
 
 Run 详情顶部提供“会话 / 本轮输入 / 产出文件”Tab，默认展示会话。本轮输入以 11px 等宽 Code Block 展示，支持独立滚动和原样复制完整 JSON；产出文件单独展示文件列表、数量和原有打开操作，没有文件时显示空状态。有错误时另显示“详情”Tab。不展示 stdout/stderr 日志，运行日志继续由服务保存。已有 Session 时，顶部提供恢复和复制 ID 的图标按钮；复制不受运行状态限制，恢复继续遵守本机能力及运行互斥规则。会话使用 shadcn Message、Bubble、Message Scroller 和 Prompt Input 组合；切换 Tab 保留会话组件与实时订阅。
 
+打开已结束且有 Session ID 的运行，在“会话”底部发送消息即可续聊。页面会切换到新的手动运行，使用当前 Action 配置恢复所选原会话，只发送本次消息。Action 须已启用，执行器和工作目录须与原运行一致。续聊不参与定时任务的会话选择和继承次数计算。
+
 排队 Run 真正启动前，才根据前一轮的实际 Session 选择 new/reuse/auto、继承次数和 compact 配置，避免连续请求提前选中旧 Session。本轮输入始终再次明确提供。
 
 v5 的未启动队列在重启后继续；开始调用 Runtime 前已持久化为 running，重启将这类结果不明的记录标记 interrupted，不自动重跑。优雅停机保留尚未启动的队列。目录占用与未知进程仍由已有资源协调器核对；恢复不会绕过互斥或执行权限。
@@ -130,6 +132,7 @@ v5 的未启动队列在重启后继续；开始调用 Runtime 前已持久化�
 | POST `/api/v1/actions/:id/pause` 或 `/resume` | 整体停用/启用，不停止已接收执行 |
 | POST `/api/v1/actions/:id/run` | 手动运行，data=null；重试沿用 idempotency_key |
 | GET `/api/v1/actions/:id/runs` | 运行历史与来源 |
+| POST `/api/v1/runs/:id/followup` | 传入 `text` 和用于重试去重的 `request_id`，返回新运行 |
 | GET `/api/v1/runs/:id` | 状态、结果与 data，继续复用日志/Session/停止等子接口 |
 
 PATCH body 为 `{expected_etag,patch}`；只暂停定时可使用 `patch:{schedule_enabled:false}`。列表不返回 secret；本地管理详情返回 secret。MCP 提供 `action_list/get/create/update/delete/pause/resume/run/runs`，使用 action_id。原 `schedule_*` 工具保留，直接复用同一实现，旧工具的标识字段仍为 schedule_id。MCP 不返回 secret；通过本地界面查看与复制。

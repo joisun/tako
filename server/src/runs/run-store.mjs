@@ -94,14 +94,20 @@ export function createRunStore({
       if (value.idempotency_key !== null) {
         const existing = selectByIdempotency.get(value.idempotency_key)
         if (existing) {
-          if (existing.schedule_id !== value.schedule.id) {
+          const previous = publicRun(existing, { includeSnapshot: true })
+          if (existing.schedule_id !== value.schedule.id
+            || previous.snapshot.followup_run_id !== value.schedule.followup_run_id
+            || (value.schedule.followup_run_id && previous.snapshot.prompt !== value.schedule.prompt)) {
             throw runtimeError(
               'RUN_IDEMPOTENCY_CONFLICT',
-              'The idempotency key belongs to another Schedule',
+              'The idempotency key belongs to another request',
             )
           }
-          return publicRun(existing, { includeSnapshot: true })
+          return previous
         }
+      }
+      if (value.schedule.followup_run_id && isSessionActive(value.runtime_id, value.schedule.resume_session_id)) {
+        throw runtimeError('RUN_ALREADY_ACTIVE', '该会话已有运行正在排队或执行。')
       }
       if (value.occurrence_key !== null
         && selectOccurrence.get(value.schedule.id, value.occurrence_key)) {
@@ -129,7 +135,7 @@ export function createRunStore({
           error_code, final_message, usage_json, file_changes_json,
           stdout_log_path, stderr_log_path, reviewed_at, updated_at
         ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, NULL, NULL, NULL, NULL,
+          ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, NULL, NULL, NULL, ?,
           ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?
         )
       `).run(
@@ -143,6 +149,7 @@ export function createRunStore({
         value.scheduled_for,
         JSON.stringify(snapshot),
         JSON.stringify(value.data),
+        snapshot.followup_run_id ? snapshot.resume_session_id : null,
         timestamp,
         timestamp,
       )
@@ -155,18 +162,21 @@ export function createRunStore({
       const row = requireRun(id)
       if (row.status !== 'queued') throw runtimeError('RUN_STATE_CONFLICT', 'Run is not queued')
       const snapshot = JSON.parse(row.snapshot_json)
+      if (snapshot.followup_run_id) return publicRun(row, { includeSnapshot: true })
       snapshot.session_mode_reason = 'always_new'
       snapshot.inherit_run_number = 0
       if (['reuse', 'auto'].includes(snapshot.thread_mode)) {
         const previous = db.prepare(`
           SELECT * FROM scheduled_runs
           WHERE schedule_id = ? AND runtime_id = ? AND session_id IS NOT NULL
+            AND json_extract(snapshot_json, '$.followup_run_id') IS NULL
             AND session_id != '' AND json_extract(snapshot_json, '$.workspace') = ?
           ORDER BY created_at DESC, rowid DESC LIMIT 1
         `).get(snapshot.id, row.runtime_id, snapshot.workspace)
         const inherited = previous ? db.prepare(`
           SELECT count(*) AS count FROM scheduled_runs
           WHERE schedule_id = ? AND runtime_id = ? AND session_id = ?
+            AND json_extract(snapshot_json, '$.followup_run_id') IS NULL
             AND json_extract(snapshot_json, '$.resume_session_id') = ?
         `).get(snapshot.id, row.runtime_id, previous.session_id, previous.session_id).count : 0
         const limitReached = inherited >= (snapshot.max_inherit_runs ?? 20)
@@ -342,6 +352,13 @@ export function createRunStore({
     ))
   }
 
+  function isSessionActive(runtimeId, sessionId) {
+    return Boolean(db.prepare(`
+      SELECT 1 FROM scheduled_runs WHERE runtime_id = ? AND status IN ('queued', 'running')
+        AND (session_id = ? OR json_extract(snapshot_json, '$.resume_session_id') = ?) LIMIT 1
+    `).get(runtimeId, sessionId, sessionId))
+  }
+
   return Object.freeze({
     create,
     markRunning,
@@ -356,10 +373,7 @@ export function createRunStore({
     list,
     markReviewed,
     hasOccurrence,
-    isSessionActive: (runtimeId, sessionId) => Boolean(db.prepare(`
-      SELECT 1 FROM scheduled_runs WHERE runtime_id = ? AND status IN ('queued', 'running')
-        AND (session_id = ? OR json_extract(snapshot_json, '$.resume_session_id') = ?) LIMIT 1
-    `).get(runtimeId, sessionId, sessionId)),
+    isSessionActive,
     close: () => { if (!database) db.close() },
   })
 }

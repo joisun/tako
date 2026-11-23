@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 
 import { DialogClose, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -6,7 +6,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
 import type { DashboardApi } from '@/lib/api/dashboard-api'
-import type { ScheduleRecord } from '@/lib/api/types'
+import type { RunRecord, ScheduleRecord, ScheduleRunsResponse } from '@/lib/api/types'
 import { queryKeys } from '@/lib/query/keys'
 import { RunDetail } from './run-detail'
 import { RunHistory } from './run-history'
@@ -24,6 +24,7 @@ export function RunReviewDrawer({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const queryClient = useQueryClient()
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const scheduleDetail = useQuery({
     queryKey: queryKeys.schedule(schedule?.id ?? ''),
@@ -57,6 +58,17 @@ export function RunReviewDrawer({
   })
   const currentSchedule = scheduleDetail.data?.job ?? schedule
 
+  function selectFollowUp(run: RunRecord) {
+    const key = queryKeys.runs(run.job_id)
+    queryClient.setQueryData<ScheduleRunsResponse>(key, current => current && ({
+      ...current, runs: [run, ...current.runs.filter(item => item.id !== run.id)],
+    }))
+    queryClient.setQueryData(queryKeys.run(run.id), { run })
+    setSelectedRunId(run.id)
+    void queryClient.invalidateQueries({ queryKey: key })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.schedules })
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}><SheetContent className="run-review-drawer" aria-label="执行记录">
       <div className="ui-sheet__content">
@@ -78,7 +90,7 @@ export function RunReviewDrawer({
             <div className="run-review-drawer__detail">
               {runDetail.isPending && selectedRunId ? <div className="run-review-drawer__state" aria-busy="true">正在读取 Run…</div> : null}
               {runDetail.isError ? <div className="run-review-drawer__state is-error" role="alert">{runDetail.error.message}</div> : null}
-              {runDetail.data ? <RunDetail key={runDetail.data.run.id} api={api} run={runDetail.data.run} /> : null}
+              {runDetail.data ? <RunDetail key={runDetail.data.run.id} api={api} run={runDetail.data.run} onFollowUp={selectFollowUp} /> : null}
               {!selectedRunId && !history.isPending ? <div className="run-review-drawer__state">选择一条 Run 查看详情</div> : null}
             </div>
           </div>

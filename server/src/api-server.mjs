@@ -355,14 +355,18 @@ function parseEventSequence(request, url) {
 }
 
 function validateRunControl(action, value) {
-  const allowed = action === 'steer'
+  const followup = action === 'followup'
+  const allowed = followup ? new Set(['text', 'request_id']) : action === 'steer'
     ? new Set(['expected_turn_revision', 'text'])
     : new Set(['expected_turn_revision'])
   const input = exactBody(value, allowed, `Run ${action}`)
-  if (!Number.isSafeInteger(input.expected_turn_revision) || input.expected_turn_revision < 1) {
+  if (followup && (typeof input.request_id !== 'string' || !/^[a-zA-Z0-9-]{1,128}$/.test(input.request_id))) {
+    throw httpError('INTERVENTION_INVALID', 'request_id is invalid', 400)
+  }
+  if (!followup && (!Number.isSafeInteger(input.expected_turn_revision) || input.expected_turn_revision < 1)) {
     throw httpError('INTERVENTION_INVALID', 'expected_turn_revision must be a positive integer', 400)
   }
-  if (action === 'steer') {
+  if (action === 'steer' || followup) {
     if (typeof input.text !== 'string' || input.text.trim() === ''
       || input.text.includes('\0')
       || Buffer.byteLength(input.text) > RUN_INTERVENTION_TEXT_LIMIT) {
@@ -624,7 +628,7 @@ export function createApiServer({
         sendJson(response, 202, result)
         return
       }
-      const runControl = pathname.match(/^\/api\/v1\/runs\/([^/]+)\/(steer|stop)$/)
+      const runControl = pathname.match(/^\/api\/v1\/runs\/([^/]+)\/(steer|stop|followup)$/)
       if (request.method === 'POST' && runControl && runService) {
         requireJson(request)
         const runId = safeSegment(runControl[1])
@@ -632,6 +636,13 @@ export function createApiServer({
           runControl[2],
           await readJson(request, { limit: RUN_INTERVENTION_BODY_LIMIT }),
         )
+        if (runControl[2] === 'followup') {
+          const source = runService.get(runId)
+          const { job } = await schedulerService.getJob(source.schedule_id)
+          const { run } = await runService.followUp(runId, job, input)
+          sendJson(response, 202, { run: scheduledRun(run) })
+          return
+        }
         const result = runControl[2] === 'steer'
           ? await runService.steer(runId, input)
           : await runService.stop(runId, input)

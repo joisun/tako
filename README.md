@@ -185,9 +185,9 @@ queued → running → succeeded | failed | timed_out | canceled | interrupted
 
 Live Session 断线后自动重连，也可点击“重新连接”；连接恢复会补读任务状态，避免错过结束事件。最近 500 条实时消息保留在窗口内，发送期间继续输入的文字不会被清空。Actions 列表、执行历史和详情会随服务端事件更新，连接恢复后会同步补读。
 
-Live Session 只干预当前 active Turn，不在 Dashboard 内创建第二轮对话。Run 结束后，页面会重新读取 authoritative terminal Run，并通过 Codex 原生分页接口从本机 Codex-owned session 临时取得 user/assistant messages（旧 CLI 回退为有容量上限的 `thread/read`）；TAKO 不复制或持久化这份 transcript。已结束 Run 可点击 Session ID 在 Terminal 中恢复并继续对话；Session ID 在创建时立即保存，超时、取消、连接异常或服务重启后仍可恢复已创建的会话。历史对话读取失败时可点击“重新读取”。
+在已结束运行的“会话”底部发送消息，Dashboard 会切到新的手动运行，并在所选原会话中继续对话。Run 结束后，页面会重新读取 authoritative terminal Run，并通过 Codex 原生分页接口从本机 Codex-owned session 临时取得 user/assistant messages（旧 CLI 回退为有容量上限的 `thread/read`）；TAKO 不复制或持久化这份 transcript。已结束 Run 可点击 Session ID 在 Terminal 中恢复并继续对话；Session ID 在创建时立即保存，超时、取消、连接异常或服务重启后仍可恢复已创建的会话。历史对话读取失败时可点击“重新读取”。
 
-实时 message、guidance、reasoning 与 tool payload 不写入 SQLite 或普通日志。OpenCode Run 的受限 stdout/stderr 会记录服务诊断、工具标题或脱敏命令摘要，不记录工具参数和输出正文。历史读取只向通过访问检查的 browser 返回可展示的 `userMessage` / `agentMessage`，不返回 reasoning、tool arguments/results 或 command output；本机 Codex session 被删除后，页面明确回退到 Run `final_message`。Run ledger 只保留既有 terminal facts；browser 不接触 runtime `turnId`、executable、argv 或 shell command。Run SSE 是 bounded memory replay，缓冲过期时页面明确 reset，并仍可读取 terminal facts。
+实时 message、guidance、reasoning 与 tool payload 不写入 SQLite 或普通日志。OpenCode Run 的受限 stdout/stderr 会记录服务诊断、工具标题或脱敏命令摘要，不记录工具参数和输出正文。历史读取只向通过访问检查的 browser 返回可展示的 `userMessage` / `agentMessage`，不返回 reasoning、tool arguments/results 或 command output；本机 Codex session 被删除后，页面明确回退到 Run `final_message`。续聊消息作为新运行的指令存入运行快照；browser 不接触 runtime `turnId`、executable、argv 或 shell command。Run SSE 是 bounded memory replay，缓冲过期时页面明确 reset，并仍可读取 terminal facts。
 
 ## Sessions
 

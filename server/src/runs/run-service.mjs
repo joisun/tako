@@ -43,6 +43,23 @@ export function createRunService({
     return { run: publicRun(run) }
   }
 
+  function followUp(runId, schedule, { text, request_id }) {
+    const source = runStore.get(runId)
+    if (['queued', 'running'].includes(source.status) || !source.session_id) {
+      throw serviceError('RUN_STATE_CONFLICT', '请选择已结束且保存了会话的运行。')
+    }
+    if (schedule.id !== source.schedule_id || schedule.agent !== source.runtime_id
+      || schedule.workspace !== source.snapshot.workspace) {
+      throw serviceError('RUN_STATE_CONFLICT', 'Action 的执行器或工作目录已变更，无法恢复这个会话。')
+    }
+    return create({
+      schedule: { ...schedule, prompt: text, resume_session_id: source.session_id,
+        followup_run_id: source.id, session_mode: 'reuse', session_mode_reason: 'followup' },
+      origin: 'manual',
+      idempotency_key: `followup:${runId}:${request_id}`,
+    })
+  }
+
   const scheduleTails = new Map()
   function scheduleLaunch(run) {
     if (active.has(run.id) || run.status !== 'queued') return
@@ -276,6 +293,7 @@ export function createRunService({
 
   return Object.freeze({
     create,
+    followUp,
     get: readPublicRun,
     list: (query) => runStore.list(query).map((run) => {
       const result = publicRun(run)

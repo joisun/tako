@@ -1,3 +1,5 @@
+import { PromptInput, PromptInputBody, PromptInputFooter, PromptInputSubmit } from '@/components/ai-elements/prompt-input'
+import { InputGroupTextarea } from '@/components/ui/input-group'
 import { Pill } from '@/components/kibo-ui/pill'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Clipboard, FileText, GitFork, RefreshCw, Square, Terminal } from 'lucide-react'
@@ -19,7 +21,7 @@ import { LiveSession, SessionConversation } from './live-session'
 
 const ACTIVE_STATUSES = new Set(['queued', 'claimed', 'running'])
 
-export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
+export function RunDetail({ api, run, onFollowUp }: { api: DashboardApi; run: RunRecord; onFollowUp?: (run: RunRecord) => void }) {
   const queryClient = useQueryClient()
   const [copied, setCopied] = useState(false)
   const [actionError, setActionError] = useState('')
@@ -44,6 +46,27 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
   if (active) resumeTitle = '运行结束后恢复 Session'
   else if (checkSession && !canResume) resumeTitle = session?.reason ?? '检查会话状态后恢复 Session'
   const sessionReason = session?.reason ?? (session?.state === 'active' ? '原会话正在执行，暂不能恢复。' : session?.state === 'unknown' ? '暂时无法确认原会话是否空闲。' : null)
+
+  const [draft, setDraft] = useState('')
+  const pendingMessage = useRef<{ text: string; id: string } | null>(null)
+  const followup = useMutation({
+    mutationFn: () => {
+      const text = draft.trim()
+      if (pendingMessage.current?.text !== text) {
+        const id = globalThis.crypto?.randomUUID?.() ?? `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`
+        pendingMessage.current = { text, id }
+      }
+      return api.followUpRun(run.id, text, pendingMessage.current.id)
+    },
+  })
+  function sendFollowUp() {
+    if (!draft.trim() || followup.isPending) return
+    followup.mutate(undefined, { onSuccess: ({ run: next }) => {
+      setDraft('')
+      pendingMessage.current = null
+      onFollowUp?.(next)
+    } })
+  }
 
   const reviewed = useMutation({
     mutationFn: () => api.markScheduledRunReviewed(run.id),
@@ -219,6 +242,22 @@ export function RunDetail({ api, run }: { api: DashboardApi; run: RunRecord }) {
                   ? 'Codex 本地 Session 暂不可用'
                   : 'Session 中没有可展示的对话'}
           />
+          {run.thread_id && onFollowUp ? (
+            <PromptInput className="live-session__composer" onSubmit={event => { event.preventDefault(); sendFollowUp() }}>
+              <PromptInputBody>
+                <InputGroupTextarea aria-label="继续会话" placeholder="继续这个会话…" value={draft} disabled={followup.isPending}
+                  onChange={event => setDraft(event.currentTarget.value)}
+                  onKeyDown={event => {
+                    if (!event.nativeEvent.isComposing && event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                      event.preventDefault()
+                      sendFollowUp()
+                    }
+                  }} />
+              </PromptInputBody>
+              {followup.isError && <p className="live-session__error" role="alert">{followup.error.message}</p>}
+              <PromptInputFooter><PromptInputSubmit status={followup.isPending ? 'submitted' : 'ready'} disabled={!draft.trim()} /></PromptInputFooter>
+            </PromptInput>
+          ) : null}
           {conversation.isError && run.final_message ? (
             <p className="live-session__notice">本地 Session 不可用，当前显示 Run final message。</p>
           ) : null}
