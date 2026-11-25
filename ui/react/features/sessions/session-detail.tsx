@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { SessionAgent } from '@/components/agents/session-agent'
 import { Task,TaskTrigger,TaskContent } from '@/components/ai-elements/task'
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { DashboardApiError, type DashboardApi } from '@/lib/api/dashboard-api'
 import type { BrowserSession, SessionMessagesPage, SessionRef, SessionRelation, SessionTimeline } from '@/lib/api/types'
@@ -60,6 +61,7 @@ export function SessionDetail({ api, session, knownSessions, knownRelations, que
   }, [timeline.dataUpdatedAt, timeline.isFetching, client, session.provider, session.store_id, session.session_id])
   const syncedTime = useRef('')
   const repairedPosition = useRef('')
+  const [tab, setTab] = useState('conversation')
   const [locateMatch, setLocateMatch] = useState(Boolean(query))
   const [copyStatus, setCopyStatus] = useState('')
   const matchedMessage = useRef<HTMLDivElement>(null)
@@ -79,7 +81,7 @@ export function SessionDetail({ api, session, knownSessions, knownRelations, que
   const requestAt = at ? position.at : null
   const requestItem = at ? position.itemId : undefined
   const search = !at && locateMatch ? query : ''
-  useEffect(() => { setLocateMatch(Boolean(query)); setFollowing(true) }, [query, followRequest])
+  useEffect(() => { setTab('conversation'); setLocateMatch(Boolean(query)); setFollowing(true) }, [query, followRequest])
   const history = useInfiniteQuery({
     queryKey: queryKeys.sessionMessages(session.provider, session.store_id, session.session_id, search, requestAt ?? '', requestItem ?? ''),
     initialPageParam: null as string | null,
@@ -237,8 +239,9 @@ export function SessionDetail({ api, session, knownSessions, knownRelations, que
         </div>
         {copyStatus ? <span className="sr-only" role="status">{copyStatus}</span> : null}
       </header>
-      <SessionSummary api={api} session={current} />
-      <div className="session-detail__body">
+      <Tabs className="session-detail__tabs" value={tab} onValueChange={setTab}>
+        <TabsList aria-label="会话详情"><TabsTrigger value="conversation">对话</TabsTrigger><TabsTrigger value="summary">摘要</TabsTrigger></TabsList>
+        <TabsContent value="conversation" keepMounted className="session-detail__body">
       <div ref={conversation} className="session-detail__conversation" tabIndex={0} aria-label="会话消息" onScroll={onScroll} onWheel={pauseFollowing} onTouchMove={pauseFollowing} onPointerDown={pauseFollowing} onKeyDown={(event) => { if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) pauseFollowing() }}>
         {search ? (
           <div className="session-match-notice">
@@ -270,7 +273,9 @@ export function SessionDetail({ api, session, knownSessions, knownRelations, que
             : <span className="session-minimap__state" role="status" title={timeline.isError ? '时间轴不可用' : timeline.isPending || timeline.isFetching ? '读取时间轴…' : '暂无时间点'}><span aria-hidden="true">{timeline.isError ? '!' : timeline.isPending || timeline.isFetching ? '…' : '—'}</span><span className="sr-only">{timeline.isError ? '时间轴不可用' : timeline.isPending || timeline.isFetching ? '读取时间轴…' : '暂无时间点'}</span></span>}
         </div>
       </aside>
-      </div>
+        </TabsContent>
+        <TabsContent value="summary" keepMounted className="session-detail__summary"><SessionSummary api={api} session={session} editable /></TabsContent>
+      </Tabs>
     </section>
   )
 }

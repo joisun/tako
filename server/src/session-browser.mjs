@@ -109,6 +109,13 @@ export function createSessionBrowser({ adapters, settings, terminalLauncher, lin
       reference(source(id), sessionId, input)
       return { summary: summaries?.read({ provider: id, store_id: input.store_id, session_id: sessionId }) ?? null }
     },
+    async saveSummary(id, sessionId, input) {
+      if (!summaries) throw sessionBrowserError('SESSION_BROWSER_UNAVAILABLE', '摘要服务不可用', 503)
+      const ref = { provider: id, store_id: input.store_id, session_id: sessionId }
+      reference(source(id), sessionId, input)
+      if (!summaries.read(ref)?.note) await readRef(ref)
+      return { summary: summaries.save(ref, input.note, input.expected_note) }
+    },
     async generateSummary(id, sessionId, input) {
       if (!summaries) throw sessionBrowserError('SESSION_BROWSER_UNAVAILABLE', '摘要服务不可用', 503)
       const ref = { provider: id, store_id: input.store_id, session_id: sessionId }

@@ -412,12 +412,18 @@
 
 .session-summary { min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
 .session-summary__heading, .session-pinned-card > header { display: flex; align-items: center; gap: 6px; }
-.session-summary__heading button { margin-left: auto; }
+.session-summary__actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .session-summary time, .session-summary dt { color: var(--text-muted); }
 .session-summary dl, .session-summary p { margin: 4px 0; }
 .session-summary dl > div { display: grid; grid-template-columns: 4.5em minmax(0,1fr); gap: 6px; padding: 2px 0; }
 .session-summary dd { margin: 0; white-space: pre-line; }
-.session-detail > .session-summary { flex: none; max-height: 30%; overflow: auto; padding: 4px 12px; border-bottom: 1px solid var(--border-subtle); }
+.session-detail__tabs { flex: 1; }
+.session-detail__summary { overflow: auto; padding: 16px; }
+.session-detail__summary dl > div { padding-block: 8px; }
+.session-summary__editor, .session-summary__editor label { display: grid; gap: 6px; }
+.session-summary__editor { margin-top: 12px; gap: 12px; }
+.session-summary__editor small { color: var(--text-muted); }
+.session-summary__editor textarea { width: 100%; resize: vertical; }
 .session-pinned-scroll { height: 100%; min-height: 0; overflow: auto; padding: 10px; }
 .session-pinned-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(min(100%,290px),1fr)); align-items: start; gap: 10px; }
 .session-pinned-card { min-width: 0; padding: 12px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface-1); }

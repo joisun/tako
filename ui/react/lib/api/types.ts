@@ -25,9 +25,11 @@ export interface SessionPin extends SessionRef {
 
 export interface TeamSessionIdentity {id:string;name:string;task_id:string;task_title:string;member_id:string;alias:string;avatar:LoopAvatar|null;leader:boolean;deleted:boolean;dissolved:boolean}
 
+export type SessionNote = Record<'goal' | 'completed' | 'current' | 'blockers' | 'todo', string>
+
 export interface SessionSummaryRecord {
   status: 'running' | 'ready' | 'failed'
-  note: Record<'goal' | 'completed' | 'current' | 'blockers' | 'todo', string> | null
+  note: SessionNote | null
   generated_at: string | null
   error: string | null
 }

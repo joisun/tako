@@ -11,6 +11,7 @@ import type {
   SessionPage,
   SessionProvider,
   SessionRef,
+  SessionNote,
   SessionSummaryRecord,
   SessionPin,
   BrowserSession,
@@ -121,6 +122,7 @@ export interface DashboardApi {
   controlLoopTask(id: string, action: string, revision: number): Promise<{ task: LoopTaskDetail }>
 
   sessionSummary(session: SessionRef): Promise<{ summary: SessionSummaryRecord | null }>
+  saveSessionSummary(session: SessionRef, note: SessionNote, expectedNote: SessionNote | null): Promise<{ summary: SessionSummaryRecord }>
   generateSessionSummary(session: SessionRef): Promise<{ summary: SessionSummaryRecord }>
   sessionPins(): Promise<{ pins: SessionPin[] }>
   setSessionPin(session: SessionRef, pinned: boolean): Promise<{ pin: SessionPin | null; changed: boolean }>
@@ -319,6 +321,10 @@ export function createDashboardApi({
     controlLoopTask: (id, action, revision) => request(`/api/v1/loop-tasks/${encodeURIComponent(id)}/control`, { method: 'POST', body: { action, expected_revision: revision } }),
     sessionSummary: session => request(
       `/api/v1/session-browser/${encodeURIComponent(session.provider)}/sessions/${encodeURIComponent(session.session_id)}/summary${queryString({ store_id: session.store_id })}`,
+    ),
+    saveSessionSummary: (session, note, expectedNote) => request(
+      `/api/v1/session-browser/${encodeURIComponent(session.provider)}/sessions/${encodeURIComponent(session.session_id)}/summary`,
+      { method: 'PUT', body: { store_id: session.store_id, note, expected_note: expectedNote } },
     ),
     generateSessionSummary: session => request(
       `/api/v1/session-browser/${encodeURIComponent(session.provider)}/sessions/${encodeURIComponent(session.session_id)}/summary`,

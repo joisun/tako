@@ -43,6 +43,17 @@ export function createSessionPinStore({ databasePath, clock = () => new Date() }
       const row = db.prepare('SELECT * FROM session_summaries WHERE session_key=?').get(sessionReferenceKey(ref))
       return row ? { status: row.status, note: JSON.parse(row.note_json), generated_at: row.generated_at, error: row.error } : null
     },
+    saveSummary(ref, note, expectedNote) {
+      const key = sessionReferenceKey(ref)
+      const content = JSON.stringify(note)
+      const result = expectedNote === null
+        ? db.prepare(`INSERT INTO session_summaries(session_key,status,note_json) VALUES(?,'ready',?)
+            ON CONFLICT(session_key) DO UPDATE SET status='ready',note_json=excluded.note_json,error=NULL
+            WHERE status!='running' AND note_json IS NULL`).run(key, content)
+        : db.prepare(`UPDATE session_summaries SET status='ready',note_json=?,error=NULL
+            WHERE session_key=? AND status!='running' AND note_json=?`).run(content, key, JSON.stringify(expectedNote))
+      return result.changes > 0
+    },
     startSummary(ref) {
       db.prepare(`INSERT INTO session_summaries(session_key,status) VALUES(?,'running')
         ON CONFLICT(session_key) DO UPDATE SET status='running',error=NULL`).run(sessionReferenceKey(ref))

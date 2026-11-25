@@ -568,6 +568,12 @@ export function createApiServer({
             return
           }
           if (request.method === 'POST' && session[3] === 'summary') {
+          if (request.method === 'PUT' && session[3] === 'summary') {
+            requireJson(request)
+            const input = exactBody(await readJson(request, { limit: 64 * 1024 }), new Set(['store_id', 'note', 'expected_note']), 'Session summary', 'SESSION_BROWSER_INPUT_INVALID')
+            sendJson(response, 200, await sessionBrowser.saveSummary(provider, sessionId, input))
+            return
+          }
             requireJson(request)
             const input = exactBody(await readJson(request), new Set(['store_id']), 'Session summary', 'SESSION_BROWSER_INPUT_INVALID')
             sendJson(response, 202, await sessionBrowser.generateSummary(provider, sessionId, input))
