@@ -1,6 +1,6 @@
 /* Shared controls: shadcn structure, Kibo composites, one semantic token set. */
 .ui-button { position: relative; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--control-background); color: var(--text-primary); font: 500 12px/1 var(--font-geist-sans); white-space: nowrap; cursor: pointer; transition: background var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast); }
-.ui-button:hover { background: var(--control-background-hover); border-color: #505050; }
+.ui-button:hover { background: var(--control-background-hover); border-color: color-mix(in srgb, var(--border-strong) 75%, var(--text-muted)); }
 .ui-button:active { background: var(--surface-2); }
 .ui-button[data-variant='quiet'], .ui-button[data-variant='link'] { border-color: transparent; background: transparent; box-shadow: none; color: var(--text-muted); }
 .ui-button[data-variant='quiet']:hover { background: var(--surface-2); color: var(--text-primary); }
@@ -20,7 +20,7 @@
 :where(input, textarea):focus-visible { outline-offset: 0; }
 .ui-input, .ui-select__trigger { width: 100%; min-width: 0; min-height: var(--control-height); padding: 6px 9px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--control-background); color: var(--text-primary); font: 400 12px/1.4 var(--font-geist-sans); transition: border-color var(--motion-fast); }
 .ui-input::placeholder { color: var(--text-subtle); }
-.ui-input:hover:not(:disabled), .ui-select__trigger:hover:not(:disabled) { border-color: #505050; }
+.ui-input:hover:not(:disabled), .ui-select__trigger:hover:not(:disabled) { border-color: color-mix(in srgb, var(--border-strong) 75%, var(--text-muted)); }
 .ui-input:disabled, .ui-select__trigger:disabled { cursor: not-allowed; opacity: .45; }
 .ui-textarea { min-height: 80px; resize: vertical; }
 .ui-input-group { display: flex; min-width: 0; align-items: center; gap: 4px; padding: 0 8px; border: 1px solid var(--control-border); border-radius: 7px; background: var(--control-background); }
@@ -36,7 +36,7 @@
 .ui-select__popup, .ui-popover, .ui-tooltip { min-width: var(--anchor-width); max-width: min(520px, calc(100vw - 24px)); max-height: var(--available-height, 65vh); overflow: auto; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--popover); color: var(--text-primary); box-shadow: var(--shadow-panel); font-size: 12px; }
 .ui-select__popup { padding: 4px; }
 .ui-select__item, .ui-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 30px; padding: 6px 8px; border-radius: 4px; outline: none; cursor: pointer; }
-:is(.ui-select__item, .ui-option)[data-highlighted] { background: #292929; }
+:is(.ui-select__item, .ui-option)[data-highlighted] { background: var(--surface-2); }
 .ui-select__item[data-disabled] { opacity: .4; cursor: not-allowed; }
 .ui-select__item svg { width: 13px; height: 13px; }
 .ui-popover { padding: 10px; }
@@ -50,10 +50,10 @@
 .ui-tabs__content { flex: 1; min-height: 0; outline: none; }
 .ui-tabs__content[hidden] { display: none; }
 .ui-switch-field { display: inline-flex; align-items: center; gap: 9px; color: var(--text-primary); font-size: 12px; cursor: pointer; }
-.ui-switch { position: relative; display: inline-flex; align-items: center; flex-shrink: 0; width: 30px; height: 18px; padding: 2px; border: 1px solid var(--border-strong); border-radius: 100px; background: #333; transition: background var(--motion-fast); }
+.ui-switch { position: relative; display: inline-flex; align-items: center; flex-shrink: 0; width: 30px; height: 18px; padding: 2px; border: 1px solid var(--border-strong); border-radius: 100px; background: var(--border-strong); transition: background var(--motion-fast); }
 .ui-switch[data-checked] { background: var(--text-primary); }
 .ui-switch__thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-control); transition: transform var(--motion-fast); }
-.ui-switch[data-checked] .ui-switch__thumb { transform: translateX(12px); background: #0a0a0a; }
+.ui-switch[data-checked] .ui-switch__thumb { transform: translateX(12px); background: var(--accent-contrast); }
 .ui-switch[data-disabled] { opacity: .4; cursor: not-allowed; }
 .ui-badge { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 6px; border: 1px solid var(--border-subtle); border-radius: 4px; background: var(--surface-2); color: var(--text-muted); font-size: 10px; line-height: 1.5; font-weight: 500; white-space: nowrap; }
 .kibo-pill { border-radius: 999px; padding: 2px 8px; font-weight: 400; }
@@ -96,7 +96,7 @@
 .session-workspaces { background: var(--surface-1); }
 .session-tree__row { background: var(--surface-0); border-color: transparent; border-bottom-color: var(--border-subtle); border-radius: 6px; margin-bottom: 4px; }
 .session-tree__row:hover { background: var(--surface-1); border-color: var(--border-subtle); }
-.session-tree__row[data-selected] { background: #1a1a1a; border-color: var(--border-strong); }
+.session-tree__row[data-selected] { background: var(--surface-2); border-color: var(--border-strong); }
 .session-tree__group { background: var(--surface-0); font-weight: 500; }
 .session-search__popover { width: var(--anchor-width); padding: 4px; }
 .session-search__item { border-radius: 6px; padding: 10px !important; }
@@ -112,7 +112,7 @@
 .scheduled-toolbar { padding-inline: 24px; }
 .schedule-list { padding: 0 24px 24px; }
 .schedule-row { border-color: var(--border-subtle); border-radius: 8px; background: var(--surface-1); }
-.schedule-row:hover { border-color: var(--border-strong); background: #131313; }
+.schedule-row:hover { border-color: var(--border-strong); background: var(--control-background-hover); }
 .schedule-row__heading { font-size: 13px; }
 .schedule-row__cadence.kibo-pill { font: 400 10px/1.5 var(--font-geist-mono); color: var(--text-muted); }
 .run-review-drawer > .ui-sheet__content { gap: 0; }
@@ -124,6 +124,11 @@
   .scheduled-header { padding: 16px 14px 12px; }
   .scheduled-toolbar { padding-inline: 14px; }
   .schedule-list { padding-inline: 14px; }
+}
+
+@media (max-width: 400px) {
+  .app-navigation .segmented-control__item { padding-inline: 6px; }
+  .app-navigation .segmented-control__label svg { display: none; }
 }
 
 .ui-dialog.schedule-editor-dialog { width: min(720px, calc(100vw - 32px)); }

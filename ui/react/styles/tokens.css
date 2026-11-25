@@ -63,6 +63,33 @@
   --ring: var(--focus);
 }
 
+:root[data-mode='light'] {
+  color-scheme: light;
+  --surface-0: #f8f8fa;
+  --surface-1: #ffffff;
+  --surface-2: #eeeef2;
+  --surface-raised: #ffffff;
+  --border-subtle: #dddde3;
+  --border-strong: #b5b5bf;
+  --text-primary: #202026;
+  --text-muted: #575762;
+  --text-secondary: #62626d;
+  --text-subtle: #656571;
+  --accent: #33333c;
+  --accent-strong: #17171c;
+  --accent-contrast: #ffffff;
+  --brand-foreground: #5832c5;
+  --danger: #b42330;
+  --success: #187247;
+  --warning: #865600;
+  --info: #285fae;
+  --timeline-agent-color: #6346b9;
+  --control-background: #ffffff;
+  --control-background-hover: #f1f1f4;
+  --shadow-panel: 0 16px 48px rgb(24 24 36 / .14), 0 1px 4px rgb(24 24 36 / .08);
+  --shadow-control: 0 1px 2px rgb(24 24 36 / .1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;

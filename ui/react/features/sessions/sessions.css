@@ -344,7 +344,7 @@
 .session-reader-sheet-host { position: absolute; inset: 92px 16px 16px; min-width: 0; min-height: 0; pointer-events: none; }
 .session-reader-sheet-host [data-slot='drawer-overlay'] { position: absolute; inset: 0; }
 .session-reader-sheet-host [data-slot='drawer-viewport'] { position: absolute; inset: 0; padding: 0; touch-action: auto; pointer-events: none; }
-.session-reader-sheet { width: min(640px, calc(100vw - 32px)); min-width: 0; max-width: 100%; height: 100%; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface-1); box-shadow: 0 24px 72px rgb(0 0 0 / .5), 0 0 0 1px rgb(255 255 255 / .03); transition-duration: 160ms; pointer-events: auto; }
+.session-reader-sheet { width: min(640px, calc(100vw - 32px)); min-width: 0; max-width: 100%; height: 100%; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface-1); box-shadow: var(--shadow-panel); transition-duration: 160ms; pointer-events: auto; }
 .session-reader-sheet__content { width: 100%; height: 100%; min-height: 0; gap: 0; padding: 0; overflow: hidden; }
 .session-reader-sheet .session-detail { width: 100%; height: 100%; min-height: 0; }
 .session-detail__body { display: grid; grid-template-columns: minmax(0, 1fr) 20px; min-height: 0; flex: 1; }
@@ -357,7 +357,7 @@
 .session-minimap .session-density__cursor { top: auto; right: 0; bottom: auto; left: 0; width: 100%; height: 1px; background: var(--text-primary); }
 .session-minimap .session-density__reading { right: -5px; bottom: auto; left: auto; border-top: 4px solid transparent; border-right: 5px solid var(--text-primary); border-bottom: 4px solid transparent; border-left: 0; transform: translateY(-50%); }
 .session-minimap .session-density__tooltip { right: calc(100% + 10px); bottom: auto; left: auto; max-width: min(260px, calc(100vw - 100px)); white-space: nowrap; transform: translateY(-50%); }
-.session-density__viewport { position: absolute; z-index: 3; right: 0; left: 0; min-height: 6px; border: 1px solid rgb(255 255 255 / .22); border-radius: 2px; background: rgb(255 255 255 / .06); pointer-events: none; }
+.session-density__viewport { position: absolute; z-index: 3; right: 0; left: 0; min-height: 6px; border: 1px solid color-mix(in srgb, var(--accent-strong) 22%, transparent); border-radius: 2px; background: color-mix(in srgb, var(--accent-strong) 6%, transparent); pointer-events: none; }
 @container (max-width: 450px) {
  .sessions-main__toolbar { min-height: 62px; flex-wrap: wrap; }
  .sessions-main__toolbar > .session-status-sort { order: 1; flex-basis: 100%; margin-left: 0; }

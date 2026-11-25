@@ -1,11 +1,39 @@
-import type { PropsWithChildren, ReactNode } from 'react'
+import { Moon, Sun } from 'lucide-react'
+import { useEffect, useState, type PropsWithChildren, type ReactNode } from 'react'
 
 import { TAKO_BRAND_NAME, TAKO_BRAND_MARK } from '@/branding'
+import { Button } from '@/components/ui/button'
 import type { DashboardConnectionState } from '@/lib/events/dashboard-event-source'
 import type { DashboardView } from '@/lib/preferences/dashboard-preferences'
 import { ConnectionStatus } from './connection-status'
 import { Navigation } from './navigation'
 import { SettingsDialog } from './settings-dialog'
+
+function ThemeToggle() {
+  const [light, setLight] = useState(() => document.documentElement.dataset.mode === 'light')
+  function applyTheme(useLight: boolean) {
+    document.documentElement.dataset.mode = useLight ? 'light' : 'dark'
+    document.documentElement.classList.toggle('dark', !useLight)
+    setLight(useLight)
+  }
+
+  useEffect(() => {
+    function sync(event: StorageEvent) {
+      if (event.storageArea === localStorage && (event.key === 'tako.theme' || event.key === null)) {
+        applyTheme(event.newValue === 'light')
+      }
+    }
+    window.addEventListener('storage', sync)
+    return () => window.removeEventListener('storage', sync)
+  }, [])
+
+  const label = light ? '切换到深色模式' : '切换到浅色模式'
+  return <Button size="xs" isIconOnly variant="quiet" title={label} aria-label={label} onClick={() => {
+    applyTheme(!light)
+    try { localStorage.setItem('tako.theme', light ? 'dark' : 'light') }
+    catch { /* Keep the theme for this tab when storage is unavailable. */ }
+  }}>{light ? <Moon aria-hidden="true" /> : <Sun aria-hidden="true" />}</Button>
+}
 
 export function AppShell({
   children,
@@ -41,6 +69,7 @@ export function AppShell({
             {countLabel}
           </span>
           <ConnectionStatus state={connectionState} />
+          <ThemeToggle />
           <SettingsDialog />
         </div>
       </header>
