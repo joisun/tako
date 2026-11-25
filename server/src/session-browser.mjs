@@ -102,7 +102,7 @@ export function createSessionBrowser({ adapters, settings, terminalLauncher, lin
       const ref = normalizeSessionReference(input.session)
       if (input.pinned) await readRef(ref)
       const result = pins.set(ref, input.pinned)
-      if (result.changed && input.pinned) summaries?.start(ref)
+      if (result.changed && input.pinned && summaries && !summaries.read(ref)?.note) summaries.start(ref)
       return result
     },
     summary(id, sessionId, input) {
