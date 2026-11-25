@@ -21,8 +21,10 @@ import { collectSessionFamily, indexSessionRelations, projectSessionTree } from 
 import { SessionSearch } from './session-search'
 import { SessionOrigin } from './session-origin'
 import { sessionKey } from './session-format'
-import { useSessionPins } from './session-pins'
+import { SessionPinButton, useSessionPins } from './session-pins'
 import { sessionReadRequests } from './session-timeline-queue'
+import { SessionSummary } from './session-summary'
+import { SessionActivity } from './session-activity'
 import { SessionActivityView } from './session-activity-view'
 import './sessions.css'
 import { compareSessions, sessionStatusGroup, sessionStatusOptions, sessionWithStatus, SessionStatusGroup } from './session-status'
@@ -38,6 +40,7 @@ export function SessionsView({ api }: { api: DashboardApi }) {
   }, [connectionError, client])
   const [statusSort, setStatusSort] = useState<SessionStatusGroup | null>(null)
   const [pinnedOnly, setPinnedOnly] = useState(false)
+  const [pinnedLayout, setPinnedLayout] = useState(() => localStorage.getItem('tako.pinned-layout') === 'cards' ? 'cards' : 'list')
   const pins = useSessionPins(api)
   const pinnedKeys = useMemo(() => new Set((pins.data?.pins ?? []).map(sessionKey)), [pins.data])
   const [childPages, setChildPages] = useState<Record<string, SessionPage[]>>({})
@@ -313,11 +316,23 @@ export function SessionsView({ api }: { api: DashboardApi }) {
               <button type="button" aria-pressed={pinnedOnly} aria-label={`Pinned ${(pins.data?.pins ?? []).filter(pin => pin.provider === providerId && pin.store_id === provider?.store_id).length}`} title="仅查看已标记会话，再次点击查看全部" disabled={!pins.data} onClick={() => setPinnedOnly(current => !current)}><Pin aria-hidden="true" />Pinned<span className="session-status-sort__count">{(pins.data?.pins ?? []).filter(pin => pin.provider === providerId && pin.store_id === provider?.store_id).length}</span></button>
               {nativeActivity?.available ? sessionStatusOptions.map(option => <button type="button" key={option.id} data-status={option.id} aria-pressed={statusSort === option.id} aria-label={`${option.label} ${statusCounts.get(option.id) ?? 0}`} title={`${option.description}；点击优先排列，再次点击恢复最近消息排序。计数为当前范围已载入的会话。`} onClick={() => setStatusSort(current => current === option.id ? null : option.id)}><span className="session-status-sort__dot" aria-hidden="true" />{option.label}<span className="session-status-sort__count">{statusCounts.get(option.id) ?? 0}</span></button>) : <span className="session-status-sort__unavailable" role="status">{activity.isPending ? '读取状态…' : '状态不可用'}</span>}
             </div>
+            {pinnedOnly && <SegmentedControl label="Pinned 视图" value={pinnedLayout}
+              options={[{ value: 'list', label: '列表' }, { value: 'cards', label: '卡片' }]}
+              onValueChange={layout => { setPinnedLayout(layout); localStorage.setItem('tako.pinned-layout', layout) }} />}
             <Button className="session-sheet-toggle" aria-label="展开会话面板" isIconOnly size="xs" variant="quiet" disabled={!selection || readerOpen} onClick={() => setReaderOpen(true)}><PanelRightOpen /></Button>
           </header>
           <section className="sessions-activity-panel">
-          <SessionActivityView pinnedOnly={pinnedOnly} pinnedKeys={pinnedKeys} canResume={Boolean(provider?.capabilities.resume)} key={`${providerId}:${workspace}:${branch}:${pinnedOnly}`} api={api} sessions={sessions} relations={relations} relationIndex={relationIndex} knownSessions={knownSessions} onChildren={rememberChildren} ancestorState={family.missingParents.length === 0 ? 'complete' : family.missingParents.some(ref => !unavailableAncestors.has(sessionKey(ref))) ? 'pending' : 'unavailable'} activity={nativeActivity} statuses={nativeStatuses} statusSort={statusSort} selection={selection?.session ?? null} hasMore={Boolean(results.hasNextPage) && !results.isError} loadingMore={results.isFetching} onMore={() => results.fetchNextPage()}
-            onSelect={selectSession} onLatest={session => void selectLatest(session)} onReadSession={(ref) => void onReadSession(ref)} />
+          {pinnedOnly && pinnedLayout === 'cards' ? <div className="session-pinned-scroll">
+            <div className="session-pinned-grid">{rootSessions.map(session => <article key={sessionKey(session)} className="session-pinned-card">
+              <header><SessionActivity session={session} /><button className="session-tree__title" onClick={() => selectSession(session)}>{session.title}</button>
+                <SessionPinButton api={api} session={session} /></header>
+              <SessionOrigin workspace={session.workspace} branch={session.branch} />
+              <SessionSummary api={api} session={session} />
+            </article>)}</div>
+            {!rootSessions.length && !results.isFetching && !results.hasNextPage && !results.isError && <p className="session-state">当前范围没有已标记会话</p>}
+            <AutoPager enabled={Boolean(results.hasNextPage) && !results.isError} loading={results.isFetching} onMore={() => results.fetchNextPage()} />
+          </div> : <SessionActivityView pinnedOnly={pinnedOnly} pinnedKeys={pinnedKeys} canResume={Boolean(provider?.capabilities.resume)} key={`${providerId}:${workspace}:${branch}:${pinnedOnly}`} api={api} sessions={sessions} relations={relations} relationIndex={relationIndex} knownSessions={knownSessions} onChildren={rememberChildren} ancestorState={family.missingParents.length === 0 ? 'complete' : family.missingParents.some(ref => !unavailableAncestors.has(sessionKey(ref))) ? 'pending' : 'unavailable'} activity={nativeActivity} statuses={nativeStatuses} statusSort={statusSort} selection={selection?.session ?? null} hasMore={Boolean(results.hasNextPage) && !results.isError} loadingMore={results.isFetching} onMore={() => results.fetchNextPage()}
+            onSelect={selectSession} onLatest={session => void selectLatest(session)} onReadSession={(ref) => void onReadSession(ref)} />}
           </section>
         </div>
       </div>

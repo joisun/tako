@@ -15,6 +15,7 @@ import { sessionMessageRange } from './session-projection'
 import { AutoPager } from './session-auto-pager'
 import { SessionRelations } from './session-relations'
 import { SessionResumeButton } from './session-resume-button'
+import { SessionSummary } from './session-summary'
 import { SessionPinButton } from './session-pins'
 import { SessionActivity } from './session-activity'
 import { sessionReadRequests } from './session-timeline-queue'
@@ -236,6 +237,7 @@ export function SessionDetail({ api, session, knownSessions, knownRelations, que
         </div>
         {copyStatus ? <span className="sr-only" role="status">{copyStatus}</span> : null}
       </header>
+      <SessionSummary api={api} session={current} />
       <div className="session-detail__body">
       <div ref={conversation} className="session-detail__conversation" tabIndex={0} aria-label="会话消息" onScroll={onScroll} onWheel={pauseFollowing} onTouchMove={pauseFollowing} onPointerDown={pauseFollowing} onKeyDown={(event) => { if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) pauseFollowing() }}>
         {search ? (

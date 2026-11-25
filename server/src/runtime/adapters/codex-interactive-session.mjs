@@ -237,7 +237,7 @@ function createSession({
         throw sessionError('RUNTIME_SESSION_IN_USE')
       }
       const startedThread = await client.request(run.resume_session_id ? 'thread/resume' : 'thread/start', compact({
-        ...(run.resume_session_id ? { threadId: run.resume_session_id } : { ephemeral: false }),
+        ...(run.resume_session_id ? { threadId: run.resume_session_id } : { ephemeral: run.ephemeral === true }),
         cwd: run.workspace,
         model: run.model,
         approvalPolicy: 'never',

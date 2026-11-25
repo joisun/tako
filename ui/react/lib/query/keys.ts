@@ -4,7 +4,7 @@ export function isSessionMetadataQuery(key: readonly unknown[]) {
   if (key[0] !== 'dashboard' || key[1] !== 'session-browser') return false
   if (key[3] === 'list') return key[5] === ''
   if (key[3] === 'workspaces' || key[3] === 'branches') return true
-  if (key[3] === 'pinned' || key.at(-1) === 'pins') return true
+  if (key[3] === 'pinned' || key.at(-1) === 'pins' || key.at(-1) === 'summary') return true
   return key.at(-1) === 'children' || key.at(-1) === 'relations' || key.at(-1) === 'activity'
 }
 
@@ -24,6 +24,7 @@ export const queryKeys = {
   sessionList: (provider: string, workspace: string, query: string, archived: boolean, branch = '') => ['dashboard', 'session-browser', provider, 'list', workspace, query, archived, branch] as const,
   sessionSearch: (provider: string, query: string, archived: boolean) => ['dashboard', 'session-browser', provider, 'search', query, archived] as const,
   sessionMessages: (provider: string, store: string, id: string, query: string, at = '', itemId = '') => ['dashboard', 'session-browser', provider, store, id, 'messages', query, at, itemId] as const,
+  sessionSummary: (ref: SessionRef) => ['dashboard', 'session-browser', ref.provider, ref.store_id, ref.session_id, 'summary'] as const,
   sessionRead: (ref: SessionRef) => ['dashboard', 'session-browser', ref.provider, ref.store_id, ref.session_id, 'read'] as const,
   sessionChildren: (ref: SessionRef) => ['dashboard', 'session-browser', ref.provider, ref.store_id, ref.session_id, 'children'] as const,
   sessionTimeline: (ref: SessionRef, scope: string, revision: string) => ['dashboard', 'session-browser', ref.provider, ref.store_id, ref.session_id, 'timeline', scope, revision] as const,

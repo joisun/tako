@@ -25,6 +25,7 @@ import { createRevisionHub } from './revision-hub.mjs'
 import { createSessionResumeService } from './session-resume-service.mjs'
 import { createSessionBrowser } from './session-browser.mjs'
 import { createSessionLinkStore } from './session-link-store.mjs'
+import { createSessionSummaries } from './session-summary.mjs'
 import { createSessionPinStore } from './session-pin-store.mjs'
 import { createTerminalLauncher } from './terminal-launcher.mjs'
 import { createRunEventHub } from './runs/run-event-hub.mjs'
@@ -171,6 +172,7 @@ export async function startDaemon({
   let runtimeEnvironment = null
   let sessionBrowser = null
   let pins = null
+  let summaries = null
   let runService = null
   let runEventHub = null
   let scheduledRunLogs = null
@@ -449,7 +451,10 @@ export async function startDaemon({
       runService,
       sessionActivity: options => codexSessions.activity(options),
     })
+    summaries = createSessionSummaries({ store: pins, adapter: codexSessions, settings: dashboardSettings,
+      registry: runtimeRegistry, workspace: join(dataDirectory, 'summary-workspace'), onChange: () => hub.publish() })
     sessionBrowser = createBrowser({
+      summaries,
       adapters: [codexSessions],
       settings: dashboardSettings,
       terminalLauncher,
@@ -503,6 +508,7 @@ export async function startDaemon({
       async close() {
         if (closed) return
         closed = true
+        await summaries?.close()
         await messaging?.close?.()
         sessionBrowser?.close?.()
         hub.close()
@@ -514,6 +520,7 @@ export async function startDaemon({
       },
     }
   } catch (error) {
+    await summaries?.close()
     await messaging?.close?.()
     sessionBrowser?.close?.()
     hub.close()

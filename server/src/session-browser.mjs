@@ -62,7 +62,7 @@ function nativeRelations(session) {
     }))
 }
 
-export function createSessionBrowser({ adapters, settings, terminalLauncher, links = null, pins = null, projectSessions = sessions => sessions }) {
+export function createSessionBrowser({ adapters, settings, terminalLauncher, links = null, pins = null, summaries = null, projectSessions = sessions => sessions }) {
   const sources = new Map(adapters.map((adapter) => [adapter.id, adapter]))
   if (sources.size !== adapters.length) throw new TypeError('Session adapter IDs must be unique')
 
@@ -101,7 +101,19 @@ export function createSessionBrowser({ adapters, settings, terminalLauncher, lin
       if (typeof input.pinned !== 'boolean') throw sessionBrowserError('SESSION_BROWSER_INPUT_INVALID', 'pinned must be boolean')
       const ref = normalizeSessionReference(input.session)
       if (input.pinned) await readRef(ref)
-      return pins.set(ref, input.pinned)
+      const result = pins.set(ref, input.pinned)
+      if (result.changed && input.pinned) summaries?.start(ref)
+      return result
+    },
+    summary(id, sessionId, input) {
+      reference(source(id), sessionId, input)
+      return { summary: summaries?.read({ provider: id, store_id: input.store_id, session_id: sessionId }) ?? null }
+    },
+    async generateSummary(id, sessionId, input) {
+      if (!summaries) throw sessionBrowserError('SESSION_BROWSER_UNAVAILABLE', '摘要服务不可用', 503)
+      const ref = { provider: id, store_id: input.store_id, session_id: sessionId }
+      await readRef(ref)
+      return { summary: summaries.start(ref) }
     },
     async pinned(id, input) {
       const adapter = source(id)
@@ -117,7 +129,7 @@ export function createSessionBrowser({ adapters, settings, terminalLauncher, lin
       }))
       const matched = sessions.filter(session => (!filters.workspace || session.workspace === filters.workspace) && (!filters.branch || session.branch === filters.branch))
       const next = offset + page.length
-      return { sessions: projectSessions(matched), relations: relationsFor(matched), next_cursor: next < entries.length ? 'pinned:' + next : null, search_scope: null, scanned_count: page.length }
+      return { sessions: projectSessions(matched).map(session => summaries ? { ...session, summary: summaries.read(session) } : session), relations: relationsFor(matched), next_cursor: next < entries.length ? 'pinned:' + next : null, search_scope: null, scanned_count: page.length }
     },
     providers() {
       return { providers: [...sources.values()].map((adapter) => ({

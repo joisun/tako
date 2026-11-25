@@ -25,7 +25,15 @@ export interface SessionPin extends SessionRef {
 
 export interface TeamSessionIdentity {id:string;name:string;task_id:string;task_title:string;member_id:string;alias:string;avatar:LoopAvatar|null;leader:boolean;deleted:boolean;dissolved:boolean}
 
+export interface SessionSummaryRecord {
+  status: 'running' | 'ready' | 'failed'
+  note: Record<'goal' | 'completed' | 'current' | 'blockers' | 'todo', string> | null
+  generated_at: string | null
+  error: string | null
+}
+
 export interface BrowserSession extends SessionRef {
+  summary?: SessionSummaryRecord | null
   team?:TeamSessionIdentity | null
   title: string
   preview: string
@@ -112,6 +120,8 @@ export interface SessionMessagesPage {
 export interface DashboardSettingsResponse {
   local_actions_supported?: boolean
   settings: {
+    summary_model?: string
+    summary_effort?: string | null
     resume_terminal: string
     schedule_definitions_dir: string
   }

@@ -11,6 +11,7 @@ import { SessionActivity } from './session-activity'
 import { AutoPager } from './session-auto-pager'
 import { SessionOrigin } from './session-origin'
 import { SessionResumeButton } from './session-resume-button'
+import { SessionSummary } from './session-summary'
 import { SessionPinButton } from './session-pins'
 import { sessionKey } from './session-format'
 import { projectSessionTree, type SessionTreeNode } from './session-projection'
@@ -95,7 +96,7 @@ export function SessionActivityView({ api, sessions, relations, relationIndex, k
           {session.branch ? <span className="session-tree__branch-meta"><SessionOrigin workspace={null} branch={session.branch} /></span> : null}
           {session.team?<span className="session-team-meta">Teams · {session.team.name}{session.team.deleted?' · 已删除':session.team.dissolved?' · 已解散':''} · {session.provider}</span>:session.workspace ? <SessionOrigin workspace={session.workspace} branch={null} /> : null}
         </div>
-
+        {pinnedOnly && pinnedKeys?.has(node.key) && <SessionSummary api={api} session={session} compact />}
       </div>
       {isExpanded ? <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={transition.fast}>{children.map((child, index) => renderNode(child, depth + 1, index === children.length - 1))}</m.div> : null}
     </m.div>

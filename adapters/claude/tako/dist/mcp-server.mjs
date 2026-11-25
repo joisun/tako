@@ -23240,6 +23240,8 @@ function createSessionClient({ baseUrl, fetchImpl = globalThis.fetch, timeoutMs 
       return { ...result, conversation: await compatibleRequest(`${path}/conversation`) };
     },
     listSessions: ({ provider, ...filters2 }) => compatibleRequest(queryPath(`/api/v1/session-browser/${encodeURIComponent(provider)}/sessions`, filters2)),
+    generateSummary: (ref) => compatibleRequest(sessionPath(ref, "summary"), { method: "POST", body: { store_id: ref.store_id } }),
+    readSummary: (ref) => compatibleRequest(queryPath(sessionPath(ref, "summary"), { store_id: ref.store_id })),
     readSession: (ref) => compatibleRequest(queryPath(sessionPath(ref, "read"), { store_id: ref.store_id })),
     sessionMessages,
     sessionChildren: ({ provider, session_id, ...filters2 }) => compatibleRequest(queryPath(sessionPath({ provider, session_id }, "children"), filters2)),
@@ -31319,6 +31321,8 @@ function createTAKOServer({ service }) {
     ["run_read", "Read execution status and result. Optionally include the recorded conversation.", { run_id: external_exports.string().min(1).max(256), include_conversation: external_exports.boolean().optional() }, "readRun", readOnly],
     ["session_list", "List native sessions by provider, workspace or branch. Follow next_cursor for more results; includes parent and fork relations.", filters, "listSessions", readOnly],
     ["session_search", "Search user and assistant message bodies across native sessions. Returns matching snippets and pagination; an empty page with next_cursor is not the end.", { ...filters, query: external_exports.string().trim().min(1).max(256) }, "listSessions", readOnly],
+    ["session_summary_generate", "Generate a handoff note for the specified session in a separate Codex thread using the Dashboard summary settings. Only call on explicit user request. Poll session_summary_read for completion.", sessionRef.shape, "generateSummary", { ...write, idempotentHint: false, openWorldHint: true }],
+    ["session_summary_read", "Read the saved handoff note and generation status without starting generation. A null summary means none has been requested.", sessionRef.shape, "readSummary", readOnly],
     ["session_read", "Read metadata for one native session using the exact provider, store_id and session_id.", sessionRef.shape, "readSession", readOnly],
     ["session_messages", "Read session messages: page (default) preserves native pagination and query/time seek; head reads the first count messages, tail the last count, all follows history automatically. History modes return chronological messages, complete/truncated and a continuation cursor. Continue using the same mode and SessionRef; count defaults to 20. all is bounded by max_chars, 50 pages and a time budget. Does not include tool or reasoning events.", { ...sessionRef.shape, ...page, mode: external_exports.enum(["page", "head", "tail", "all"]).optional(), count: external_exports.number().int().min(1).max(1e3).describe("Number of messages for head/tail; default 20.").optional(), max_chars: external_exports.number().int().min(1e3).max(1e6).optional(), query: external_exports.string().trim().min(1).max(256).optional(), at: external_exports.string().min(1).max(64).optional() }, "sessionMessages", readOnly],
     ["session_children", "List delegated and native subagent child sessions. Follow next_cursor; fork relations are separate.", { ...sessionRef.shape, ...page }, "sessionChildren", readOnly],

@@ -15,6 +15,11 @@ export function createSessionPinStore({ databasePath, clock = () => new Date() }
         reference_json TEXT NOT NULL,
         pinned_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS session_summaries (
+        session_key TEXT PRIMARY KEY, status TEXT NOT NULL, note_json TEXT,
+        generated_at TEXT, error TEXT
+      );
+      UPDATE session_summaries SET status='failed', error='服务已重启，请重新生成。' WHERE status='running';
       PRAGMA user_version=1;`)
   } catch (error) { db.close(); throw error }
   const find = db.prepare('SELECT * FROM session_pins WHERE session_key=?')
@@ -33,6 +38,19 @@ export function createSessionPinStore({ databasePath, clock = () => new Date() }
       const at = new Date(clock()).toISOString()
       insert.run(key, JSON.stringify(ref), at)
       return { pin: { ...ref, pinned_at: at }, changed: true }
+    },
+    summary(ref) {
+      const row = db.prepare('SELECT * FROM session_summaries WHERE session_key=?').get(sessionReferenceKey(ref))
+      return row ? { status: row.status, note: JSON.parse(row.note_json), generated_at: row.generated_at, error: row.error } : null
+    },
+    startSummary(ref) {
+      db.prepare(`INSERT INTO session_summaries(session_key,status) VALUES(?,'running')
+        ON CONFLICT(session_key) DO UPDATE SET status='running',error=NULL`).run(sessionReferenceKey(ref))
+    },
+    finishSummary(ref, note, error) {
+      db.prepare(`UPDATE session_summaries SET status=?,error=?,note_json=coalesce(?,note_json),
+        generated_at=coalesce(?,generated_at) WHERE session_key=?`)
+        .run(note ? 'ready' : 'failed', error, note ? JSON.stringify(note) : null, note ? new Date(clock()).toISOString() : null, sessionReferenceKey(ref))
     },
     check() { return { schemaVersion: 1, integrityCheck: db.prepare('PRAGMA quick_check').get().quick_check, foreignKeyViolations: [], invariantViolations: [] } },
     close() { if (!closed) { closed = true; db.close() } },

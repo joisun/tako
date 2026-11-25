@@ -11,6 +11,7 @@ import type {
   SessionPage,
   SessionProvider,
   SessionRef,
+  SessionSummaryRecord,
   SessionPin,
   BrowserSession,
   SessionRelation,
@@ -119,6 +120,8 @@ export interface DashboardApi {
   loopTask(id: string): Promise<{ task: LoopTaskDetail }>
   controlLoopTask(id: string, action: string, revision: number): Promise<{ task: LoopTaskDetail }>
 
+  sessionSummary(session: SessionRef): Promise<{ summary: SessionSummaryRecord | null }>
+  generateSessionSummary(session: SessionRef): Promise<{ summary: SessionSummaryRecord }>
   sessionPins(): Promise<{ pins: SessionPin[] }>
   setSessionPin(session: SessionRef, pinned: boolean): Promise<{ pin: SessionPin | null; changed: boolean }>
   pinnedSessions(provider: string, filters: SessionFilters): Promise<SessionPage>
@@ -137,7 +140,7 @@ export interface DashboardApi {
   resumeSession(session: SessionRef): Promise<{ ok: boolean; terminal_label: string; action?: TerminalResumeAction }>
   meta(): Promise<DashboardMeta>
   settings(): Promise<DashboardSettingsResponse>
-  updateSettings(input: { resume_terminal: string }): Promise<DashboardSettingsResponse>
+  updateSettings(input: { resume_terminal: string } | { summary_model: string; summary_effort: string | null }): Promise<DashboardSettingsResponse>
   runtimes(): Promise<RuntimeListResponse>
   runtimeModels(id: string): Promise<RuntimeModelCatalogResponse>
   schedules(): Promise<ScheduleListResponse>
@@ -314,6 +317,13 @@ export function createDashboardApi({
     createLoopTask: (id, body) => request(`/api/v1/teams/${encodeURIComponent(id)}/tasks`, { method: 'POST', body, requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
     loopTask: id => request(`/api/v1/loop-tasks/${encodeURIComponent(id)}/timeline`),
     controlLoopTask: (id, action, revision) => request(`/api/v1/loop-tasks/${encodeURIComponent(id)}/control`, { method: 'POST', body: { action, expected_revision: revision } }),
+    sessionSummary: session => request(
+      `/api/v1/session-browser/${encodeURIComponent(session.provider)}/sessions/${encodeURIComponent(session.session_id)}/summary${queryString({ store_id: session.store_id })}`,
+    ),
+    generateSessionSummary: session => request(
+      `/api/v1/session-browser/${encodeURIComponent(session.provider)}/sessions/${encodeURIComponent(session.session_id)}/summary`,
+      { method: 'POST', body: { store_id: session.store_id }, requestTimeoutMs: RUNTIME_TIMEOUT_MS },
+    ),
     sessionPins: () => request('/api/v1/session-browser/pins'),
     setSessionPin: (session, pinned) => request('/api/v1/session-browser/pins', { method: 'PUT', body: { session: { provider: session.provider, store_id: session.store_id, session_id: session.session_id }, pinned }, requestTimeoutMs: RUNTIME_TIMEOUT_MS }),
     pinnedSessions: (provider, filters) => request(`/api/v1/session-browser/${encodeURIComponent(provider)}/pinned${queryString(filters)}`, { requestTimeoutMs: RUNTIME_TIMEOUT_MS }),

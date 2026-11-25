@@ -3,6 +3,7 @@ import { access, chmod, lstat, readFile, realpath, rename, rm, writeFile } from 
 import { dirname, isAbsolute, resolve } from 'node:path'
 
 import { TAKOError } from '../../mcp/src/errors.mjs'
+import { isCodexModelSlug, isCodexReasoningLevel } from './scheduler/codex-model-selection.mjs'
 import { DEFAULT_RESUME_TERMINAL } from './terminal-launcher.mjs'
 
 function settingsError(code, message, details) {
@@ -56,6 +57,7 @@ export function createDashboardSettings({
     return {
       settings: {
         resume_terminal: selected,
+        ...(config.summary_model ? { summary_model: config.summary_model, summary_effort: config.summary_effort ?? null } : {}),
         schedule_definitions_dir: configuredDefinitionsDirectory(config),
       },
       terminal_options: terminalOptions,
@@ -73,7 +75,7 @@ export function createDashboardSettings({
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
       throw settingsError('SETTINGS_INVALID', 'Settings payload must be an object.')
     }
-    const allowed = new Set(['resume_terminal', 'schedule_definitions_dir'])
+    const allowed = new Set(['resume_terminal', 'schedule_definitions_dir', 'summary_model', 'summary_effort'])
     for (const key of Object.keys(input)) {
       if (!allowed.has(key)) throw settingsError('SETTINGS_INVALID', `Unsupported settings field: ${key}.`)
     }
@@ -111,10 +113,20 @@ export function createDashboardSettings({
       }
     }
 
+    const summary = {}
+    if ('summary_model' in input || 'summary_effort' in input) {
+      if (!isCodexModelSlug(input.summary_model)
+        || (input.summary_effort !== null && !isCodexReasoningLevel(input.summary_effort))) {
+        throw settingsError('SETTINGS_INVALID', '请选择有效的摘要模型和推理强度。')
+      }
+      summary.summary_model = input.summary_model
+      summary.summary_effort = input.summary_effort
+    }
     const changedTerminal = config.resume_terminal !== terminal
     const changedDefinitions = configuredDefinitionsDirectory(config) !== definitionsDir
     const nextConfig = {
       ...config,
+      ...summary,
       resume_terminal: terminal,
       ...(changedDefinitions ? { schedule_definitions_dir: definitionsDir } : {}),
     }
@@ -137,7 +149,7 @@ export function createDashboardSettings({
         throw settingsError('SCHEDULE_RELOCATION_UNAVAILABLE', 'The running Scheduler cannot relocate its definitions directory.')
       }
       relocation = await relocateDefinitionsDirectory({ directory: definitionsDir, persist: persistConfig })
-    } else if (changedTerminal) {
+    } else if (changedTerminal || summary.summary_model) {
       await persistConfig()
     }
     return present(nextConfig, { relocation })

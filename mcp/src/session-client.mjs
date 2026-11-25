@@ -156,6 +156,8 @@ export function createSessionClient({ baseUrl, fetchImpl = globalThis.fetch, tim
       return { ...result, conversation: await compatibleRequest(`${path}/conversation`) }
     },
     listSessions: ({ provider, ...filters }) => compatibleRequest(queryPath(`/api/v1/session-browser/${encodeURIComponent(provider)}/sessions`, filters)),
+    generateSummary: ref => compatibleRequest(sessionPath(ref, 'summary'), { method: 'POST', body: { store_id: ref.store_id } }),
+    readSummary: ref => compatibleRequest(queryPath(sessionPath(ref, 'summary'), { store_id: ref.store_id })),
     readSession: (ref) => compatibleRequest(queryPath(sessionPath(ref, 'read'), { store_id: ref.store_id })),
     sessionMessages,
     sessionChildren: ({ provider, session_id, ...filters }) => compatibleRequest(queryPath(sessionPath({ provider, session_id }, 'children'), filters)),

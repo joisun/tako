@@ -559,12 +559,18 @@ export function createApiServer({
           }
           return
         }
-        const session = pathname.match(/^\/api\/v1\/session-browser\/([^/]+)\/sessions\/([^/]+)\/(read|children|timeline|messages|resume)$/)
+        const session = pathname.match(/^\/api\/v1\/session-browser\/([^/]+)\/sessions\/([^/]+)\/(read|children|timeline|messages|resume|summary)$/)
         if (session) {
           const provider = safeSegment(session[1])
           const sessionId = safeSegment(session[2])
           if (request.method === 'GET' && session[3] !== 'resume') {
             sendJson(response, 200, await sessionBrowser[session[3]](provider, sessionId, Object.fromEntries(url.searchParams)))
+            return
+          }
+          if (request.method === 'POST' && session[3] === 'summary') {
+            requireJson(request)
+            const input = exactBody(await readJson(request), new Set(['store_id']), 'Session summary', 'SESSION_BROWSER_INPUT_INVALID')
+            sendJson(response, 202, await sessionBrowser.generateSummary(provider, sessionId, input))
             return
           }
           if (request.method === 'POST' && session[3] === 'resume') {

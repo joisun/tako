@@ -26,6 +26,7 @@ export function SessionPinButton({ api, session }: { api: DashboardApi; session:
       client.setQueryData<{ pins: SessionPin[] }>(queryKeys.sessionPins, current => ({ pins: [
         ...(current?.pins ?? []).filter(pin => sessionKey(pin) !== key), ...(result.pin ? [result.pin] : []),
       ] }))
+      if (result.changed && result.pin) void client.invalidateQueries({ queryKey: queryKeys.sessionSummary(session) })
       void client.invalidateQueries({ queryKey: queryKeys.sessionBrowser, predicate: query => query.queryKey[3] === 'pinned' })
     },
   })
