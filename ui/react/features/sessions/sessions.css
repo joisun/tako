@@ -43,6 +43,7 @@
 .session-workspaces__heading { display: grid; gap: 10px; padding: 12px 10px 10px; }
 .session-group-picker { display: none; max-width: 120px; }
 .session-eyebrow { color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
+.sessions-workspace [data-session-scroll] { position: relative; }
 .session-workspaces__list { min-height: 0; flex: 1; overflow: auto; padding-bottom: 8px; }
 .session-directory { display: flex; width: 100%; min-width: 0; min-height: 40px; flex-shrink: 0; align-items: center; gap: 8px; padding: 9px 10px; border: 0; border-left: 2px solid transparent; color: var(--text-muted); background: transparent; text-align: left; cursor: pointer; }
 .session-directory:hover { background: var(--surface-2); }
@@ -310,7 +311,7 @@
 .session-tree__connector[data-last]::after { display: none; }
 .session-tree__row { position: relative; display: grid; min-width: 0; grid-template-rows: 24px 18px; gap: 3px; margin-bottom: 6px; padding: 5px 8px 7px; border: 1px solid var(--border-subtle); border-radius: 6px; background: var(--surface-1); scroll-margin-top: 8px; }
 .session-tree__row:hover { border-color: color-mix(in oklab, var(--text-muted) 38%, var(--border-subtle)); background: var(--surface-2); }
-.session-tree__row[data-selected] { border-color: color-mix(in oklab, var(--accent-strong) 42%, var(--border-subtle)); background: color-mix(in oklab, var(--accent) 5%, var(--surface-1)); }
+.session-pinned-card[data-selected], .session-tree__row[data-selected] { border-color: color-mix(in oklab, var(--accent-strong) 42%, var(--border-subtle)); background: color-mix(in oklab, var(--accent) 5%, var(--surface-1)); }
 .session-tree__row[data-depth='0'] { margin-top: 1px; }
 .session-tree__title-row { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .session-tree__toggle-slot { display: inline-flex; width: 14px; flex-shrink: 0; align-items: center; }

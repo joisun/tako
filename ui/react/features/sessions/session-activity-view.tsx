@@ -20,9 +20,11 @@ import { SessionFamilyBadges } from './session-family-badges'
 import type { SessionRelationIndex } from './session-projection'
 import { compareSessions, sessionStatusGroup, sessionWithStatus, type SessionStatusGroup } from './session-status'
 
-export function SessionActivityView({ api, sessions, relations, relationIndex, knownSessions, onChildren, canResume = true, ancestorState = 'complete', activity, statuses, statusSort, selection, onSelect, onLatest, onReadSession, hasMore = false, loadingMore = false, onMore = () => {}, pinnedOnly = false, pinnedKeys }: {
+export function SessionActivityView({ revealHit, revealRow, api, sessions, relations, relationIndex, knownSessions, onChildren, canResume = true, ancestorState = 'complete', activity, statuses, statusSort, selection, onSelect, onLatest, onReadSession, hasMore = false, loadingMore = false, onMore = () => {}, pinnedOnly = false, pinnedKeys }: {
   pinnedOnly?: boolean; pinnedKeys?: Set<string>
   api: DashboardApi; canResume?: boolean; sessions: BrowserSession[]; relations: SessionRelation[]; ancestorState?: 'pending' | 'unavailable' | 'complete'; relationIndex: SessionRelationIndex; knownSessions: Map<string, BrowserSession>; onChildren: (key: string, pages: SessionPage[]) => void; activity?: SessionActivityPage; statuses: Map<string, BrowserSession>; statusSort: SessionStatusGroup | null
+  revealHit: BrowserSession | null
+  revealRow: (row: HTMLElement | null) => void
   selection: BrowserSession | null
   onLatest: (session: BrowserSession) => void
   onSelect: (session: BrowserSession) => void
@@ -57,6 +59,7 @@ export function SessionActivityView({ api, sessions, relations, relationIndex, k
   }
   const selectedKey = selection ? sessionKey(selection) : null
   function selectionPath(nodes: SessionTreeNode[]): string[] | null {
+    if (!selectedKey) return null
     for (const node of nodes) {
       if (node.key === selectedKey) return []
       const path = selectionPath(node.children)
@@ -64,12 +67,24 @@ export function SessionActivityView({ api, sessions, relations, relationIndex, k
     }
     return null
   }
-  const ancestorKey = JSON.stringify(selectionPath(roots) ?? [])
+  const path = selectionPath(roots)
+  const ancestorKey = JSON.stringify(path ?? [])
+  const rootKey = path?.[0] ?? selectedKey
+  const team = revealHit && roots.find(node => node.key === rootKey)?.session?.team
+  const teamKey = team ? 'team:' + team.id : null
   useEffect(() => {
     const ancestors: string[] = JSON.parse(ancestorKey)
     if (!ancestors.length) return
     setExpanded(current => ancestors.every(key => current.has(key)) ? current : new Set([...current, ...ancestors]))
-  }, [ancestorKey])
+  }, [ancestorKey, revealHit])
+  useEffect(() => {
+    if (teamKey) setCollapsedTeams(current => {
+      if (!current.has(teamKey)) return current
+      const next = new Set(current)
+      next.delete(teamKey)
+      return next
+    })
+  }, [teamKey, revealHit])
   function toggle(key: string) {
     setExpanded(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next })
   }
@@ -80,7 +95,7 @@ export function SessionActivityView({ api, sessions, relations, relationIndex, k
     const isExpanded = expanded.has(node.key)
     return <m.div layout="position" transition={transition.standard} className="session-tree__branch" key={node.key}>
       {depth > 0 ? <span className="session-tree__connector" data-last={lastSibling || undefined} aria-hidden="true" style={{ left: 9 + (depth - 1) * 18 }} /> : null}
-      <div className="session-tree__row" data-selected={node.key === selectedKey || undefined} data-depth={depth} style={{ marginInlineStart: depth * 18 }}>
+      <div className="session-tree__row" ref={revealHit && node.key === selectedKey ? revealRow : undefined} data-selected={node.key === selectedKey || undefined} data-depth={depth} style={{ marginInlineStart: depth * 18 }}>
         <div className="session-tree__title-row">
           <span className="session-tree__toggle-slot">{children.length ? <button className="session-tree__toggle" type="button" aria-label={(isExpanded ? '折叠 ' : '展开 ') + session.title} aria-expanded={isExpanded} onClick={() => toggle(node.key)}>{isExpanded ? <ChevronDown /> : <ChevronRight />}</button> : null}</span>
           <SessionActivity session={session} />
@@ -103,7 +118,11 @@ export function SessionActivityView({ api, sessions, relations, relationIndex, k
   }
   return <section className="session-activity-view" aria-label="会话列表">
     <header className="session-activity-view__toolbar"><Button size="xs" variant="quiet" disabled={!selection && !sessions.length} onClick={() => { const session = selection ?? sessions[0]; if (session) onLatest(session) }}>最近消息</Button></header>
-    <div className="session-activity-view__scroll">
+    <div className="session-activity-view__scroll" data-session-scroll>
+      {revealHit && !path ? <div className="session-tree__workspace">
+        <div className="session-tree__group">搜索命中</div>
+        {renderNode({ key: sessionKey(revealHit), ref: revealHit, session: revealHit, relation: null, conflict: false, children: [] }, 0)}
+      </div> : null}
       {[...groups.entries()].map(([path,nodes])=>{
         const team=nodes[0]?.session?.team,closed=team&&collapsedTeams.has(path)
         return <div key={path} className="session-tree__workspace" data-team={team?.id}>
@@ -111,7 +130,7 @@ export function SessionActivityView({ api, sessions, relations, relationIndex, k
           {!closed?nodes.map((node,index)=>renderNode(node,team?1:0,index===nodes.length-1)):null}
         </div>
       })}
-      {roots.length === 0 ? (hasMore || loadingMore || ancestorState === 'pending'
+      {roots.length === 0 && !revealHit ? (hasMore || loadingMore || ancestorState === 'pending'
         ? <div className="session-state" aria-busy="true"><span className="session-spinner" aria-label="读取主会话" /></div>
         : <p className="session-state">{ancestorState === 'unavailable' ? '父会话暂不可读取' : pinnedOnly ? '当前范围没有已标记会话' : '当前范围没有可展示的主会话'}</p>) : null}
       <AutoPager enabled={hasMore} loading={loadingMore} onMore={onMore} />
